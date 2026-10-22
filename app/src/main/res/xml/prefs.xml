@@ -7,50 +7,47 @@
         android:selectable="false" />
 
     <Preference
-        android:key="status_diagnostics"
-        android:title="@string/status_diagnostics_title"
-        android:selectable="false" />
+        android:key="warning"
+        android:layout="@layout/preference_warning_banner"
+        android:selectable="false"
+        android:visible="false" />
 
-    <PreferenceCategory android:title="@string/group_ads">
+    <PreferenceCategory android:title="@string/group_ad">
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ads"
+            android:icon="@drawable/ic_group_ad"
             android:key="ad_01_splash" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ads"
+            android:icon="@drawable/ic_group_ad"
             android:key="ad_02_launch_dialog" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ads"
-            android:key="ad_03_update_dialog" />
-
-        <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ads"
+            android:icon="@drawable/ic_group_ad"
             android:key="ad_08_report_jump" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ads"
+            android:icon="@drawable/ic_group_ad"
             android:key="ad_09_search_ad" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ads"
+            android:icon="@drawable/ic_group_ad"
             android:key="ad_10_ad_preload" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ads"
+            android:icon="@drawable/ic_group_ad"
             android:key="ad_04_feed" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ads"
+            android:icon="@drawable/ic_group_ad"
             android:key="ad_05_comment" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ads"
+            android:icon="@drawable/ic_group_ad"
             android:key="ad_06_player" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ads"
+            android:icon="@drawable/ic_group_ad"
             android:key="ad_07_audio_clip" />
 
     </PreferenceCategory>
@@ -58,100 +55,136 @@
     <PreferenceCategory android:title="@string/group_ui">
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ui"
+            android:icon="@drawable/ic_group_ui"
+            android:key="ad_03_update_dialog" />
+
+        <com.cloudmusictool.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_ui"
             android:key="ui_05_startup_delay" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ui"
+            android:icon="@drawable/ic_group_ui"
             android:key="ui_01_home_blocks" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ui"
+            android:icon="@drawable/ic_group_ui"
             android:key="ui_02_top_channel" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ui"
+            android:icon="@drawable/ic_group_ui"
             android:key="ui_03_bottom_nav" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ui"
+            android:icon="@drawable/ic_group_ui"
             android:key="ui_04_drawer" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ui"
+            android:icon="@drawable/ic_group_ui"
             android:key="ui_06_hints" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ui"
+            android:icon="@drawable/ic_group_ui"
             android:key="ui_07_autoplay" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ui"
-            android:key="ui_08_dark_mode" />
-
-        <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ui"
+            android:icon="@drawable/ic_group_ui"
             android:key="ui_09_pendant" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ui"
+            android:icon="@drawable/ic_group_ui"
             android:key="ui_10_player_hints" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ui"
+            android:icon="@drawable/ic_group_ui"
             android:key="ui_11_search_guide" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ui"
+            android:icon="@drawable/ic_group_ui"
             android:key="ui_12_podcast_guide" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ui"
+            android:icon="@drawable/ic_group_ui"
             android:key="ui_13_widget_push_guide" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ui"
+            android:icon="@drawable/ic_group_ui"
             android:key="ui_14_lyrics_hint" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ui"
+            android:icon="@drawable/ic_group_ui"
             android:key="ui_15_community_live" />
 
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/group_pv">
+
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_ui"
+            android:icon="@drawable/ic_group_pv"
+            android:key="pv_01_oaid" />
+
+        <com.cloudmusictool.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_pv"
+            android:key="pv_02_log_tasks" />
+
+        <com.cloudmusictool.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_pv"
+            android:key="pv_03_startup_blacklist" />
+
+        <com.cloudmusictool.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_pv"
+            android:key="pv_04_apm" />
+
+        <com.cloudmusictool.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_pv"
+            android:key="pv_05_stats_observe" />
+
+        <com.cloudmusictool.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_pv"
+            android:key="pv_06_clipboard" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/group_en">
+
+        <com.cloudmusictool.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_group_en"
             android:key="ui_16_mine_background" />
 
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="@string/group_privacy">
+    <PreferenceCategory android:title="@string/group_ex">
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_privacy"
-            android:key="pv_01_oaid" />
+            android:icon="@drawable/ic_group_ex"
+            android:key="ui_08_dark_mode" />
 
         <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_privacy"
-            android:key="pv_02_log_tasks" />
-
-        <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_privacy"
-            android:key="pv_03_startup_blacklist" />
-
-        <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_privacy"
-            android:key="pv_04_apm" />
-
-        <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_privacy"
-            android:key="pv_05_stats_observe" />
-
-        <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_privacy"
-            android:key="pv_06_clipboard" />
-
-        <com.cloudmusictool.app.MaterialSwitchPreference
-            android:icon="@drawable/ic_privacy"
+            android:icon="@drawable/ic_group_ex"
             android:key="pv_07_startup_orchestration" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/group_pages">
+
+        <Preference
+            android:icon="@drawable/ic_group_ui"
+            android:key="page_home_customize"
+            android:title="@string/page_home_customize" />
+
+        <Preference
+            android:icon="@drawable/ic_test"
+            android:key="page_experiments"
+            android:title="@string/page_experiments" />
+
+        <Preference
+            android:icon="@drawable/ic_test"
+            android:key="page_diagnostics"
+            android:title="@string/page_diagnostics" />
+
+        <Preference
+            android:icon="@drawable/ic_about"
+            android:key="page_about"
+            android:title="@string/page_about" />
 
     </PreferenceCategory>
 

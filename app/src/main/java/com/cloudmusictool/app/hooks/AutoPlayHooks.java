@@ -8,7 +8,7 @@ import java.lang.reflect.Method;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * UI-07 禁止自动播放：拦截启动和切歌时的各类自动播放逻辑。
+ * UI-08 禁止自动播放：拦截启动和切歌时的各类自动播放逻辑。
  */
 public final class AutoPlayHooks {
 

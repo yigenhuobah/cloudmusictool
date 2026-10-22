@@ -9,7 +9,7 @@ import java.lang.reflect.Method;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * AD-06 播放页广告与商业挂件。
+ * AD-08 播放页广告与商业挂件。
  */
 public final class PlayerAdHooks {
 

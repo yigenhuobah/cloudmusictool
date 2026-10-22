@@ -124,14 +124,14 @@ public class ProfileExportTest {
             assertTrue("no critical mount for " + featureId, critical > 0);
         }
 
-        // 2) 未 blocked 的 UI Feature 必须被 Profile 覆盖（UI-04 blocked，按计划跳过）。
+        // 2) 所有未 blocked 的 Feature 都必须被 Profile 覆盖（UI-06 blocked，按计划跳过）。
         for (Feature f : Feature.values()) {
-            if (f.group != Feature.Group.UI || f.blocked()) {
+            if (f.blocked()) {
                 continue;
             }
-            assertTrue("UI feature has no mounts: " + f.id,
+            assertTrue("feature has no mounts: " + f.id,
                     !profile.forFeature(f.id).isEmpty());
-            assertTrue("UI feature has no critical mount: " + f.id,
+            assertTrue("feature has no critical mount: " + f.id,
                     profile.criticalCount(f.id) > 0);
         }
 

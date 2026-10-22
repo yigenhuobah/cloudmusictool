@@ -3,7 +3,7 @@ package com.cloudmusictool.app.hooks;
 /**
  * 进程过滤器。
  * 跳过 :patch、:safemode、:heap_analysis、:leakcanary 等辅助进程。
- * :play 进程只安装音频贴片（AD-07）相关 hook，其余功能仅主进程。
+ * :play 进程只安装音频贴片（AD-09）相关 hook，其余功能仅主进程。
  */
 public final class ProcessFilter {
 
@@ -12,7 +12,7 @@ public final class ProcessFilter {
     private ProcessFilter() {
     }
 
-    /** 音频播放进程：只装 AD-07。 */
+    /** 音频播放进程：只装 AD-09。 */
     public static boolean isPlayProcess(String processName) {
         String name = resolve(processName);
         return name != null && name.endsWith(":play");

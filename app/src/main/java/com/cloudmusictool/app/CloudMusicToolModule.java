@@ -5,7 +5,8 @@ import android.util.Log;
 
 import com.cloudmusictool.app.dexkit.DexKitLocator;
 import com.cloudmusictool.app.hooks.ExperimentState;
-import com.cloudmusictool.app.hooks.Hooks;import com.cloudmusictool.app.hooks.ProcessFilter;
+import com.cloudmusictool.app.hooks.Hooks;
+import com.cloudmusictool.app.hooks.ProcessFilter;
 
 import io.github.libxposed.api.XposedModule;
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam;
@@ -36,7 +37,7 @@ public class CloudMusicToolModule extends XposedModule {
                     DexKitLocator.setModuleApkPath(appInfo.sourceDir);
                 }
                 if (appInfo.packageName != null) {
-                    HookState.init(appInfo.packageName);
+                    HookState.init(appInfo.packageName, mProcessName);
                     // :play 只做音频贴片拦截，不参与 ABTest 观测，避免空快照覆盖主进程数据。
                     if (!ProcessFilter.isPlayProcess(mProcessName)) {
                         ExperimentState.init(appInfo.packageName);

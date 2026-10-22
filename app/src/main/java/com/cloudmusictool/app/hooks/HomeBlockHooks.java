@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * UI-01 首页模块净化。
+ * UI-03 首页模块净化。
  *
  * 9.6.08 的“推荐”页走 DSL / MixContainer 链路，模块顺序由
  * MixContainerData.getBlockCodeOrderList() 返回的 JSON 数组决定；

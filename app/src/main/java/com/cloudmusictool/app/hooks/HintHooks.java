@@ -9,7 +9,7 @@ import java.lang.reflect.Method;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * UI-06 引导与气泡屏蔽：屏蔽各类引导气泡、评分弹窗、青少年弹窗及权限引导。
+ * UI-07 引导与气泡屏蔽：屏蔽各类引导气泡、评分弹窗、青少年弹窗及权限引导。
  */
 public final class HintHooks {
 

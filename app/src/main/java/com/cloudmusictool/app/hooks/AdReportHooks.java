@@ -7,7 +7,7 @@ import java.lang.reflect.Method;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * AD-08 广告上报与外部应用静默跳转拦截。
+ * AD-03 广告上报与外部应用静默跳转拦截。
  */
 public final class AdReportHooks {
 

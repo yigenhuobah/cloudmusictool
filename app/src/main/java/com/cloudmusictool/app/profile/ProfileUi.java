@@ -6,11 +6,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 界面（UI-01~UI-15）的挂载点分片。
+ * 界面（UI-01~UI-15）与增强/实验（EN-01、EX-01）的挂载点分片。
  *
  * 坐标全部来自 9.6.08 现有 hook 文件，并用 dexsql 在
  * {@code E:/download/base(2).apk}（versionCode 9006008）上逐条核对过
- * class descriptor、方法参数与返回类型。UI-04 没有可靠挂载点，按计划跳过。
+ * class descriptor、方法参数与返回类型。UI-06 没有可靠挂载点，按计划跳过。
  *
  * critical=true 表示该挂载点缺失时对应功能应降级；每个有挂载点的 Feature
  * 至少保留一个 critical。anchors 只放真实 dex 字符串字面量，没有验证过的
@@ -34,55 +34,55 @@ public final class ProfileUi {
         List<MountSpec> out = new ArrayList<>();
 
         // ------------------------------------------------------------------
-        // UI-01 首页模块净化
+        // UI-03 首页模块净化
         // ------------------------------------------------------------------
-        out.add(m("UI-01", "MixContainerData#getBlockCodeOrderList", true,
+        out.add(m("UI-03", "MixContainerData#getBlockCodeOrderList", true,
                 "com.netease.cloudmusic.dsl.container.data.MixContainerData",
                 "getBlockCodeOrderList", "Ljava/lang/String;", NONE));
-        out.add(m("UI-01", "MixContainerData#getResources", true,
+        out.add(m("UI-03", "MixContainerData#getResources", true,
                 "com.netease.cloudmusic.dsl.container.data.MixContainerData",
                 "getResources", "Ljava/util/List;", NONE));
-        out.add(m("UI-01", "DiscoveryBlockData#getBlockList", false,
+        out.add(m("UI-03", "DiscoveryBlockData#getBlockList", false,
                 "com.netease.cloudmusic.discovery.data.meta.DiscoveryBlockData",
                 "getBlockList", "Ljava/util/List;", NONE));
-        out.add(m("UI-01", "MMKV#decodeString(String)", false,
+        out.add(m("UI-03", "MMKV#decodeString(String)", false,
                 "com.tencent.mmkv.MMKV",
                 "decodeString", "Ljava/lang/String;",
                 new String[]{"Ljava/lang/String;"}));
-        out.add(m("UI-01", "MMKV#decodeString(String,String)", false,
+        out.add(m("UI-03", "MMKV#decodeString(String,String)", false,
                 "com.tencent.mmkv.MMKV",
                 "decodeString", "Ljava/lang/String;",
                 new String[]{"Ljava/lang/String;", "Ljava/lang/String;"}));
-        out.add(m("UI-01", "MMKV#getString(String,String)", false,
+        out.add(m("UI-03", "MMKV#getString(String,String)", false,
                 "com.tencent.mmkv.MMKV",
                 "getString", "Ljava/lang/String;",
                 new String[]{"Ljava/lang/String;", "Ljava/lang/String;"}));
 
         // ------------------------------------------------------------------
-        // UI-02 顶部频道管理
+        // UI-04 顶部频道管理
         // ------------------------------------------------------------------
-        out.add(m("UI-02", "HomeTopTabInfo#getCanDelete", false,
+        out.add(m("UI-04", "HomeTopTabInfo#getCanDelete", false,
                 "com.netease.cloudmusic.discovery.view.module.hometoptab.model.HomeTopTabInfo",
                 "getCanDelete", "Ljava/lang/Boolean;", NONE));
-        out.add(m("UI-02", "HomeTopTabInfo#getCanDrag", false,
+        out.add(m("UI-04", "HomeTopTabInfo#getCanDrag", false,
                 "com.netease.cloudmusic.discovery.view.module.hometoptab.model.HomeTopTabInfo",
                 "getCanDrag", "Ljava/lang/Boolean;", NONE));
-        out.add(m("UI-02", "hometoptab.TabExtra#getNowChannelItems", false,
+        out.add(m("UI-04", "hometoptab.TabExtra#getNowChannelItems", false,
                 "com.netease.cloudmusic.discovery.view.module.hometoptab.model.TabExtra",
                 "getNowChannelItems", "Ljava/util/List;", NONE));
-        out.add(m("UI-02", "newframework.TabExtra#getNowChannelItems", false,
+        out.add(m("UI-04", "newframework.TabExtra#getNowChannelItems", false,
                 "com.netease.cloudmusic.discovery.view.newframework.model.TabExtra",
                 "getNowChannelItems", "Ljava/util/List;", NONE));
-        out.add(m("UI-02", "hometoptab.UserSettingDTO#getCurrentRes", false,
+        out.add(m("UI-04", "hometoptab.UserSettingDTO#getCurrentRes", false,
                 "com.netease.cloudmusic.discovery.view.module.hometoptab.model.UserSettingDTO",
                 "getCurrentRes", "Ljava/util/List;", NONE));
-        out.add(m("UI-02", "hometoptab.v2.UserSettingDTO#getCurrentRes", false,
+        out.add(m("UI-04", "hometoptab.v2.UserSettingDTO#getCurrentRes", false,
                 "com.netease.cloudmusic.discovery.view.module.hometoptab.v2.UserSettingDTO",
                 "getCurrentRes", "Ljava/util/List;", NONE));
-        out.add(m("UI-02", "BaseArkV3Fragment#getTabDataList", true,
+        out.add(m("UI-04", "BaseArkV3Fragment#getTabDataList", true,
                 "com.netease.cloudmusic.discovery.view.newframework.BaseArkV3Fragment",
                 "getTabDataList", "Ljava/util/List;", NONE));
-        out.add(m("UI-02", "BaseArkV3Fragment#hc", false,
+        out.add(m("UI-04", "BaseArkV3Fragment#hc", false,
                 "com.netease.cloudmusic.discovery.view.newframework.BaseArkV3Fragment",
                 "hc", "V",
                 new String[]{
@@ -91,32 +91,32 @@ public final class ProfileUi {
                         "Lcom/netease/cloudmusic/discovery/view/widget/"
                                 + "DiscoveryCustomThemeRightIconTabLayout;"
                 }));
-        out.add(m("UI-02", "BaseArkV3Fragment#Tc", false,
+        out.add(m("UI-04", "BaseArkV3Fragment#Tc", false,
                 "com.netease.cloudmusic.discovery.view.newframework.BaseArkV3Fragment",
                 "Tc", "V", new String[]{"Ljava/util/List;"}));
-        out.add(m("UI-02", "BaseArkV3Fragment#Lc", false,
+        out.add(m("UI-04", "BaseArkV3Fragment#Lc", false,
                 "com.netease.cloudmusic.discovery.view.newframework.BaseArkV3Fragment",
                 "Lc", "V", new String[]{"Ljava/util/List;"}));
-        out.add(m("UI-02", "dr.h#T0", true,
+        out.add(m("UI-04", "dr.h#T0", true,
                 "dr.h", "T0", "V", new String[]{"Ljava/util/List;"},
                 DexKitAnchors.DR_H));
-        out.add(m("UI-02", "MusicTabLayout#addTab(k,int,boolean)", false,
+        out.add(m("UI-04", "MusicTabLayout#addTab(k,int,boolean)", false,
                 "com.netease.cloudmusic.theme.ui.tab.MusicTabLayout",
                 "addTab", "V",
                 new String[]{"Lcom/netease/cloudmusic/theme/ui/tab/MusicTabLayout$k;", "I", "Z"}));
 
         // ------------------------------------------------------------------
-        // UI-03 底部导航精简
+        // UI-05 底部导航精简
         // ------------------------------------------------------------------
-        out.add(m("UI-03", "SettingActivity#T8", false,
+        out.add(m("UI-05", "SettingActivity#T8", false,
                 "com.netease.cloudmusic.music.biz.setting.activity.SettingActivity",
                 "T8", "Z", NONE));
-        out.add(m("UI-03", "SettingActivity#U8", false,
+        out.add(m("UI-05", "SettingActivity#U8", false,
                 "com.netease.cloudmusic.music.biz.setting.activity.SettingActivity",
                 "U8", "Z", NONE));
-        out.add(m("UI-03", "th0.h#h", true,
+        out.add(m("UI-05", "th0.h#h", true,
                 "th0.h", "h", "Ljava/util/List;", NONE, DexKitAnchors.TH0_H));
-        out.add(m("UI-03", "rh0.c#c", false,
+        out.add(m("UI-05", "rh0.c#c", false,
                 "rh0.c", "c", "Ljava/util/List;",
                 new String[]{
                         "Z",
@@ -126,70 +126,70 @@ public final class ProfileUi {
                 DexKitAnchors.RH0_C));
 
         // ------------------------------------------------------------------
-        // UI-05 跳过启动延迟
+        // UI-02 跳过启动延迟
         // ------------------------------------------------------------------
-        out.add(m("UI-05", "StartTimeHandler#isNeedDelayStart", true,
+        out.add(m("UI-02", "StartTimeHandler#isNeedDelayStart", true,
                 "com.netease.cloudmusic.module.startup.StartTimeHandler",
                 "isNeedDelayStart", "Z", NONE));
-        out.add(m("UI-05", "StartTimeHandler#getStartAppRedPageDelayTime", false,
+        out.add(m("UI-02", "StartTimeHandler#getStartAppRedPageDelayTime", false,
                 "com.netease.cloudmusic.module.startup.StartTimeHandler",
                 "getStartAppRedPageDelayTime", "J",
                 new String[]{"Ljava/lang/String;"}));
-        out.add(m("UI-05", "StartTimeHandler#checkDelayDoAction", true,
+        out.add(m("UI-02", "StartTimeHandler#checkDelayDoAction", true,
                 "com.netease.cloudmusic.module.startup.StartTimeHandler",
                 "checkDelayDoAction", "V",
                 new String[]{"Ljava/lang/Runnable;", "Ljava/lang/String;"}));
 
         // ------------------------------------------------------------------
-        // UI-06 引导与气泡屏蔽
+        // UI-07 引导与气泡屏蔽
         // ------------------------------------------------------------------
-        out.add(m("UI-06", "PushGuideHintView#maybeDisplayHint", true,
+        out.add(m("UI-07", "PushGuideHintView#maybeDisplayHint", true,
                 "com.netease.cloudmusic.main.hint.push.PushGuideHintView",
                 "maybeDisplayHint", "V", HINT_ARGS));
-        out.add(m("UI-06", "ScoreHintDialogView#maybeDisplayHint", false,
+        out.add(m("UI-07", "ScoreHintDialogView#maybeDisplayHint", false,
                 "com.netease.cloudmusic.module.hint.view.ScoreHintDialogView",
                 "maybeDisplayHint", "V", HINT_ARGS));
-        out.add(m("UI-06", "HintVipNormalRenewalDialogueView#maybeDisplayHint", false,
+        out.add(m("UI-07", "HintVipNormalRenewalDialogueView#maybeDisplayHint", false,
                 "com.netease.cloudmusic.discovery.view.module.music.v3.vipcard."
                         + "HintVipNormalRenewalDialogueView",
                 "maybeDisplayHint", "V", HINT_ARGS));
-        out.add(m("UI-06", "LiveLocalPushHintView#maybeDisplayHint", false,
+        out.add(m("UI-07", "LiveLocalPushHintView#maybeDisplayHint", false,
                 "com.netease.cloudmusic.module.hint.view.LiveLocalPushHintView",
                 "maybeDisplayHint", "V", HINT_ARGS));
-        out.add(m("UI-06", "BottomTabGuideBubbleNativeView#maybeDisplayHint", false,
+        out.add(m("UI-07", "BottomTabGuideBubbleNativeView#maybeDisplayHint", false,
                 "com.netease.cloudmusic.main.hint.BottomTabGuideBubbleNativeView",
                 "maybeDisplayHint", "V", HINT_ARGS));
-        out.add(m("UI-06", "nr2.c#checkAndShowYouthDialog", false,
+        out.add(m("UI-07", "nr2.c#checkAndShowYouthDialog", false,
                 "nr2.c", "checkAndShowYouthDialog", "Z",
                 new String[]{"Landroid/content/Context;"}));
 
         // ------------------------------------------------------------------
-        // UI-07 禁止自动播放
+        // UI-08 禁止自动播放
         // ------------------------------------------------------------------
-        out.add(m("UI-07", "SettingActivity#V8", true,
+        out.add(m("UI-08", "SettingActivity#V8", true,
                 "com.netease.cloudmusic.music.biz.setting.activity.SettingActivity",
                 "V8", "Z", NONE));
-        out.add(m("UI-07", "jn#m0", false,
+        out.add(m("UI-08", "jn#m0", false,
                 "com.netease.cloudmusic.utils.jn", "m0", "Z", NONE,
                 DexKitAnchors.JN));
-        out.add(m("UI-07", "tt0.d#a", false,
+        out.add(m("UI-08", "tt0.d#a", false,
                 "tt0.d", "a", "Z", NONE, DexKitAnchors.TT0_D));
-        out.add(m("UI-07", "tt0.d#d", false,
+        out.add(m("UI-08", "tt0.d#d", false,
                 "tt0.d", "d", "Z", NONE, DexKitAnchors.TT0_D));
-        out.add(m("UI-07", "vt0.r#j", false,
+        out.add(m("UI-08", "vt0.r#j", false,
                 "vt0.r", "j", "Z", NONE, DexKitAnchors.VT0_R));
-        out.add(m("UI-07", "lv0.j#e", false,
+        out.add(m("UI-08", "lv0.j#e", false,
                 "lv0.j", "e",
                 "Lcom/netease/cloudmusic/module/strategy/meta/AutoPlayConfig;",
                 NONE, DexKitAnchors.LV0_J));
 
         // ------------------------------------------------------------------
-        // UI-08 强制深色模式
+        // EX-01 强制深色模式
         // ------------------------------------------------------------------
-        out.add(m("UI-08", "ResourceRouter#isNightTheme", true,
+        out.add(m("EX-01", "ResourceRouter#isNightTheme", true,
                 "com.netease.cloudmusic.theme.core.ResourceRouter",
                 "isNightTheme", "Z", NONE));
-        out.add(m("UI-08", "ResourceRouter#isUiModeNightYes", false,
+        out.add(m("EX-01", "ResourceRouter#isUiModeNightYes", false,
                 "com.netease.cloudmusic.theme.core.ResourceRouter",
                 "isUiModeNightYes", "Z", NONE));
 
@@ -296,17 +296,17 @@ public final class ProfileUi {
                 }));
 
         // ------------------------------------------------------------------
-        // UI-16 我的页自定义背景（纯本地渲染，不碰会员字段）
+        // EN-01 我的页自定义背景（纯本地渲染，不碰会员字段）
         // ------------------------------------------------------------------
         // 9.6.08 的「我的」Tab 是 RN 页面；原生 manager 只覆盖旧布局。
-        out.add(m("UI-16", "RnMineFragment#onResume", true,
+        out.add(m("EN-01", "RnMineFragment#onResume", true,
                 "com.netease.cloudmusic.fragment.RnMineFragment",
                 "onResume", "V", NONE));
-        out.add(m("UI-16", "MyMusicProfileHeaderBgViewHolderManager#e", true,
+        out.add(m("EN-01", "MyMusicProfileHeaderBgViewHolderManager#e", true,
                 "com.netease.cloudmusic.vh.MyMusicProfileHeaderBgViewHolderManager",
                 "e", "V",
                 new String[]{"Lcom/netease/cloudmusic/meta/virtual/UserBackgroundInfo;"}));
-        out.add(m("UI-16", "MyMusicProfileHeaderBgViewHolderManager#onResume", false,
+        out.add(m("EN-01", "MyMusicProfileHeaderBgViewHolderManager#onResume", false,
                 "com.netease.cloudmusic.vh.MyMusicProfileHeaderBgViewHolderManager",
                 "onResume", "V", NONE));
 

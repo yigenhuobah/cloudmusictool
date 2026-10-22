@@ -8,7 +8,7 @@ import java.lang.reflect.Method;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * AD-05 评论区广告与推广组件。
+ * AD-07 评论区广告与推广组件。
  */
 public final class CommentAdHooks {
 

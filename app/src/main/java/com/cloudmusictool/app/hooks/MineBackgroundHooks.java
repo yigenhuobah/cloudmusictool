@@ -29,10 +29,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * UI-16「我的页自定义背景」。
+ * EN-01「我的页自定义背景」。
  *
  * 9.6.08 的「我的」页有 RN / 原生 V4 两条分支（AB mine-rn-android）。
- * RN 分支的头部背景在 JS 里渲染，本地无法可靠压平；因此启用 UI-16 时
+ * RN 分支的头部背景在 JS 里渲染，本地无法可靠压平；因此启用 EN-01 时
  * 强制走原生 MyMusicFragmentV4，并复用官方全屏背景链路：
  *
  * 1. 把 UserBackgroundInfo.validType 注入为 4（FullScreen），只改渲染
@@ -122,8 +122,8 @@ public final class MineBackgroundHooks {
     }
 
     /**
-     * 启用 UI-16 时强制「我的」页走原生 V4（AB mine-rn-android=false）。
-     * 只在 UI-16 开启时安装，关闭后宿主恢复原 RN 分支。
+     * 启用 EN-01 时强制「我的」页走原生 V4（AB mine-rn-android=false）。
+     * 只在 EN-01 开启时安装，关闭后宿主恢复原 RN 分支。
      */
     private static void installProxyHook(XposedModule module, Feature f, ClassLoader cl) {
         try {

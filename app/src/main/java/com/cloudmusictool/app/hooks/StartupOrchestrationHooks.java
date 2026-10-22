@@ -12,7 +12,7 @@ import java.util.Set;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * PV-07 启动任务编排。
+ * EX-02 启动任务编排。
  *
  * 只处理 startup_task_blocklist（与 PV-03 共用）中显式列出的非核心任务：
  * - runOnUIThread -> false：移出主线程；
@@ -52,7 +52,7 @@ public final class StartupOrchestrationHooks {
 
     public static void install(XposedModule module, ClassLoader cl, Feature feature) {
         if (feature == null) {
-            HookKit.warn(module, "PV-07 install skipped: feature is null");
+            HookKit.warn(module, "EX-02 install skipped: feature is null");
             return;
         }
         Feature f = feature;

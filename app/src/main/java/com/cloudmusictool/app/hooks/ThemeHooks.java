@@ -7,7 +7,7 @@ import java.lang.reflect.Method;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * UI-08 强制深色模式：hook ResourceRouter 返回夜间模式状态。
+ * EX-01 强制深色模式：hook ResourceRouter 返回夜间模式状态。
  */
 public final class ThemeHooks {
 

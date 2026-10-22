@@ -7,7 +7,7 @@ import java.lang.reflect.Method;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * AD-07 音频贴片与播客广告。
+ * AD-09 音频贴片与播客广告。
  */
 public final class AudioAdHooks {
 

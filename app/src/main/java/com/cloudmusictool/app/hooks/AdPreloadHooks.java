@@ -7,7 +7,7 @@ import java.lang.reflect.Method;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * AD-10 冷启动广告预加载裁剪。
+ * AD-05 冷启动广告预加载裁剪。
  * 只跳过“纯预热 / 推广”类启动任务，不触碰核心启动任务。
  */
 public final class AdPreloadHooks {
@@ -23,7 +23,7 @@ public final class AdPreloadHooks {
 
     public static void install(XposedModule module, ClassLoader cl, Feature feature) {
         if (feature == null) {
-            HookKit.warn(module, "AD-10 install skipped: feature is null");
+            HookKit.warn(module, "AD-05 install skipped: feature is null");
             return;
         }
         Feature f = feature;

@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * UI-02 顶部频道管理。
+ * UI-04 顶部频道管理。
  *
  * 9.6.08 的顶部 tab 由 ViewPager2 + FragmentStateAdapter 驱动：
  *   ArkFragmentV3.Hc -> BaseArkV3Fragment.Tc(list) / hc(list, pager, tabLayout)

@@ -9,21 +9,20 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
 
 import com.google.android.material.appbar.MaterialToolbar;
-import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.color.DynamicColors;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 /**
- * 模块主入口 Activity。
- * Material 3 DayNight，四 Tab 结构（功能 / 首页定制 / 实验 / 关于）。
+ * 单 Activity 外壳：MaterialToolbar + FrameLayout。
+ *
+ * 主页面固定为 {@link SettingsFragment}；首页定制、实验、诊断、关于作为二级页
+ * 通过 hide/add 入返回栈。隐藏而非销毁主页面，返回时保留滚动位置。
  */
 public class MainActivity extends AppCompatActivity {
 
-    private static final String STATE_TAB = "tab";
-
-    private BottomNavigationView mNav;
+    private MaterialToolbar mToolbar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -31,25 +30,24 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        MaterialToolbar toolbar = findViewById(R.id.toolbar);
-        toolbar.setSubtitle("v" + versionName());
-        toolbar.setOnClickListener(v -> showAboutDialog());
-
-        mNav = findViewById(R.id.bottom_nav);
-        int tab = savedInstanceState == null
-                ? R.id.nav_features
-                : savedInstanceState.getInt(STATE_TAB, R.id.nav_features);
-
-        mNav.setSelectedItemId(tab);
-        mNav.setOnItemSelectedListener(item -> {
-            showTab(item.getItemId());
-            return true;
+        mToolbar = findViewById(R.id.toolbar);
+        mToolbar.setNavigationOnClickListener(v -> {
+            FragmentManager fm = getSupportFragmentManager();
+            if (fm.getBackStackEntryCount() > 0) {
+                fm.popBackStack();
+            } else {
+                finish();
+            }
         });
+        getSupportFragmentManager().addOnBackStackChangedListener(this::updateToolbar);
 
         if (savedInstanceState == null) {
-            showTab(tab);
+            getSupportFragmentManager().beginTransaction()
+                    .add(R.id.settings_container, new SettingsFragment(),
+                            SettingsFragment.class.getName())
+                    .commit();
         }
-
+        updateToolbar();
         applyInsets();
 
         ServiceBridge.setOnBound(() -> runOnUiThread(this::refreshCurrent));
@@ -57,69 +55,89 @@ public class MainActivity extends AppCompatActivity {
         ServiceBridge.poke(getApplicationContext());
     }
 
-    @Override
-    protected void onSaveInstanceState(Bundle outState) {
-        super.onSaveInstanceState(outState);
-        outState.putInt(STATE_TAB, mNav == null ? R.id.nav_features : mNav.getSelectedItemId());
+    /** 打开二级页；只允许一层，重复点击同一页时不叠加返回栈。 */
+    public void openPage(Fragment page) {
+        FragmentManager fm = getSupportFragmentManager();
+        if (fm.getBackStackEntryCount() > 0) {
+            return;
+        }
+        Fragment current = currentFragment();
+        if (current == null || current.getClass() == page.getClass()) {
+            return;
+        }
+        fm.beginTransaction()
+                .setReorderingAllowed(true)
+                .hide(current)
+                .add(R.id.settings_container, page, page.getClass().getName())
+                .addToBackStack(page.getClass().getName())
+                .commit();
+    }
+
+    private Fragment currentFragment() {
+        Fragment top = null;
+        for (Fragment fragment : getSupportFragmentManager().getFragments()) {
+            if (fragment.isAdded() && !fragment.isHidden()) {
+                top = fragment;
+            }
+        }
+        return top;
+    }
+
+    private void updateToolbar() {
+        boolean secondary = getSupportFragmentManager().getBackStackEntryCount() > 0;
+        // MIUI 的 Resources 对 setNavigationIcon(0) 会抛 NotFoundException，主页必须传 null。
+        if (secondary) {
+            mToolbar.setNavigationIcon(R.drawable.ic_arrow_back);
+        } else {
+            mToolbar.setNavigationIcon(null);
+        }
+        Fragment current = currentFragment();
+        if (current instanceof HomeCustomizeFragment) {
+            mToolbar.setTitle(R.string.page_home_customize);
+        } else if (current instanceof ExperimentFragment) {
+            mToolbar.setTitle(R.string.page_experiments);
+        } else if (current instanceof DiagnosticsFragment) {
+            mToolbar.setTitle(R.string.page_diagnostics);
+        } else if (current instanceof AboutFragment) {
+            mToolbar.setTitle(R.string.page_about);
+        } else {
+            mToolbar.setTitle(R.string.app_name_full);
+        }
+        mToolbar.setSubtitle("v" + versionName());
     }
 
     private void applyInsets() {
         View root = findViewById(R.id.root);
+        View container = findViewById(R.id.settings_container);
         ViewCompat.setOnApplyWindowInsetsListener(root, (v, windowInsets) -> {
             Insets bars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(bars.left, bars.top, bars.right, 0);
-            mNav.setPadding(0, 0, 0, bars.bottom);
+            container.setPadding(0, 0, 0, bars.bottom);
             return windowInsets;
         });
     }
 
-    private void showTab(int id) {
-        Fragment current = getSupportFragmentManager().findFragmentById(R.id.settings_container);
-        if (id == R.id.nav_features) {
-            if (current instanceof SettingsFragment) return;
-            switchFragment(new SettingsFragment());
-        } else if (id == R.id.nav_home) {
-            if (current instanceof HomeCustomizeFragment) return;
-            switchFragment(new HomeCustomizeFragment());
-        } else if (id == R.id.nav_experiments) {
-            if (current instanceof ExperimentFragment) return;
-            switchFragment(new ExperimentFragment());
-        } else if (id == R.id.nav_about) {
-            if (current instanceof AboutFragment) return;
-            switchFragment(new AboutFragment());
-        }
-    }
-
-    private void switchFragment(Fragment fragment) {
-        getSupportFragmentManager().beginTransaction()
-                .replace(R.id.settings_container, fragment)
-                .commit();
-    }
-
     private void refreshCurrent() {
-        Fragment f = getSupportFragmentManager().findFragmentById(R.id.settings_container);
-        if (f instanceof SettingsFragment) {
-            ((SettingsFragment) f).refresh();
-        } else if (f instanceof HomeCustomizeFragment) {
-            ((HomeCustomizeFragment) f).refresh();
-        } else if (f instanceof ExperimentFragment) {
-            ((ExperimentFragment) f).refresh();
+        for (Fragment fragment : getSupportFragmentManager().getFragments()) {
+            if (fragment instanceof SettingsFragment) {
+                ((SettingsFragment) fragment).refresh();
+            } else if (fragment instanceof HomeCustomizeFragment) {
+                ((HomeCustomizeFragment) fragment).refresh();
+            } else if (fragment instanceof ExperimentFragment) {
+                ((ExperimentFragment) fragment).refresh();
+            } else if (fragment instanceof DiagnosticsFragment) {
+                ((DiagnosticsFragment) fragment).refresh();
+            }
         }
     }
 
     private String versionName() {
         try {
-            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            String name = getPackageManager()
+                    .getPackageInfo(getPackageName(), 0).versionName;
+            return name == null ? "?" : name;
         } catch (PackageManager.NameNotFoundException e) {
             return "?";
         }
-    }
-
-    private void showAboutDialog() {
-        new MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.about_title)
-                .setMessage(getString(R.string.about_body, versionName()))
-                .setPositiveButton(android.R.string.ok, null)
-                .show();
     }
 }

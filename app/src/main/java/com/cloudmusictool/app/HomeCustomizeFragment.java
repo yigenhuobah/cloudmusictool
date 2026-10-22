@@ -24,7 +24,6 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
 
     private ConfigStore mStore;
 
-    // 发现页推荐模块代码与中文名（code 与 9.6.08 实际下发值对齐）
     private static final String[] BLOCK_KEYS = {
             "PAGE_RECOMMEND_PRIVATE_RCMD_SONG",
             "PAGE_RECOMMEND_RANK",
@@ -58,52 +57,13 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
             "PAGE_IMG_TEXT_VOICELIST_RCMD_HOT"
     };
 
-    private static final String[] BLOCK_TITLES = {
-            "猜你喜欢",
-            "排行榜",
-            "快捷入口 (每日推荐/心动模式等)",
-            "雷达歌单",
-            "每日推荐",
-            "新歌新碟",
-            "云村精选歌单",
-            "红心相似推荐",
-            "艺人/组合歌单",
-            "心动歌单",
-            "场景歌单",
-            "风格歌单",
-            "调研问卷",
-            "VIP 专属模块",
-            "VIP 小卡片",
-            "运营 Banner 1",
-            "运营 Banner 6",
-            "播客电台",
-            "播客音乐电台",
-            "播客订阅更新",
-            "播客关联节目",
-            "艺人动态",
-            "艺人 FM",
-            "音乐 FM",
-            "粉丝团卡片",
-            "实时兴趣推荐",
-            "组合模块",
-            "品牌歌单",
-            "音乐播客图文",
-            "声音/视频歌单推荐"
-    };
-
-    // 顶部频道（与 9.6.08 实测 tab 对齐）
+    // 顶部频道（与 9.6.08 实测 tab 对齐；key 是目标应用下发的频道代码）
     private static final String[] CHANNEL_KEYS = {
-            "心动", "推荐", "音乐", "播客", "听书", "AI写歌"
-    };
-    private static final String[] CHANNEL_TITLES = {
             "心动", "推荐", "音乐", "播客", "听书", "AI写歌"
     };
 
     // 底部导航（与 9.6.08 实测 tab 对齐：getTabTitle/getTabCode）
     private static final String[] BOTTOM_NAV_KEYS = {
-            "首页", "搜索", "关注", "我的"
-    };
-    private static final String[] BOTTOM_NAV_TITLES = {
             "首页", "搜索", "关注", "我的"
     };
 
@@ -122,9 +82,12 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
     }
 
     private void setupPreferences() {
-        bindMultiSelect(Config.KEY_HOME_BLOCKS_FILTER, BLOCK_TITLES, BLOCK_KEYS);
-        bindMultiSelect(Config.KEY_TOP_CHANNELS_KEEP, CHANNEL_TITLES, CHANNEL_KEYS);
-        bindMultiSelect(Config.KEY_BOTTOM_NAV_KEEP, BOTTOM_NAV_TITLES, BOTTOM_NAV_KEYS);
+        bindMultiSelect(Config.KEY_HOME_BLOCKS_FILTER,
+                getResources().getStringArray(R.array.home_block_titles), BLOCK_KEYS);
+        bindMultiSelect(Config.KEY_TOP_CHANNELS_KEEP,
+                getResources().getStringArray(R.array.home_channel_titles), CHANNEL_KEYS);
+        bindMultiSelect(Config.KEY_BOTTOM_NAV_KEEP,
+                getResources().getStringArray(R.array.home_bottom_nav_titles), BOTTOM_NAV_KEYS);
 
         Preference hint = findPreference("footer_home_custom_hint");
         if (hint != null) {

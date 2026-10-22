@@ -1,46 +1,151 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">云音乐工具箱</string>
-    <string name="module_description">网易云音乐净化与体验优化：去广告、精简界面、跳过启动延迟、隐私加固。</string>
+    <string name="app_name_full">云音乐工具箱 (CloudMusicTool)</string>
+    <string name="module_description">网易云音乐净化与体验优化：去广告、精简界面、跳过启动延迟、隐私加固</string>
 
-    <!-- 界面外壳 -->
-    <string name="about">关于</string>
-    <string name="about_title">关于云音乐工具箱</string>
-    <string name="about_body">版本 %1$s\n目标应用：网易云音乐 9.6.08 · libxposed API 102\n\n本模块与网易官方无任何关联，仅供学习、研究和个人设备使用。使用风险由使用者自行承担。\n\nGitHub:\ngithub.com/yigenhuobah/cloudmusictool</string>
-    <string name="status_title">模块状态</string>
-    <string name="status_active">已激活</string>
-    <string name="status_connected">框架已连接</string>
-    <string name="status_inactive">未激活</string>
+    <!-- 状态卡 -->
     <string name="status_connecting">正在连接框架…</string>
-    <string name="status_unsupported">目标版本未适配</string>
-    <string name="status_detail_active">框架 API %1$d · 已注入网易云音乐</string>
-    <string name="status_detail_no_scope">框架已连接，但作用域未勾选网易云音乐</string>
-    <string name="status_detail_not_running">启动网易云音乐后生效。若已启动仍显示此状态，请检查模块是否已在 LSPosed 中启用</string>
-    <string name="status_detail_inactive">请在 LSPosed 中启用本模块并勾选网易云音乐</string>
+    <string name="status_inactive">未激活</string>
+    <string name="status_connected">框架已连接</string>
+    <string name="status_active">已激活</string>
     <string name="status_detail_connecting">绑定成功后自动刷新</string>
-    <string name="status_detail_unsupported">当前版本 %1$s 未适配（官方适配：9.6.08）</string>
-    <string name="status_detail_injected">本次尝试 %1$d 个挂载点，%2$d 项未命中</string>
-    <string name="status_detail_health">Profile 适配：降级 %1$d 项 · 不可用 %2$d 项</string>
-    <string name="status_mark_degraded">降级</string>
-    <string name="status_mark_unavailable">不可用</string>
-    <string name="status_diagnostics_title">诊断</string>
-    <string name="status_diagnostics_empty">暂无目标进程回写。启动网易云音乐后自动刷新。</string>
-    <string name="status_diagnostics_none">未启用任何功能</string>
-    <string name="dexkit_selftest_title">DexKit 自检（调试）</string>
-    <string name="dexkit_selftest_summary">开启后 AD-01 的 LoadingAdManager 忽略硬编码类名，强制走 DexKit 定位；日志输出 selftest located/elapsed</string>
+    <string name="status_detail_no_scope">在 LSPosed 中启用模块并勾选网易云音乐</string>
+    <string name="status_detail_not_running">启动网易云音乐后生效</string>
+    <string name="status_detail_active">框架 API %1$d · 目标版本 %2$s · 已注入目标应用</string>
+    <string name="status_meta">框架 API %1$d · 目标版本 %2$s</string>
+    <string name="status_meta_unknown">框架 API — · 目标版本 %1$s</string>
+    <string name="status_target_missing">未安装</string>
+    <string name="status_remote_ok">remote prefs 可用，开关改动目标进程可读</string>
+    <string name="status_remote_unavailable">remote prefs 不可用，开关不可用</string>
 
-    <!-- 底栏 -->
-    <string name="nav_features">功能</string>
-    <string name="nav_home">首页定制</string>
-    <string name="nav_experiments">实验</string>
-    <string name="nav_about">关于</string>
+    <!-- 异常横幅 -->
+    <string name="status_warning_version">目标应用版本 %1$s 未适配（适配版本 %2$s），功能可能失效</string>
+    <string name="status_warning_failed">%1$d 项功能未生效，打开诊断页查看 skip 原因</string>
+
+    <!-- 分组 -->
+    <string name="group_ad">广告净化</string>
+    <string name="group_ui">界面精简</string>
+    <string name="group_pv">隐私保护</string>
+    <string name="group_en">功能增强</string>
+    <string name="group_ex">实验功能</string>
+    <string name="group_pages">更多</string>
+
+    <!-- 二级页入口 -->
+    <string name="page_home_customize">首页定制</string>
+    <string name="page_experiments">实验</string>
+    <string name="page_diagnostics">诊断</string>
+    <string name="page_about">关于</string>
+
+    <!-- 主页面页脚 -->
+    <string name="footer_limits">兼容版本：网易云音乐 9.6.08；其他版本默认跳过</string>
+    <string name="footer_hint">修改后自动同步；部分项需重启网易云音乐生效</string>
+
+    <!-- AD 广告净化 -->
+    <string name="f_ad_01_title">开屏广告跳过</string>
+    <string name="f_ad_01_summary">拦截开屏广告展示与落地页，摇一摇跳转一并失效；广告请求仍会发出</string>
+    <string name="f_ad_02_title">运营弹窗屏蔽</string>
+    <string name="f_ad_02_summary">屏蔽启动时的运营与营销弹窗，登录弹窗保留</string>
+    <string name="f_ad_08_title">广告上报与外跳拦截</string>
+    <string name="f_ad_08_summary">阻断广告统计上报与静默拉起外部应用，正常分享跳转不受影响</string>
+    <string name="f_ad_09_title">搜索广告净化</string>
+    <string name="f_ad_09_summary">清空搜索起始页广告位，并移除搜索结果中的大图与中图广告</string>
+    <string name="f_ad_10_title">广告预加载裁剪</string>
+    <string name="f_ad_10_summary">跳过冷启动广告入口与播客激励广告预加载，减少无效网络与内存占用</string>
+    <string name="f_ad_04_title">首页信息流广告</string>
+    <string name="f_ad_04_summary">移除发现页与推荐流中的推广卡片，布局自适应留空</string>
+    <string name="f_ad_05_title">评论区广告</string>
+    <string name="f_ad_05_summary">移除评论区广告横幅、推广组件与带货标签</string>
+    <string name="f_ad_06_title">播放页广告</string>
+    <string name="f_ad_06_summary">移除黑胶界面的广告层、送礼与推广贴纸</string>
+    <string name="f_ad_07_title">音频贴片广告</string>
+    <string name="f_ad_07_summary">拦截音频起播贴片与播客内插广告，播放进度不受影响</string>
+
+    <!-- UI 界面精简 -->
+    <string name="f_ad_03_title">更新弹窗屏蔽</string>
+    <string name="f_ad_03_summary">屏蔽版本检查、强制更新弹窗与应用内下载入口，不改变已安装版本</string>
+    <string name="f_ui_05_title">跳过启动延迟</string>
+    <string name="f_ui_05_summary">去掉启动时的红屏人为等待，冷启动更快；异常时可能提前进入首页</string>
+    <string name="f_ui_01_title">首页模块净化</string>
+    <string name="f_ui_01_summary">按模块代码隐藏发现页推荐卡片，并同步过滤首页缓存</string>
+    <string name="f_ui_02_title">顶部频道管理</string>
+    <string name="f_ui_02_summary">按保留清单删除顶部频道与对应页面，至少保留 1 个；留空显示全部</string>
+    <string name="f_ui_03_title">底部导航精简</string>
+    <string name="f_ui_03_summary">按保留清单精简底部导航，至少保留 1 个入口</string>
+    <string name="f_ui_04_title">侧栏抽屉精简</string>
+    <string name="f_ui_04_summary">暂不支持：9.6.08 未找到可靠的抽屉数据挂载点</string>
+    <string name="f_ui_06_title">引导与气泡屏蔽</string>
+    <string name="f_ui_06_summary">屏蔽引导气泡、评分弹窗与青少年弹窗，不影响登录与实名流程</string>
+    <string name="f_ui_07_title">禁止自动播放</string>
+    <string name="f_ui_07_summary">禁止冷启动、信息流与切歌时自动播放，手动播放不受影响</string>
+    <string name="f_ui_09_title">关闭头像挂件</string>
+    <string name="f_ui_09_summary">屏蔽个人主页与评论区头像挂件，仅影响展示</string>
+    <string name="f_ui_10_title">播放页提示治理</string>
+    <string name="f_ui_10_summary">关闭播放页评论气泡、推荐提示与卡顿弹窗，异常诊断信息随之隐藏</string>
+    <string name="f_ui_11_title">搜索热词轮播</string>
+    <string name="f_ui_11_summary">关闭搜索框内的运营热词轮播，搜索功能保持可用</string>
+    <string name="f_ui_12_title">播客与 AI DJ 引导</string>
+    <string name="f_ui_12_summary">关闭 FM 自动播放、听书权益与 AI DJ 切换引导，不改变已订阅内容</string>
+    <string name="f_ui_13_title">小组件与推送引导</string>
+    <string name="f_ui_13_summary">关闭添加小组件与推送引导弹窗，不影响系统通知权限</string>
+    <string name="f_ui_14_title">歌词页推广</string>
+    <string name="f_ui_14_summary">关闭歌词页底部推广、选项气泡与歌词视频弹窗</string>
+    <string name="f_ui_15_title">云村与直播推广</string>
+    <string name="f_ui_15_summary">关闭直播间推广位与云村发布、搜索引导气泡，直播功能本身保留</string>
+
+    <!-- PV 隐私保护 -->
+    <string name="f_pv_01_title">OAID 与设备追踪拦截</string>
+    <string name="f_pv_01_summary">阻断 OAID 上传链路与相关启动任务，可能影响依赖设备标识的统计</string>
+    <string name="f_pv_02_title">日志写盘任务屏蔽</string>
+    <string name="f_pv_02_summary">屏蔽日志落盘任务，减少磁盘写入；崩溃日志可能不再完整</string>
+    <string name="f_pv_03_title">启动任务黑名单</string>
+    <string name="f_pv_03_summary">跳过启动黑名单中的非必要任务与追踪组件，可能延后部分初始化</string>
+    <string name="f_pv_04_title">APM 上报抑制</string>
+    <string name="f_pv_04_summary">抑制 APM 性能数据上报与后台上传，不影响崩溃捕获</string>
+    <string name="f_pv_05_title">统计数据上报抑制</string>
+    <string name="f_pv_05_summary">记录统计上报调用并关闭监控开关，仅抑制上报不阻断业务</string>
+    <string name="f_pv_06_title">剪贴板读取拦截</string>
+    <string name="f_pv_06_summary">阻断全局剪贴板读取，避免启动时识别口令与深链；粘贴功能可能受影响</string>
+
+    <!-- EN 功能增强 -->
+    <string name="f_ui_16_title">我的页自定义背景</string>
+    <string name="f_ui_16_summary">在「我的」页显示本地图片全屏背景，仅本机可见；不改变会员状态</string>
+
+    <!-- EX 实验功能 -->
+    <string name="f_ui_08_title">强制深色模式（实验性）</string>
+    <string name="f_ui_08_summary">强制开启夜间深色主题，可能与宿主主题资源冲突（实验性）</string>
+    <string name="f_pv_07_title">启动任务编排</string>
+    <string name="f_pv_07_summary">调整白名单启动任务的优先级与线程，可能改变启动顺序（实验性）</string>
+
+    <!-- 诊断页 -->
+    <string name="diag_source_title">数据来源</string>
+    <string name="diag_source_ok">目标进程回写 · 更新于 %1$s</string>
+    <string name="diag_source_empty">暂无目标进程回写，启动目标应用后自动上报</string>
+    <string name="diag_truncated">回传数据过大，仅保留摘要</string>
+    <string name="diag_no_data">—</string>
+    <string name="diag_registered">registered</string>
+    <string name="diag_registered_zero">registered 0</string>
+    <string name="diag_hit">hit %1$d</string>
+    <string name="diag_skip">skip %1$s</string>
+    <string name="diag_skip_none">—</string>
+    <string name="diag_degraded">降级</string>
+    <string name="diag_unavailable">不可用</string>
+    <string name="diag_blocked">暂不支持：%1$s</string>
+    <string name="diag_actions_title">诊断操作</string>
+    <string name="diag_refresh_title">刷新</string>
+    <string name="diag_refresh_summary">重新读取目标进程回写</string>
+    <string name="diag_refreshed">诊断数据已刷新</string>
+    <string name="diag_copy_title">复制诊断信息</string>
+    <string name="diag_copy_summary">复制当前诊断文本到剪贴板</string>
+    <string name="diag_copied">诊断信息已复制</string>
+    <string name="diag_copy_failed">复制失败，请检查剪贴板权限</string>
 
     <!-- 实验页 -->
     <string name="experiment_section_notice">实验说明</string>
     <string name="experiment_notice_title">注意事项</string>
-    <string name="experiment_warning">强开实验可能导致界面异常；每次只开一个；重启网易云生效；默认关闭。</string>
+    <string name="experiment_warning">强开实验可能导致界面异常；每次只开一个；重启网易云生效</string>
     <string name="experiment_group_help_title">分组说明</string>
-    <string name="experiment_group_help_summary">c 通常为对照组；t/t1~t4 为不同实验组。具体行为由服务端配置决定，强开可能导致界面差异。</string>
+    <string name="experiment_group_help_summary">c 通常为对照组；t/t1~t4 为不同实验组。具体行为由服务端配置决定，强开可能导致界面差异</string>
     <string name="experiment_section_curated">可强开实验</string>
     <string name="experiment_curated_summary">观测分组: %1$s · 当前强制: %2$s</string>
     <string name="experiment_not_observed">未观测</string>
@@ -51,7 +156,7 @@
     <string name="experiment_saved">已保存，重启网易云音乐生效</string>
     <string name="experiment_save_failed">框架未连接，配置未保存</string>
     <string name="experiment_section_observed">已探测实验</string>
-    <string name="experiment_observed_empty">暂无观测数据。启动网易云音乐后点击“刷新”重新读取。</string>
+    <string name="experiment_observed_empty">暂无观测数据。启动网易云音乐后点击“刷新”重新读取</string>
     <string name="experiment_observed_summary">%1$s · %2$d 次 · %3$s</string>
     <string name="experiment_blocked">禁止强开</string>
     <string name="experiment_forced_mark">已强开: %1$s</string>
@@ -62,92 +167,13 @@
     <string name="experiment_forced_empty">当前没有强开的实验</string>
     <string name="experiment_forced_summary">强制分组: %1$s · 点击取消</string>
     <string name="experiment_cancel_title">取消强开</string>
-    <string name="experiment_cancel_message">取消后重启网易云音乐即可恢复默认分组。</string>
+    <string name="experiment_cancel_message">取消后重启网易云音乐即可恢复默认分组</string>
     <string name="experiment_cancelled">已取消，重启网易云音乐生效</string>
     <string name="experiment_reset">一键恢复默认</string>
     <string name="experiment_reset_summary">清空全部强开配置（当前 %1$d 项）</string>
     <string name="experiment_reset_title">恢复默认</string>
-    <string name="experiment_reset_message">将清空所有强开配置，重启网易云音乐后生效。</string>
+    <string name="experiment_reset_message">将清空所有强开配置，重启网易云音乐后生效</string>
     <string name="experiment_reset_done">已恢复默认，重启网易云音乐生效</string>
-
-    <!-- 分组 -->
-    <string name="group_ads">广告拦截</string>
-    <string name="group_ui">界面与启动</string>
-    <string name="group_privacy">隐私与上报</string>
-
-    <!-- 功能页页脚 -->
-    <string name="footer_limits">说明：广告与界面类功能默认开启，隐私与监控类功能默认关闭。各功能均可在对应分类中单独关闭。</string>
-    <string name="footer_hint">修改后自动同步至目标进程。若部分项未立即生效，请重启网易云音乐。</string>
-
-    <!-- 功能清单 -->
-    <string name="f_ad_01_title">开屏广告跳过</string>
-    <string name="f_ad_01_summary">拦截开屏广告展示、使广告数据源返回空并秒退广告落地页</string>
-    <string name="f_ad_02_title">运营弹窗屏蔽</string>
-    <string name="f_ad_02_summary">屏蔽应用启动时的各类运营推广及营销弹窗（保留登录弹窗）</string>
-    <string name="f_ad_03_title">更新弹窗屏蔽</string>
-    <string name="f_ad_03_summary">屏蔽版本检查与强制更新对话框，保持当前版本安宁</string>
-    <string name="f_ad_04_title">首页信息流广告</string>
-    <string name="f_ad_04_summary">移除发现页与推荐流中的推广卡片</string>
-    <string name="f_ad_05_title">评论区广告</string>
-    <string name="f_ad_05_summary">移除评论区广告横幅与推广组件</string>
-    <string name="f_ad_06_title">播放页广告</string>
-    <string name="f_ad_06_summary">移除黑胶唱片界面送礼与推广贴纸</string>
-    <string name="f_ad_07_title">音频贴片广告</string>
-    <string name="f_ad_07_summary">拦截音频起播贴片与播客内插广告</string>
-    <string name="f_ad_08_title">广告上报与外跳拦截</string>
-    <string name="f_ad_08_summary">阻断广告统计上报，拦截静默拉起外部电商或推广应用</string>
-    <string name="f_ad_09_title">搜索广告净化</string>
-    <string name="f_ad_09_summary">清空搜索起始页广告位，并关闭搜索结果中的大图/中图广告</string>
-    <string name="f_ad_10_title">广告预加载裁剪</string>
-    <string name="f_ad_10_summary">跳过冷启动广告入口与播客激励广告预加载任务</string>
-
-    <string name="f_ui_05_title">跳过启动延迟</string>
-    <string name="f_ui_05_summary">绕过 StartTimeHandler 红屏停留计时，立即执行启动任务</string>
-    <string name="f_ui_01_title">首页模块净化</string>
-    <string name="f_ui_01_summary">自定义隐藏发现页各推荐板块</string>
-    <string name="f_ui_02_title">顶部频道管理</string>
-    <string name="f_ui_02_summary">按保留清单真实删除顶部频道 tab 与对应页面，至少保留 1 个频道</string>
-    <string name="f_ui_03_title">底部导航精简</string>
-    <string name="f_ui_03_summary">自定义精简底部导航栏 Tab</string>
-    <string name="f_ui_04_title">侧栏抽屉精简</string>
-    <string name="f_ui_04_summary">暂不支持：9.6.08 未找到可靠的抽屉数据挂载点</string>
-    <string name="f_ui_06_title">引导与气泡屏蔽</string>
-    <string name="f_ui_06_summary">屏蔽各类引导气泡、评分弹窗与青少年弹窗</string>
-    <string name="f_ui_07_title">禁止自动播放</string>
-    <string name="f_ui_07_summary">禁止冷启动或切歌时自动播放音频</string>
-    <string name="f_ui_08_title">强制深色模式（实验性）</string>
-    <string name="f_ui_08_summary">强制开启夜间深色主题外观（实验性，默认关闭）</string>
-    <string name="f_ui_09_title">关闭头像挂件</string>
-    <string name="f_ui_09_summary">屏蔽个人主页与评论区头像挂件与装饰</string>
-    <string name="f_ui_10_title">播放页提示治理</string>
-    <string name="f_ui_10_summary">关闭播放页评论气泡、推荐歌曲提示、卡顿/网络错误弹窗与激励广告浮层</string>
-    <string name="f_ui_11_title">搜索热词轮播</string>
-    <string name="f_ui_11_summary">关闭搜索框内的运营热词轮播引导</string>
-    <string name="f_ui_12_title">播客与 AI DJ 引导</string>
-    <string name="f_ui_12_summary">关闭 FM 自动播放、听书权益与 AI DJ 切换引导</string>
-    <string name="f_ui_13_title">小组件与推送引导</string>
-    <string name="f_ui_13_summary">关闭添加小组件、推送引导弹窗与底部弹层</string>
-    <string name="f_ui_14_title">歌词页推广</string>
-    <string name="f_ui_14_summary">关闭歌词页底部推广 Hint、选项气泡与歌词视频弹窗</string>
-    <string name="f_ui_15_title">云村与直播推广</string>
-    <string name="f_ui_15_summary">关闭直播间推广位与云村发布/搜索引导气泡（默认关闭）</string>
-    <string name="f_ui_16_title">我的页自定义背景</string>
-    <string name="f_ui_16_summary">在「我的」页显示本地图片全屏背景；仅本机可见，不改变会员状态，重启网易云生效</string>
-
-    <string name="f_pv_01_title">OAID 与设备追踪拦截</string>
-    <string name="f_pv_01_summary">阻断 OAID 上传链路与相关启动任务</string>
-    <string name="f_pv_02_title">日志写盘任务屏蔽</string>
-    <string name="f_pv_02_summary">屏蔽 NeedLogToFileTask 与 NBLogTask 日志落盘任务</string>
-    <string name="f_pv_03_title">启动任务黑名单</string>
-    <string name="f_pv_03_summary">拦截启动黑名单中的非必要任务与追踪组件</string>
-    <string name="f_pv_04_title">APM 上报抑制</string>
-    <string name="f_pv_04_summary">抑制 APM 性能数据上报与后台强制上传</string>
-    <string name="f_pv_05_title">统计数据上报抑制</string>
-    <string name="f_pv_05_summary">记录统计上报调用，并关闭 LogMonitorConfigManager 的监控开关</string>
-    <string name="f_pv_06_title">剪贴板读取拦截</string>
-    <string name="f_pv_06_summary">阻断全局剪贴板读取入口，避免启动时识别口令/深链（默认关闭）</string>
-    <string name="f_pv_07_title">启动任务编排</string>
-    <string name="f_pv_07_summary">对白名单启动任务调整优先级、线程与降级编排（实验性，默认关闭）</string>
 
     <!-- 我的页背景 -->
     <string name="mine_bg_category">我的页背景</string>
@@ -157,13 +183,13 @@
     <string name="mine_bg_clear_title">清除背景</string>
     <string name="mine_bg_clear_summary">删除已保存的本地背景图片</string>
     <string name="mine_bg_pick_success">背景已保存，重启网易云后生效</string>
-    <string name="mine_bg_pick_failed">图片读取失败，请换一张试试</string>
+    <string name="mine_bg_pick_failed">图片读取失败，换一张图片重试</string>
     <string name="mine_bg_cleared">背景已清除，重启网易云后恢复默认</string>
-    <string name="mine_bg_note">仅本机可见，不上传、不影响他人，也不改变会员状态。</string>
+    <string name="mine_bg_note">仅本机可见，不上传、不影响他人，也不改变会员状态</string>
 
     <!-- 首页定制页 -->
     <string name="home_customize_title">首页与导航定制</string>
-    <string name="home_customize_hint">本页配置已持久化至远程配置。勾选后重启网易云音乐生效；未勾选任何项时对应功能保持全量显示。</string>
+    <string name="home_customize_hint">本页配置已持久化至远程配置。勾选后重启网易云音乐生效；未勾选任何项时对应功能保持全量显示</string>
     <string name="home_blocks_title">发现页推荐卡片隐藏</string>
     <string name="home_blocks_summary">勾选需要在首页过滤的卡片类型</string>
     <string name="home_channels_title">顶部频道保留</string>
@@ -171,17 +197,130 @@
     <string name="home_bottom_nav_title">底部导航保留</string>
     <string name="home_bottom_nav_summary">保留需要的底部导航 Tab</string>
 
-    <!-- 关于页详细 -->
-    <string name="about_app_header">云音乐工具箱 (CloudMusicTool)</string>
-    <string name="about_version_format">模块版本：%1$s (Code %2$d)</string>
-    <string name="about_scope_label">目标作用域</string>
-    <string name="about_scope_value">com.netease.cloudmusic</string>
-    <string name="about_target_ver_label">适配目标版本</string>
-    <string name="about_target_ver_value">9.6.08 (VersionCode 9006008)</string>
-    <string name="about_api_label">libxposed API</string>
-    <string name="about_api_value">API 102 (Modern Exception Protective)</string>
-    <string name="about_disclaimer_title">免责声明</string>
-    <string name="about_disclaimer_content">本模块为开源 Xposed/LSPosed 模块，所有代码仅供学习研究、代码逆向工程实践及个人无障碍体验改善之用。严禁用于任何商业目的、付费破解或绕过版权保护行为。因使用本模块产生的一切后果均由使用者自行承担。</string>
-    <string name="about_source_title">开源主页</string>
+    <!-- 关于页 -->
+    <string name="about_header">云音乐工具箱 (CloudMusicTool)</string>
+    <string name="about_version">版本 %1$s（versionCode %2$d）</string>
+    <string name="about_target">目标应用：网易云音乐\n包名：com.netease.cloudmusic\n适配版本：%1$s</string>
+    <string name="about_source_label">源码：</string>
     <string name="about_source_url">https://github.com/yigenhuobah/cloudmusictool</string>
+    <string name="about_source_text">github.com/yigenhuobah/cloudmusictool</string>
+    <string name="about_modules_title">同系列模块</string>
+    <string name="about_module_cloudmusictool">云音乐工具箱 (CloudMusicTool)</string>
+    <string name="about_module_quietbox">静盒 (QuietBox)</string>
+    <string name="about_module_quietmap">静途 (QuietMap)</string>
+    <string name="about_module_tiebaquiet">贴吧静净 (TiebaQuiet)</string>
+    <string name="about_module_cloudmusictool_url">https://github.com/yigenhuobah/cloudmusictool</string>
+    <string name="about_module_quietbox_url">https://github.com/yigenhuobah/quietbox</string>
+    <string name="about_module_quietmap_url">https://github.com/yigenhuobah/quietmap</string>
+    <string name="about_module_tiebaquiet_url">https://github.com/yigenhuobah/tiebaquiet</string>
+    <string name="about_current_mark">（当前）</string>
+    <string name="about_disclaimer_title">免责声明</string>
+    <string name="about_disclaimer">本模块与网易云音乐官方无关联；仅供学习、研究和个人设备使用；使用风险自担</string>
+    <string name="about_license_title">许可证</string>
+    <string name="about_license_name">MIT License</string>
+    <string name="about_license_url">https://github.com/yigenhuobah/cloudmusictool/blob/main/LICENSE</string>
+    <string name="about_link_failed">无法打开链接，请检查浏览器是否可用</string>
+    <string name="experiment_curated_title">%1$s（%2$s）</string>
+    <string name="experiment_unlisted">未收录实验，暂无中文说明</string>
+
+    <!-- 首页定制多选项（顺序必须与 HomeCustomizeFragment 的 code 数组一致） -->
+    <string-array name="home_block_titles">
+        <item>猜你喜欢</item>
+        <item>排行榜</item>
+        <item>快捷入口（每日推荐/心动模式等）</item>
+        <item>雷达歌单</item>
+        <item>每日推荐</item>
+        <item>新歌新碟</item>
+        <item>云村精选歌单</item>
+        <item>红心相似推荐</item>
+        <item>艺人/组合歌单</item>
+        <item>心动歌单</item>
+        <item>场景歌单</item>
+        <item>风格歌单</item>
+        <item>调研问卷</item>
+        <item>VIP 专属模块</item>
+        <item>VIP 小卡片</item>
+        <item>运营 Banner 1</item>
+        <item>运营 Banner 6</item>
+        <item>播客电台</item>
+        <item>播客音乐电台</item>
+        <item>播客订阅更新</item>
+        <item>播客关联节目</item>
+        <item>艺人动态</item>
+        <item>艺人 FM</item>
+        <item>音乐 FM</item>
+        <item>粉丝团卡片</item>
+        <item>实时兴趣推荐</item>
+        <item>组合模块</item>
+        <item>品牌歌单</item>
+        <item>音乐播客图文</item>
+        <item>声音/视频歌单推荐</item>
+    </string-array>
+
+    <string-array name="home_channel_titles">
+        <item>心动</item>
+        <item>推荐</item>
+        <item>音乐</item>
+        <item>播客</item>
+        <item>听书</item>
+        <item>AI 写歌</item>
+    </string-array>
+
+    <string-array name="home_bottom_nav_titles">
+        <item>首页</item>
+        <item>搜索</item>
+        <item>关注</item>
+        <item>我的</item>
+    </string-array>
+
+    <!-- ABTest 可强开实验的中文名与说明（顺序必须与 AbTestPolicy.CURATED_KEYS 一致） -->
+    <string-array name="abtest_titles">
+        <item>Tab 合并</item>
+        <item>首页头图</item>
+        <item>评论点击</item>
+        <item>回复置顶</item>
+        <item>评论加载样式</item>
+        <item>搜索 RN 框架</item>
+        <item>最佳搜索</item>
+        <item>热搜列表</item>
+        <item>本地搜索排序</item>
+        <item>封面交叉淡入</item>
+        <item>播放器数据源</item>
+        <item>播放环 UI</item>
+        <item>音频焦点弹窗</item>
+        <item>通知接收器异步注册</item>
+        <item>仅前台通知</item>
+        <item>消息中心通知</item>
+        <item>存储策略调整</item>
+        <item>磁盘扫描树</item>
+        <item>扫描后清理</item>
+        <item>本地文件状态修复</item>
+        <item>每日推荐刷新</item>
+        <item>歌单推荐</item>
+    </string-array>
+
+    <string-array name="abtest_descriptions">
+        <item>底栏 Tab 合并展示，可能减少底栏入口</item>
+        <item>首页顶部头图/头框样式</item>
+        <item>评论区的点击行为（展开、跳转方式）</item>
+        <item>回复楼层置顶展示</item>
+        <item>评论区加载样式与占位</item>
+        <item>搜索页 RN 框架版本</item>
+        <item>搜索结果排序/效果策略</item>
+        <item>搜索页热搜列表展示</item>
+        <item>本地搜索结果的排序策略</item>
+        <item>播放页封面交叉淡入淡出效果</item>
+        <item>播放器数据源策略</item>
+        <item>播放环/播放动效样式</item>
+        <item>音频焦点被其他应用抢占时的提示弹窗</item>
+        <item>通知接收器异步注册，偏启动性能</item>
+        <item>仅在前台显示通知</item>
+        <item>消息中心通知的 RN 样式</item>
+        <item>缓存/存储清理策略</item>
+        <item>磁盘/缓存扫描的目录树策略</item>
+        <item>扫描完成后的磁盘清理策略</item>
+        <item>本地音乐文件状态修复逻辑</item>
+        <item>每日推荐刷新策略</item>
+        <item>歌单推荐策略</item>
+    </string-array>
 </resources>

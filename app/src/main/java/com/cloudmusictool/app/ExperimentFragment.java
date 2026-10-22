@@ -117,8 +117,9 @@ public class ExperimentFragment extends PreferenceFragmentCompat {
 
             Preference p = new Preference(ctx);
             p.setKey("curated_" + key);
-            p.setTitle(AbTestDescriptions.title(key) + "（" + key + "）");
-            p.setSummary(AbTestDescriptions.description(key) + "\n"
+            p.setTitle(getString(R.string.experiment_curated_title,
+                    AbTestDescriptions.title(ctx, key), key));
+            p.setSummary(AbTestDescriptions.description(ctx, key) + "\n"
                     + getString(R.string.experiment_curated_summary, observedGroup, forced));
             p.setPersistent(false);
             p.setOnPreferenceClickListener(pref -> {

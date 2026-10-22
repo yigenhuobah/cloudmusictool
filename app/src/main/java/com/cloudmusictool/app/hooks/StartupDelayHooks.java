@@ -7,7 +7,7 @@ import java.lang.reflect.Method;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * UI-05 启动延迟（红屏停留）优化。
+ * UI-02 启动延迟（红屏停留）优化。
  */
 public final class StartupDelayHooks {
 

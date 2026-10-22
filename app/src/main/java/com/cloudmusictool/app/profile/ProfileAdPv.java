@@ -7,7 +7,8 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 广告（AD-01~AD-10）与隐私（PV-01~PV-07）的挂载点分片，另含 ABTest 只读观测入口。
+ * 广告（AD-01~AD-09）、界面（UI-01）、隐私（PV-01~PV-06）与实验（EX-02）
+ * 的挂载点分片，另含 ABTest 只读观测入口。
  *
  * 全部坐标均用 dexsql 在网易云 9.6.08（versionCode 9006008）上核对：
  *   SELECT class_descriptor, name, descriptor FROM methods WHERE ...
@@ -153,135 +154,135 @@ public final class ProfileAdPv {
                 new String[]{"Landroid/app/Activity;", LAUNCH_DIALOG_DATA}));
     }
 
-    // AD-03 更新弹窗与强制更新。
+    // UI-01 更新弹窗与强制更新。
     private static void addUpdate(List<MountSpec> out) {
-        out.add(MountSpec.method("AD-03", "CMUpdateConfig#hasNewVersion", true,
+        out.add(MountSpec.method("UI-01", "CMUpdateConfig#hasNewVersion", true,
                 UPDATE_CONFIG, "hasNewVersion", "Z", NONE));
-        out.add(MountSpec.method("AD-03", "appupdate.d#B", true,
+        out.add(MountSpec.method("UI-01", "appupdate.d#B", true,
                 UPDATE_STATE, "B", "Z", NONE, DexKitAnchors.APPUPDATE_D));
-        out.add(MountSpec.method("AD-03", "appupdate.d#I", false,
+        out.add(MountSpec.method("UI-01", "appupdate.d#I", false,
                 UPDATE_STATE, "I", "Z", NONE, DexKitAnchors.APPUPDATE_D));
-        out.add(MountSpec.method("AD-03", "UpdateInfo#getNeedPopUp", false,
+        out.add(MountSpec.method("UI-01", "UpdateInfo#getNeedPopUp", false,
                 UPDATE_INFO, "getNeedPopUp", "Ljava/lang/Boolean;", NONE));
-        out.add(MountSpec.method("AD-03", "UpdateInfo#getForceUpdate", true,
+        out.add(MountSpec.method("UI-01", "UpdateInfo#getForceUpdate", true,
                 UPDATE_INFO, "getForceUpdate", "Ljava/lang/Boolean;", NONE));
-        out.add(MountSpec.method("AD-03", "fw0.e#q", false,
+        out.add(MountSpec.method("UI-01", "fw0.e#q", false,
                 FW0_E, "q", "V",
                 new String[]{"Landroid/content/Context;", "Z", "Z"}, DexKitAnchors.FW0_E));
     }
 
-    // AD-04 首页/发现页信息流广告。
+    // AD-06 首页/发现页信息流广告。
     private static void addFeedAd(List<MountSpec> out) {
-        out.add(MountSpec.method("AD-04", "Banner#isAdBanner", true,
+        out.add(MountSpec.method("AD-06", "Banner#isAdBanner", true,
                 BANNER, "isAdBanner", "Z", NONE));
     }
 
-    // AD-05 评论区广告与推广组件。
+    // AD-07 评论区广告与推广组件。
     private static void addCommentAd(List<MountSpec> out) {
-        out.add(MountSpec.method("AD-05", "CommentAdapter#y1", true,
+        out.add(MountSpec.method("AD-07", "CommentAdapter#y1", true,
                 COMMENT_ADAPTER, "y1", "V",
                 new String[]{"Lcom/netease/cloudmusic/meta/virtual/CommentListEntry;"}));
-        out.add(MountSpec.method("AD-05", "SpecialComment#getGeneralBanner", false,
+        out.add(MountSpec.method("AD-07", "SpecialComment#getGeneralBanner", false,
                 SPECIAL_COMMENT, "getGeneralBanner",
                 "Lcom/netease/cloudmusic/meta/virtual/CommentGeneralBanner;", NONE));
-        out.add(MountSpec.method("AD-05", "SpecialComment#getLiveRcmdList", false,
+        out.add(MountSpec.method("AD-07", "SpecialComment#getLiveRcmdList", false,
                 SPECIAL_COMMENT, "getLiveRcmdList", "Ljava/util/ArrayList;", NONE));
-        out.add(MountSpec.method("AD-05", "SpecialComment#getVipRcmdList", false,
+        out.add(MountSpec.method("AD-07", "SpecialComment#getVipRcmdList", false,
                 SPECIAL_COMMENT, "getVipRcmdList", "Ljava/util/ArrayList;", NONE));
-        out.add(MountSpec.method("AD-05", "SpecialComment#getConcertInfo", false,
+        out.add(MountSpec.method("AD-07", "SpecialComment#getConcertInfo", false,
                 SPECIAL_COMMENT, "getConcertInfo",
                 "Lcom/netease/cloudmusic/meta/virtual/ConcertInfo;", NONE));
-        out.add(MountSpec.method("AD-05", "Comment#isTagValid", true,
+        out.add(MountSpec.method("AD-07", "Comment#isTagValid", true,
                 COMMENT, "isTagValid", "Z", NONE));
-        out.add(MountSpec.method("AD-05", "Comment#getBottomTags", false,
+        out.add(MountSpec.method("AD-07", "Comment#getBottomTags", false,
                 COMMENT, "getBottomTags", "Ljava/util/List;", NONE));
-        out.add(MountSpec.method("AD-05", "CommentVipRcmdAdapter#getItemCount", false,
+        out.add(MountSpec.method("AD-07", "CommentVipRcmdAdapter#getItemCount", false,
                 COMMENT_VIP_ADAPTER, "getItemCount", "I", NONE));
     }
 
-    // AD-06 播放页广告与商业挂件。
+    // AD-08 播放页广告与商业挂件。
     private static void addPlayerAd(List<MountSpec> out) {
-        out.add(MountSpec.method("AD-06", "PlayerAdJarDelegateImpl#k", true,
+        out.add(MountSpec.method("AD-08", "PlayerAdJarDelegateImpl#k", true,
                 PLAYER_AD_DELEGATE, "k", "V",
                 new String[]{"Lcom/netease/cloudmusic/meta/Ad;",
                         "Landroid/view/ViewGroup;", "Landroid/view/ViewGroup;"}));
-        out.add(MountSpec.method("AD-06", "PlayerAdJarDelegateImpl#q", true,
+        out.add(MountSpec.method("AD-08", "PlayerAdJarDelegateImpl#q", true,
                 PLAYER_AD_DELEGATE, "q", "V",
                 new String[]{"Lcom/netease/cloudmusic/meta/Ad;"}));
-        out.add(MountSpec.method("AD-06", "MusicGiftModel#isValid", false,
+        out.add(MountSpec.method("AD-08", "MusicGiftModel#isValid", false,
                 MUSIC_GIFT, "isValid", "Z", NONE));
-        out.add(MountSpec.method("AD-06", "AdPlayerFullScreenHelper#checkNeedExpose", false,
+        out.add(MountSpec.method("AD-08", "AdPlayerFullScreenHelper#checkNeedExpose", false,
                 PLAYER_FULLSCREEN, "checkNeedExpose", "Z",
                 new String[]{"Lcom/netease/cloudmusic/meta/Ad;"}));
     }
 
-    // AD-07 音频贴片与播客广告。
+    // AD-09 音频贴片与播客广告。
     private static void addAudioAd(List<MountSpec> out) {
-        out.add(MountSpec.method("AD-07", "AdAudioClipManager#d", true,
+        out.add(MountSpec.method("AD-09", "AdAudioClipManager#d", true,
                 AUDIO_CLIP, "d", "Ljava/lang/Object;",
                 new String[]{"Ljava/lang/String;", "I", "J",
                         "Lkotlin/jvm/functions/Function1;", "Lkotlin/coroutines/Continuation;"}));
-        out.add(MountSpec.method("AD-07", "AdAudioClipManager#c", true,
+        out.add(MountSpec.method("AD-09", "AdAudioClipManager#c", true,
                 AUDIO_CLIP, "c", "Ljava/lang/Object;",
                 new String[]{"Lkotlinx/coroutines/n0;",
                         "Lcom/netease/cloudmusic/meta/ad/audioclip/AudioClipData;", "J",
                         "Lkotlin/jvm/functions/Function1;", "Lkotlin/coroutines/Continuation;"}));
-        out.add(MountSpec.method("AD-07", "AdPodcastPlayerPageHelper#h", false,
+        out.add(MountSpec.method("AD-09", "AdPodcastPlayerPageHelper#h", false,
                 PODCAST_AD_HELPER, "h", "V",
                 new String[]{"Lcom/netease/cloudmusic/meta/Ad;"}));
-        out.add(MountSpec.method("AD-07", "PodcastVideoAdHelperImpl#z", false,
+        out.add(MountSpec.method("AD-09", "PodcastVideoAdHelperImpl#z", false,
                 PODCAST_VIDEO_AD, "z", "V",
                 new String[]{"J", "J", "Lcom/netease/cloudmusic/meta/Ad;",
                         "Landroid/view/ViewGroup;"}));
     }
 
-    // AD-08 广告上报与外部应用静默跳转。
+    // AD-03 广告上报与外部应用静默跳转。
     private static void addAdReport(List<MountSpec> out) {
-        out.add(MountSpec.method("AD-08", "AdCloudReportTask#execute", true,
+        out.add(MountSpec.method("AD-03", "AdCloudReportTask#execute", true,
                 AD_REPORT_TASK, "execute", "Z", NONE));
-        out.add(MountSpec.method("AD-08", "StartAppHelper$b#startApp", true,
+        out.add(MountSpec.method("AD-03", "StartAppHelper$b#startApp", true,
                 START_APP_HELPER_B, "startApp", "Z",
                 new String[]{"Landroid/app/Activity;", "Landroid/content/Intent;",
                         "Lcom/netease/cloudmusic/ad/StartAppHelper$StartAppListener;", "Z"}));
-        out.add(MountSpec.method("AD-08", "AdExposureDeeplinkPreRequestTask#init", false,
+        out.add(MountSpec.method("AD-03", "AdExposureDeeplinkPreRequestTask#init", false,
                 DEEPLINK_PRE, "init", "V", NONE));
-        out.add(MountSpec.method("AD-08", "AdExposureDeeplinkTask#init", false,
+        out.add(MountSpec.method("AD-03", "AdExposureDeeplinkTask#init", false,
                 DEEPLINK_TASK, "init", "V", NONE));
     }
 
-    // AD-09 搜索广告净化。
+    // AD-04 搜索广告净化。
     private static void addSearchAd(List<MountSpec> out) {
-        out.add(MountSpec.method("AD-09", "RNSearchAdViewManger#newStyle", true,
+        out.add(MountSpec.method("AD-04", "RNSearchAdViewManger#newStyle", true,
                 SEARCH_AD_MANAGER, "newStyle", "V",
                 new String[]{"Lcom/netease/cloudmusic/music/biz/search/start/rnview/RNSearchAdView;",
                         "Lcom/netease/cloudmusic/meta/Ad;", "I", "Ljava/lang/String;"}));
-        out.add(MountSpec.method("AD-09", "RNSearchAdViewManger#oldStyle", true,
+        out.add(MountSpec.method("AD-04", "RNSearchAdViewManger#oldStyle", true,
                 SEARCH_AD_MANAGER, "oldStyle", "V",
                 new String[]{"Lcom/netease/cloudmusic/music/biz/search/start/rnview/RNSearchAdView;",
                         "Lcom/netease/cloudmusic/meta/Ad;", "I", "Ljava/lang/String;"}));
-        out.add(MountSpec.method("AD-09", "RNSearchAdViewManger#hideAllViews", false,
+        out.add(MountSpec.method("AD-04", "RNSearchAdViewManger#hideAllViews", false,
                 SEARCH_AD_MANAGER, "hideAllViews", "V", NONE));
-        out.add(MountSpec.method("AD-09", "SearchAdItemLargeView#e", true,
+        out.add(MountSpec.method("AD-04", "SearchAdItemLargeView#e", true,
                 SEARCH_AD_LARGE, "e", "V",
                 new String[]{"Lcom/netease/cloudmusic/meta/Ad;", "I",
                         "Lkotlin/jvm/functions/Function1;", "Lkotlin/jvm/functions/Function1;"}));
-        out.add(MountSpec.method("AD-09", "SearchAdItemMediumView#e", true,
+        out.add(MountSpec.method("AD-04", "SearchAdItemMediumView#e", true,
                 SEARCH_AD_MEDIUM, "e", "V",
                 new String[]{"Lcom/netease/cloudmusic/meta/Ad;", "I",
                         "Lkotlin/jvm/functions/Function1;", "Lkotlin/jvm/functions/Function1;"}));
     }
 
-    // AD-10 冷启动广告预加载裁剪。
+    // AD-05 冷启动广告预加载裁剪。
     private static void addAdPreload(List<MountSpec> out) {
-        out.add(MountSpec.method("AD-10", "AdColdBootEntranceTask#init", true,
+        out.add(MountSpec.method("AD-05", "AdColdBootEntranceTask#init", true,
                 AD_COLD_BOOT, "init", "V", NONE));
-        out.add(MountSpec.method("AD-10", "PodcastRewardAdTask#init", false,
+        out.add(MountSpec.method("AD-05", "PodcastRewardAdTask#init", false,
                 PODCAST_REWARD_AD, "init", "V", NONE));
-        out.add(MountSpec.method("AD-10", "APreloadRecommendViewTask#init", false,
+        out.add(MountSpec.method("AD-05", "APreloadRecommendViewTask#init", false,
                 AD_PRELOAD_RECOMMEND, "init", "V", NONE));
     }
 
-    // PV-01~PV-07。
+    // PV-01~PV-06 与 EX-02。
     private static void addPrivacy(List<MountSpec> out) {
         // PV-01 OAID
         out.add(MountSpec.method("PV-01", "MusicOaidUploadManager#o", true,
@@ -327,14 +328,14 @@ public final class ProfileAdPv {
                 CLIPBOARD_UTILS, "d", "Landroid/content/ClipData$Item;",
                 new String[]{"Landroid/content/Context;"}));
 
-        // PV-07 启动任务编排
-        out.add(MountSpec.method("PV-07", "StartupTask#runOnUIThread", true,
+        // EX-02 启动任务编排
+        out.add(MountSpec.method("EX-02", "StartupTask#runOnUIThread", true,
                 STARTUP_TASK, "runOnUIThread", "Z", NONE));
-        out.add(MountSpec.method("PV-07", "StartupTask#priority", true,
+        out.add(MountSpec.method("EX-02", "StartupTask#priority", true,
                 STARTUP_TASK, "priority", "I", NONE));
-        out.add(MountSpec.method("PV-07", "StartupTask#runOnStage", false,
+        out.add(MountSpec.method("EX-02", "StartupTask#runOnStage", false,
                 STARTUP_TASK, "runOnStage", "I", NONE));
-        out.add(MountSpec.method("PV-07", "StartupTask#degradeInit", false,
+        out.add(MountSpec.method("EX-02", "StartupTask#degradeInit", false,
                 STARTUP_TASK, "degradeInit", "V", NONE));
     }
 

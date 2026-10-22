@@ -169,7 +169,7 @@ public final class Hooks {
                     StartupOrchestrationHooks.install(module, cl, f);
                     break;
                 case DRAWER:
-                    // UI-04 当前 blocked，installAll 不会走到这里；保留分支保证 switch 与 Feature 一一对应。
+                    // UI-06 当前 blocked，installAll 不会走到这里；保留分支保证 switch 与 Feature 一一对应。
                     module.log(Log.INFO, TAG, f.id + " blocked: " + f.blockedReason);
                     break;
                 default:

@@ -25,6 +25,9 @@ public final class Config {
 
     public static final String GROUP = "config";
 
+    /** 目标应用包名；UI 与目标进程共用，避免引用 Xposed 入口类。 */
+    public static final String TARGET_PACKAGE = "com.netease.cloudmusic";
+
     public static final String KEY_ALLOW_UNSUPPORTED = "allow_unsupported_version";
     public static final boolean DEFAULT_ALLOW_UNSUPPORTED = false;
 
@@ -36,7 +39,7 @@ public final class Config {
     /** ABTest 强制分组：JSON 对象 {"<key>":"<group>"}，只存用户显式开启的 key。 */
     public static final String KEY_ABTEST_FORCE_MAP = "abtest_force_map";
 
-    /** 隐藏自检开关：设置页“关于”连点 7 次后可见。开启后 AD-01 强制走 DexKit。 */
+    /** 隐藏自检开关：不进入设置页，仅通过 remote prefs 手动开启。开启后 AD-01 强制走 DexKit。 */
     public static final String KEY_DEXKIT_SELFTEST = "dexkit_selftest";
     public static final boolean DEFAULT_DEXKIT_SELFTEST = false;
 

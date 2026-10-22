@@ -43,7 +43,6 @@ public class StatusProvider extends ContentProvider {
 
     private static final String TAG = "CloudMusicTool";
     private static final String TARGET_PACKAGE = "com.netease.cloudmusic";
-    private static final int MAX_JSON_CHARS = 64 * 1024;
 
     @Override
     public boolean onCreate() {
@@ -70,11 +69,16 @@ public class StatusProvider extends ContentProvider {
             return null;
         }
         String json = extras.getString(KEY_JSON);
-        if (json == null || json.isEmpty() || json.length() > MAX_JSON_CHARS) {
+        if (!ReportProtocol.isValidPayload(json)) {
             Log.w(TAG, "status report rejected: invalid payload");
             return null;
         }
         String type = extras.getString(KEY_TYPE, TYPE_MOUNTS);
+        if (TYPE_MOUNTS.equals(type) && !ReportProtocol.isMainProcessReport(json)) {
+            // :play 只装音频贴片，回传会覆盖主进程快照；只保留主进程数据。
+            Log.i(TAG, "status report ignored: secondary process or invalid payload");
+            return null;
+        }
         String prefsKey = TYPE_EXPERIMENTS.equals(type) ? KEY_EXPERIMENTS : KEY_STATE;
         try {
             prefs().edit().putString(prefsKey, json).apply();
@@ -123,6 +127,19 @@ public class StatusProvider extends ContentProvider {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                     .edit().remove(KEY_STATE).apply();
         } catch (Throwable ignored) {
+        }
+    }
+
+    /** 已启用且明确失败的功能数；供主页面异常横幅使用。 */
+    public static int failedFeatureCount(Context context) {
+        String json = readState(context);
+        if (json == null || json.isEmpty()) {
+            return 0;
+        }
+        try {
+            return ReportProtocol.failedFeatureCount(new org.json.JSONObject(json));
+        } catch (Throwable t) {
+            return 0;
         }
     }
 

@@ -10,14 +10,16 @@ if (keystorePropsFile.exists()) {
 
 android {
     namespace 'com.cloudmusictool.app'
-    compileSdk 36
+    // 统一基线 compileSdk 37（Android 17）。libxposed api/service 102.0.0 的 AAR
+    // 元数据要求 minCompileSdk 37，因此不再关闭 check*AarMetadata 校验。
+    compileSdk 37
 
     defaultConfig {
         applicationId "io.github.yigenhuobah.cloudmusictool"
         minSdk 29
         targetSdk 36
-        versionCode 7
-        versionName "2.1.0"
+        versionCode 8
+        versionName "2.2.0"
     }
 
     signingConfigs {
@@ -92,9 +94,4 @@ dependencies {
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20240303'
-}
-
-// 屏蔽 AAR metadata 校验，允许 compileSdk 36 兼容 libxposed 声明的 API 37 要求
-tasks.withType(com.android.build.gradle.internal.tasks.CheckAarMetadataTask).configureEach {
-    enabled = false
 }

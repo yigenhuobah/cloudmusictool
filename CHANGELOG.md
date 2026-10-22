@@ -1,5 +1,53 @@
 # Changelog
 
+## 2.2.0 - 2026-10-23
+
+单页 + 二级页重构与功能统一编号（versionCode 8）。
+适配网易云音乐 9.6.08。
+
+### 新增
+
+- **诊断页**：逐功能显示 `编号 标题 · registered · hit N · skip 原因`，无数据 `—`；
+  页首显示回写时间，页尾提供刷新与复制诊断信息。
+- **关于页**：模块版本、目标应用、源码、四模块互链（当前模块标注「（当前）」）、
+  免责声明与 MIT 许可证；链接使用 `ClickableSpan` + `ACTION_VIEW`。
+- **异常横幅**：目标版本不匹配，或已启用且明确失败功能数 ≥ 2 时显示；
+  不阻塞操作，不新增第五种状态卡状态。
+
+### 变更
+
+- **导航重构**：移除 4 Tab 底栏，改为单 Activity + MaterialToolbar + FrameLayout；
+  主页面为设置页，首页定制、实验、诊断、关于为二级页，返回保留主页面滚动位置。
+- **状态卡**：只保留「正在连接框架… / 未激活 / 框架已连接 / 已激活」四态；
+  删除「目标版本未适配」第五态；副文案包含框架 API、目标版本与 remote prefs 可用性。
+- **主页面去诊断**：移除行内诊断摘要，诊断细节只出现在诊断页。
+- **功能重编号**：33 项统一为 AD-01~AD-09、UI-01~UI-15、PV-01~PV-06、EN-01、EX-01~EX-02；
+  remote prefs key 保持不变，老用户已保存配置不受影响。
+- **默认值**：AD/UI 默认开，PV/EN/EX 默认关；UI-15 云村与直播推广改为默认开。
+- **构建基线**：AGP 8.12.2 → 8.13.2，compileSdk 36 → 37，移除 `check*AarMetadata` 豁免；
+  minSdk 29 / targetSdk 36 / JDK 17 / Gradle 8.13 不变。
+- **文案**：用户可见文案全部迁入 `strings.xml`，统一前缀，去除人称与默认值重复描述。
+
+### 修复
+
+- 状态卡查询改到后台单线程，结果回主线程前校验 Fragment、查询代次与 service 实例。
+- Manifest 增加目标应用 `<queries>`，避免 Android 11+ 包可见性导致状态误判。
+- 诊断回传增加 `process` 字段，失败功能计数只统计主进程；`:play` 进程的挂载点快照不再覆盖主进程数据。
+
+### 验证
+
+- `:app:testDebugUnitTest`：57 个用例通过（新增 `FeatureTest`、`ReportProtocolTest`）。
+- `:app:assembleDebug`、`:app:assembleRelease` 通过。
+- 真机 25102RKBEC（Android 17 / LSPosed 2.2.1 / 网易云 9.6.08）：模块 App 启动正常，状态卡「已激活」，诊断页显示新编号（AD-01/AD-02/AD-03…），关于页四模块互链正常，首页定制 UI-16 设置正常；无 FATAL。
+- 2.2.0 之前的条目保留发布时的旧编号。
+
+APK: cloudmusictool-2.2.0.apk
+versionCode: 8
+大小: 3,868,902 字节
+SHA-256: a37e2fdcd78f01ea8005482f0f6ed74b9da9f7653100181eb4b11a920602b163
+
+---
+
 ## 2.1.0 - 2026-10-22
 
 「我的」页自定义背景（versionCode 7）。

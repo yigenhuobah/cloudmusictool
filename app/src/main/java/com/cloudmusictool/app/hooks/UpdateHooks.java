@@ -10,7 +10,7 @@ import java.lang.reflect.Method;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * AD-03 更新弹窗与强制更新拦截。
+ * UI-01 更新弹窗与强制更新拦截。
  */
 public final class UpdateHooks {
 

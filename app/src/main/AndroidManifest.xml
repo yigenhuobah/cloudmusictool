@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Android 11+ 包可见性：状态卡与 Provider UID 校验需要查询目标应用。 -->
+    <queries>
+        <package android:name="com.netease.cloudmusic" />
+    </queries>
+
     <application
         android:allowBackup="false"
         android:description="@string/module_description"

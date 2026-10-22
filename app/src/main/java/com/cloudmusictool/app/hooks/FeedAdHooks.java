@@ -7,7 +7,7 @@ import java.lang.reflect.Method;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * AD-04 首页 / 发现页信息流广告。
+ * AD-06 首页 / 发现页信息流广告。
  * 以 Banner.isAdBanner 为主闸门；不主动改 block 列表，避免误删正常卡片。
  */
 public final class FeedAdHooks {

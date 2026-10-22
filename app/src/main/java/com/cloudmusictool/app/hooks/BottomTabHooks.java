@@ -12,7 +12,7 @@ import java.util.Set;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * UI-03 底部导航精简：屏蔽 FM/动态底栏开关，并按保留列表过滤底栏项。
+ * UI-05 底部导航精简：屏蔽 FM/动态底栏开关，并按保留列表过滤底栏项。
  */
 public final class BottomTabHooks {
 

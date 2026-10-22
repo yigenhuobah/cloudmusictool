@@ -7,7 +7,7 @@ import java.lang.reflect.Method;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * AD-09 搜索广告净化。
+ * AD-04 搜索广告净化。
  * 覆盖搜索起始页 RN 广告与搜索结果混排广告。
  */
 public final class SearchAdHooks {
@@ -24,7 +24,7 @@ public final class SearchAdHooks {
 
     public static void install(XposedModule module, ClassLoader cl, Feature feature) {
         if (feature == null) {
-            HookKit.warn(module, "AD-09 install skipped: feature is null");
+            HookKit.warn(module, "AD-04 install skipped: feature is null");
             return;
         }
         Feature f = feature;

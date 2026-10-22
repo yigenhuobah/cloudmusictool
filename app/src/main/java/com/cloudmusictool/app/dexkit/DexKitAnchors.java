@@ -28,48 +28,48 @@ public final class DexKitAnchors {
             "loading_ad_judge"
     };
 
-    /** UI-03 底栏数据仓库（th0.h）。 */
+    /** UI-05 底栏数据仓库（th0.h）。 */
     public static final String[] TH0_H = {
             "BottomNavigationRepository"
     };
 
-    /** UI-03 底栏列表构造（rh0.c）；两个 anchor 组合唯一。 */
+    /** UI-05 底栏列表构造（rh0.c）；两个 anchor 组合唯一。 */
     public static final String[] RH0_C = {
             "tabCodeList",
             "context"
     };
 
-    /** UI-07 蓝牙/车载自动播放配置（tt0.d）。 */
+    /** UI-08 蓝牙/车载自动播放配置（tt0.d）。 */
     public static final String[] TT0_D = {
             "bluetoothAutoPlay2History"
     };
 
-    /** UI-07 云村自动播放配置（vt0.r）。 */
+    /** UI-08 云村自动播放配置（vt0.r）。 */
     public static final String[] VT0_R = {
             "HOMEPAGE_BOTTOM_TAB_PUBLISH_GUIDE"
     };
 
-    /** UI-07 自动播放总开关（lv0.j）。 */
+    /** UI-08 自动播放总开关（lv0.j）。 */
     public static final String[] LV0_J = {
             "key_start_music_after_launch_mode_enable_"
     };
 
-    /** AD-03 应用内更新入口（fw0.e）。 */
+    /** UI-01 应用内更新入口（fw0.e）。 */
     public static final String[] FW0_E = {
             "MarketUpdate [logMarketStage] fail, stage="
     };
 
-    /** AD-03 更新状态机（appupdate.d）。 */
+    /** UI-01 更新状态机（appupdate.d）。 */
     public static final String[] APPUPDATE_D = {
             "apkRemindVersionCode"
     };
 
-    /** UI-07 / UI-09 用户设置聚合类（jn）。 */
+    /** UI-08 / UI-09 用户设置聚合类（jn）。 */
     public static final String[] JN = {
             "MESSAGE_CENTER_NEW_SONG_VERSION_CODE_TEMP"
     };
 
-    /** UI-02 顶部频道 ViewPager2 适配器（dr.h，继承 FragmentStateAdapter）。 */
+    /** UI-04 顶部频道 ViewPager2 适配器（dr.h，继承 FragmentStateAdapter）。 */
     public static final String[] DR_H = {
             "RecommendTwoFlowAdapter"
     };

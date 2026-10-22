@@ -45,6 +45,7 @@ public final class HookState {
     private static final AtomicBoolean sPublishQueued = new AtomicBoolean(false);
 
     private static volatile String sModulePackage;
+    private static volatile String sProcessName;
     private static volatile Context sTargetContext;
     private static volatile boolean sContextWarningLogged;
     private static volatile boolean sPublishFailureLogged;
@@ -92,7 +93,13 @@ public final class HookState {
 
     /** 由 CloudMusicToolModule 在 onModuleLoaded 调用。 */
     public static void init(String modulePackage) {
+        init(modulePackage, null);
+    }
+
+    /** 记录回传进程名，供模块 App 只统计主进程失败功能数。 */
+    public static void init(String modulePackage, String processName) {
         sModulePackage = modulePackage;
+        sProcessName = processName;
     }
 
     /** 模块 App 包名；目标进程用它拼 StatusProvider authority。 */
@@ -250,6 +257,9 @@ public final class HookState {
                 }
             }
             root.put("updatedAt", System.currentTimeMillis());
+            if (sProcessName != null) {
+                root.put("process", sProcessName);
+            }
             root.put("enabledFeatures", enabledCount);
             root.put("installed", installed);
             root.put("expected", expected);
@@ -263,6 +273,9 @@ public final class HookState {
                 // 极端情况下退回摘要，保证不超过 64KB。
                 JSONObject compact = new JSONObject();
                 compact.put("updatedAt", System.currentTimeMillis());
+                if (sProcessName != null) {
+                    compact.put("process", sProcessName);
+                }
                 compact.put("enabledFeatures", enabledCount);
                 compact.put("installed", installed);
                 compact.put("expected", expected);

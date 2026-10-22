@@ -1,34 +1,45 @@
 package com.cloudmusictool.app;
 
+import android.app.Activity;
 import android.content.pm.PackageInfo;
 import android.os.Bundle;
 
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 
-import org.json.JSONObject;
-
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import io.github.libxposed.service.HookedTarget;
 import io.github.libxposed.service.XposedService;
 
 /**
- * 功能设置页。
- * 顶部状态卡展示：连接中 / 未激活 / 已激活 / 未适配。
- * 包含广告、界面与启动、隐私与上报三个分类。
+ * 主设置页：四态状态卡、异常横幅、功能开关、二级页入口与页脚。
+ *
+ * 状态卡的 binder 查询全部放后台单线程；结果回主线程前校验 Fragment 仍存在、
+ * 查询未被更新的一次覆盖、service 未被换绑。
  */
 public class SettingsFragment extends PreferenceFragmentCompat {
 
-    private static final String TARGET = "com.netease.cloudmusic";
+    private static final String TARGET = Config.TARGET_PACKAGE;
 
     private ConfigStore mStore;
+    private ExecutorService mStatusExecutor;
+    private final AtomicInteger mStatusGeneration = new AtomicInteger();
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
         setPreferencesFromResource(R.xml.prefs, rootKey);
         mStore = new ConfigStore(requireContext());
+        mStatusExecutor = Executors.newSingleThreadExecutor(r -> {
+            Thread thread = new Thread(r, "CloudMusicTool-Status");
+            thread.setDaemon(true);
+            return thread;
+        });
         bindFeatures();
+        bindPages();
         refresh();
     }
 
@@ -38,6 +49,16 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         refresh();
     }
 
+    @Override
+    public void onDestroy() {
+        mStatusGeneration.incrementAndGet();
+        if (mStatusExecutor != null) {
+            mStatusExecutor.shutdownNow();
+            mStatusExecutor = null;
+        }
+        super.onDestroy();
+    }
+
     private void bindFeatures() {
         for (Feature f : Feature.values()) {
             Preference p = findPreference(f.key);
@@ -45,18 +66,17 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 continue;
             }
             p.setTitle(f.titleRes);
+            p.setSummary(f.summaryRes);
             if (f.blocked()) {
-                p.setSummary(f.summaryRes);
                 p.setEnabled(false);
-            } else {
-                p.setSummary(f.summaryRes);
-                p.setOnPreferenceChangeListener((pref, value) -> {
-                    if (value instanceof Boolean) {
-                        mStore.put(f.key, (Boolean) value);
-                    }
-                    return true;
-                });
+                continue;
             }
+            p.setOnPreferenceChangeListener((pref, value) -> {
+                if (value instanceof Boolean) {
+                    mStore.put(f.key, (Boolean) value);
+                }
+                return true;
+            });
         }
 
         Preference limits = findPreference("footer_limits");
@@ -69,64 +89,51 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         }
     }
 
-    /** 重新读取框架状态与开关值。service 绑定后由 Activity 调一次。 */
+    private void bindPages() {
+        Preference home = findPreference("page_home_customize");
+        if (home != null) {
+            home.setOnPreferenceClickListener(p -> {
+                openPage(new HomeCustomizeFragment());
+                return true;
+            });
+        }
+        Preference experiments = findPreference("page_experiments");
+        if (experiments != null) {
+            experiments.setOnPreferenceClickListener(p -> {
+                openPage(new ExperimentFragment());
+                return true;
+            });
+        }
+        Preference diagnostics = findPreference("page_diagnostics");
+        if (diagnostics != null) {
+            diagnostics.setOnPreferenceClickListener(p -> {
+                openPage(new DiagnosticsFragment());
+                return true;
+            });
+        }
+        Preference about = findPreference("page_about");
+        if (about != null) {
+            about.setOnPreferenceClickListener(p -> {
+                openPage(new AboutFragment());
+                return true;
+            });
+        }
+    }
+
+    private void openPage(androidx.fragment.app.Fragment page) {
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).openPage(page);
+        }
+    }
+
+    /** 重新读取框架状态与开关值；service 绑定后由 Activity 调用。 */
     void refresh() {
-        if (getContext() == null) {
+        if (getContext() == null || mStatusExecutor == null
+                || mStatusExecutor.isShutdown()) {
             return;
         }
         mStore = new ConfigStore(requireContext());
         boolean writable = mStore.remote();
-
-        Preference status = findPreference("status");
-        if (status != null) {
-            XposedService service = ServiceBridge.get();
-            if (service == null) {
-                status.setTitle(R.string.status_connecting);
-                status.setSummary(R.string.status_detail_connecting);
-            } else {
-                int api = 0;
-                boolean scoped = false;
-                try {
-                    api = service.getApiVersion();
-                } catch (Throwable ignored) {
-                }
-                try {
-                    List<String> scope = service.getScope();
-                    scoped = scope != null && scope.contains(TARGET);
-                } catch (Throwable ignored) {
-                }
-
-                String targetVersion = null;
-                try {
-                    PackageInfo pi = requireContext().getPackageManager().getPackageInfo(TARGET, 0);
-                    targetVersion = pi.versionName;
-                } catch (Throwable ignored) {
-                }
-
-                boolean versionSupported = targetVersion != null && VersionGate.SUPPORTED_VERSION.equals(targetVersion);
-                boolean allowUnsupported = mStore.get(VersionGate.KEY_ALLOW_UNSUPPORTED, VersionGate.DEFAULT_ALLOW_UNSUPPORTED);
-                boolean injected = isTargetRunning(service);
-
-                if (!scoped) {
-                    status.setTitle(R.string.status_inactive);
-                    status.setSummary(R.string.status_detail_no_scope);
-                } else if (targetVersion != null && !versionSupported && !allowUnsupported) {
-                    status.setTitle(R.string.status_unsupported);
-                    status.setSummary(getString(R.string.status_detail_unsupported, targetVersion));
-                } else if (injected) {
-                    status.setTitle(R.string.status_active);
-                    String base = getString(R.string.status_detail_active, api);
-                    String injection = injectionSummary();
-                    status.setSummary(injection == null ? base : base + "\n" + injection);
-                } else {
-                    status.setTitle(R.string.status_connected);
-                    status.setSummary(R.string.status_detail_not_running);
-                }
-            }
-        }
-
-        updateDiagnostics();
-
         for (Feature f : Feature.values()) {
             Preference p = findPreference(f.key);
             if (p instanceof MaterialSwitchPreference) {
@@ -140,6 +147,56 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 }
             }
         }
+        refreshStatusAsync();
+    }
+
+    private void refreshStatusAsync() {
+        final XposedService service = ServiceBridge.get();
+        final Activity activity = getActivity();
+        final android.content.Context appContext = requireContext().getApplicationContext();
+        if (activity == null) {
+            return;
+        }
+        final int generation = mStatusGeneration.incrementAndGet();
+        try {
+            mStatusExecutor.execute(() -> {
+                StatusSnapshot snapshot = queryStatus(service, appContext);
+                activity.runOnUiThread(() -> {
+                    if (!isAdded() || mStatusGeneration.get() != generation
+                            || ServiceBridge.get() != service) {
+                        return;
+                    }
+                    renderStatus(snapshot);
+                });
+            });
+        } catch (Throwable ignored) {
+            // Fragment 正在销毁或 executor 已关闭：下次 onResume 会重新查询。
+        }
+    }
+
+    private StatusSnapshot queryStatus(XposedService service, android.content.Context context) {
+        StatusSnapshot snapshot = new StatusSnapshot();
+        if (service != null) {
+            try {
+                snapshot.api = service.getApiVersion();
+            } catch (Throwable ignored) {
+            }
+            try {
+                List<String> scope = service.getScope();
+                snapshot.scoped = scope != null && scope.contains(TARGET);
+            } catch (Throwable ignored) {
+            }
+            snapshot.running = isTargetRunning(service);
+        }
+        try {
+            PackageInfo info = context.getPackageManager().getPackageInfo(TARGET, 0);
+            snapshot.installed = true;
+            snapshot.targetVersion = info.versionName;
+        } catch (Throwable ignored) {
+        }
+        snapshot.remotePrefs = ServiceBridge.remotePreferences(Config.GROUP) != null;
+        snapshot.failedFeatures = StatusProvider.failedFeatureCount(context);
+        return snapshot;
     }
 
     private boolean isTargetRunning(XposedService service) {
@@ -148,8 +205,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             if (targets == null) {
                 return false;
             }
-            for (HookedTarget t : targets) {
-                String name = t.getProcessName();
+            for (HookedTarget target : targets) {
+                String name = target.getProcessName();
                 if (name != null && (name.equals(TARGET) || name.startsWith(TARGET + ":"))) {
                     return true;
                 }
@@ -159,96 +216,63 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         return false;
     }
 
-    /** 状态卡上的“本次注入 N/M 挂载点，K 项未命中”。 */
-    private String injectionSummary() {
-        JSONObject root = readStatus();
-        if (root == null) {
-            return null;
-        }
-        int enabled = root.optInt("enabledFeatures", 0);
-        if (enabled == 0) {
-            return null;
-        }
-        String summary = getString(R.string.status_detail_injected,
-                root.optInt("expected", 0),
-                root.optInt("noHitFeatures", 0));
-        String health = healthSummary(root);
-        return health == null ? summary : summary + "\n" + health;
-    }
-
-    /**
-     * Profile 降级/不可用摘要。
-     * 旧版 HookState 没有 degradedFeatures/unavailableFeatures 字段，
-     * optInt 默认 0，此时返回 null，状态卡保持旧文案。
-     */
-    private String healthSummary(JSONObject root) {
-        int degraded = root.optInt("degradedFeatures", 0);
-        int unavailable = root.optInt("unavailableFeatures", 0);
-        if (degraded == 0 && unavailable == 0) {
-            return null;
-        }
-        return getString(R.string.status_detail_health, degraded, unavailable);
-    }
-
-    /** 诊断卡：每项 installed/expected/hit/最近失败原因。 */
-    private void updateDiagnostics() {
-        Preference diag = findPreference("status_diagnostics");
-        if (diag == null) {
-            return;
-        }
-        JSONObject root = readStatus();
-        if (root == null) {
-            diag.setSummary(R.string.status_diagnostics_empty);
-            return;
-        }
-        int enabled = root.optInt("enabledFeatures", 0);
-        StringBuilder sb = new StringBuilder();
-        if (enabled == 0) {
-            sb.append(getString(R.string.status_diagnostics_none));
-        } else {
-            sb.append(getString(R.string.status_detail_injected,
-                    root.optInt("expected", 0),
-                    root.optInt("noHitFeatures", 0)));
-            String health = healthSummary(root);
-            if (health != null) {
-                sb.append('\n').append(health);
+    private void renderStatus(StatusSnapshot snapshot) {
+        Preference status = findPreference("status");
+        if (status != null) {
+            String target = snapshot.targetVersion != null
+                    ? snapshot.targetVersion
+                    : getString(R.string.status_target_missing);
+            String remote = getString(snapshot.remotePrefs
+                    ? R.string.status_remote_ok
+                    : R.string.status_remote_unavailable);
+            if (ServiceBridge.get() == null) {
+                status.setTitle(R.string.status_connecting);
+                status.setSummary(getString(R.string.status_detail_connecting) + "\n"
+                        + getString(R.string.status_meta_unknown, target) + "\n" + remote);
+            } else if (!snapshot.scoped) {
+                status.setTitle(R.string.status_inactive);
+                status.setSummary(getString(R.string.status_detail_no_scope) + "\n"
+                        + getString(R.string.status_meta, snapshot.api, target) + "\n" + remote);
+            } else if (snapshot.running) {
+                status.setTitle(R.string.status_active);
+                status.setSummary(getString(R.string.status_detail_active,
+                        snapshot.api, target) + "\n" + remote);
+            } else {
+                status.setTitle(R.string.status_connected);
+                status.setSummary(getString(R.string.status_detail_not_running) + "\n"
+                        + getString(R.string.status_meta, snapshot.api, target) + "\n" + remote);
             }
         }
-        JSONObject features = root.optJSONObject("features");
-        if (features != null) {
-            for (Feature f : Feature.values()) {
-                JSONObject o = features.optJSONObject(f.name());
-                if (o == null || !o.optBoolean("enabled", false)) {
-                    continue;
+
+        Preference warning = findPreference("warning");
+        if (warning != null) {
+            StringBuilder text = new StringBuilder();
+            if (snapshot.installed && snapshot.targetVersion != null
+                    && !VersionGate.isSupportedVersion(snapshot.targetVersion)) {
+                text.append(getString(R.string.status_warning_version,
+                        snapshot.targetVersion, VersionGate.SUPPORTED_VERSION));
+            }
+            if (snapshot.failedFeatures >= 2) {
+                if (text.length() > 0) {
+                    text.append('\n');
                 }
-                sb.append('\n').append(f.id).append("  ")
-                        .append(o.optInt("installed", 0)).append('/')
-                        .append(o.optInt("expected", 0))
-                        .append(o.optBoolean("hit", false) ? " · 已命中" : " · 未命中");
-                if (o.optBoolean("degraded", false)) {
-                    sb.append(" · ").append(getString(R.string.status_mark_degraded));
-                }
-                if (o.optBoolean("unavailable", false)) {
-                    sb.append(" · ").append(getString(R.string.status_mark_unavailable));
-                }
-                String failure = o.optString("lastFailure", null);
-                if (failure != null && !failure.isEmpty()) {
-                    sb.append(" · ").append(failure);
-                }
+                text.append(getString(R.string.status_warning_failed,
+                        snapshot.failedFeatures));
+            }
+            warning.setVisible(text.length() > 0);
+            if (text.length() > 0) {
+                warning.setSummary(text.toString());
             }
         }
-        diag.setSummary(sb.toString());
     }
 
-    private JSONObject readStatus() {
-        String json = StatusProvider.readState(requireContext());
-        if (json == null || json.isEmpty()) {
-            return null;
-        }
-        try {
-            return new JSONObject(json);
-        } catch (Throwable t) {
-            return null;
-        }
+    private static final class StatusSnapshot {
+        int api;
+        boolean scoped;
+        boolean running;
+        boolean installed;
+        boolean remotePrefs;
+        int failedFeatures;
+        String targetVersion;
     }
 }

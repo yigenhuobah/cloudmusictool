@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 关于页互链固定蓝色，亮/暗色背景均可读；不写死在 Java 里。 -->
+    <color name="about_link">#1A73E8</color>
+</resources>
