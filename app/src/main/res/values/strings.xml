@@ -131,6 +131,8 @@
     <string name="f_ui_14_summary">关闭歌词页底部推广 Hint、选项气泡与歌词视频弹窗</string>
     <string name="f_ui_15_title">云村与直播推广</string>
     <string name="f_ui_15_summary">关闭直播间推广位与云村发布/搜索引导气泡（默认关闭）</string>
+    <string name="f_ui_16_title">我的页自定义背景</string>
+    <string name="f_ui_16_summary">在「我的」页显示本地图片全屏背景；仅本机可见，不改变会员状态，重启网易云生效</string>
 
     <string name="f_pv_01_title">OAID 与设备追踪拦截</string>
     <string name="f_pv_01_summary">阻断 OAID 上传链路与相关启动任务</string>
@@ -146,6 +148,18 @@
     <string name="f_pv_06_summary">阻断全局剪贴板读取入口，避免启动时识别口令/深链（默认关闭）</string>
     <string name="f_pv_07_title">启动任务编排</string>
     <string name="f_pv_07_summary">对白名单启动任务调整优先级、线程与降级编排（实验性，默认关闭）</string>
+
+    <!-- 我的页背景 -->
+    <string name="mine_bg_category">我的页背景</string>
+    <string name="mine_bg_pick_title">选择背景图片</string>
+    <string name="mine_bg_pick_summary_set">已设置本地背景，重启网易云后生效</string>
+    <string name="mine_bg_pick_summary_unset">未设置；选择一张本地图片作为「我的」页全屏背景</string>
+    <string name="mine_bg_clear_title">清除背景</string>
+    <string name="mine_bg_clear_summary">删除已保存的本地背景图片</string>
+    <string name="mine_bg_pick_success">背景已保存，重启网易云后生效</string>
+    <string name="mine_bg_pick_failed">图片读取失败，请换一张试试</string>
+    <string name="mine_bg_cleared">背景已清除，重启网易云后恢复默认</string>
+    <string name="mine_bg_note">仅本机可见，不上传、不影响他人，也不改变会员状态。</string>
 
     <!-- 首页定制页 -->
     <string name="home_customize_title">首页与导航定制</string>

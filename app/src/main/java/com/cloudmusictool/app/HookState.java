@@ -95,6 +95,11 @@ public final class HookState {
         sModulePackage = modulePackage;
     }
 
+    /** 模块 App 包名；目标进程用它拼 StatusProvider authority。 */
+    public static String modulePackage() {
+        return sModulePackage;
+    }
+
     public static void enable(Feature f) {
         if (f == null) {
             return;

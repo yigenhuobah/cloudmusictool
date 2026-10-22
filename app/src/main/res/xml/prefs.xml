@@ -117,6 +117,10 @@
             android:icon="@drawable/ic_ui"
             android:key="ui_15_community_live" />
 
+        <com.cloudmusictool.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_ui"
+            android:key="ui_16_mine_background" />
+
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/group_privacy">

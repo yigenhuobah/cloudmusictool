@@ -20,6 +20,21 @@
 
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="@string/mine_bg_category">
+        <Preference
+            android:key="mine_bg_pick"
+            android:title="@string/mine_bg_pick_title"
+            android:summary="@string/mine_bg_pick_summary_unset" />
+        <Preference
+            android:key="mine_bg_clear"
+            android:title="@string/mine_bg_clear_title"
+            android:summary="@string/mine_bg_clear_summary" />
+        <Preference
+            android:key="mine_bg_note"
+            android:selectable="false"
+            android:title="@string/mine_bg_note" />
+    </PreferenceCategory>
+
     <Preference
         android:key="footer_home_custom_hint"
         android:layout="@layout/preference_footer"

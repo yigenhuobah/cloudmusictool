@@ -296,6 +296,21 @@ public final class ProfileUi {
                 }));
 
         // ------------------------------------------------------------------
+        // UI-16 我的页自定义背景（纯本地渲染，不碰会员字段）
+        // ------------------------------------------------------------------
+        // 9.6.08 的「我的」Tab 是 RN 页面；原生 manager 只覆盖旧布局。
+        out.add(m("UI-16", "RnMineFragment#onResume", true,
+                "com.netease.cloudmusic.fragment.RnMineFragment",
+                "onResume", "V", NONE));
+        out.add(m("UI-16", "MyMusicProfileHeaderBgViewHolderManager#e", true,
+                "com.netease.cloudmusic.vh.MyMusicProfileHeaderBgViewHolderManager",
+                "e", "V",
+                new String[]{"Lcom/netease/cloudmusic/meta/virtual/UserBackgroundInfo;"}));
+        out.add(m("UI-16", "MyMusicProfileHeaderBgViewHolderManager#onResume", false,
+                "com.netease.cloudmusic.vh.MyMusicProfileHeaderBgViewHolderManager",
+                "onResume", "V", NONE));
+
+        // ------------------------------------------------------------------
         // UI-15 云村 / 直播推广
         // ------------------------------------------------------------------
         out.add(m("UI-15", "LivePromotion#listFromJson(JSONObject)", true,

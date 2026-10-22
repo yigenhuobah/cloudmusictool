@@ -1,9 +1,16 @@
 package com.cloudmusictool.app;
 
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
+import android.widget.Toast;
 
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
+
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.Collections;
 import java.util.Set;
@@ -12,6 +19,8 @@ import java.util.Set;
  * 首页定制与导航精简页面。
  */
 public class HomeCustomizeFragment extends PreferenceFragmentCompat {
+
+    private static final int REQ_PICK_BG = 1001;
 
     private ConfigStore mStore;
 
@@ -121,6 +130,78 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
         if (hint != null) {
             hint.setSummary(R.string.home_customize_hint);
         }
+
+        Preference pick = findPreference("mine_bg_pick");
+        if (pick != null) {
+            pick.setOnPreferenceClickListener(preference -> {
+                pickBackground();
+                return true;
+            });
+        }
+
+        Preference clear = findPreference("mine_bg_clear");
+        if (clear != null) {
+            clear.setOnPreferenceClickListener(preference -> {
+                confirmClearBackground();
+                return true;
+            });
+        }
+    }
+
+    private void pickBackground() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("image/*");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try {
+            startActivityForResult(intent, REQ_PICK_BG);
+        } catch (Throwable t) {
+            Toast.makeText(requireContext(), R.string.mine_bg_pick_failed,
+                    Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void confirmClearBackground() {
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.mine_bg_clear_title)
+                .setMessage(R.string.mine_bg_clear_summary)
+                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                    MineBackgroundStore.clear(requireContext());
+                    Toast.makeText(requireContext(), R.string.mine_bg_cleared,
+                            Toast.LENGTH_SHORT).show();
+                    refresh();
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQ_PICK_BG || resultCode != Activity.RESULT_OK || data == null) {
+            return;
+        }
+        Uri uri = data.getData();
+        if (uri == null) {
+            return;
+        }
+        Context context = getContext();
+        if (context == null) {
+            return;
+        }
+        Context appContext = context.getApplicationContext();
+        MineBackgroundStore.importImageAsync(
+                appContext != null ? appContext : context,
+                uri,
+                ok -> {
+                    if (!isAdded()) {
+                        return;
+                    }
+                    Toast.makeText(requireContext(),
+                            ok ? R.string.mine_bg_pick_success : R.string.mine_bg_pick_failed,
+                            Toast.LENGTH_SHORT).show();
+                    refresh();
+                });
     }
 
     private void bindMultiSelect(String key, String[] entries, String[] values) {
@@ -144,9 +225,16 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
             return;
         }
         mStore = new ConfigStore(requireContext());
+        MineBackgroundStore.syncExternal(requireContext());
         updatePrefValues(Config.KEY_HOME_BLOCKS_FILTER);
         updatePrefValues(Config.KEY_TOP_CHANNELS_KEEP);
         updatePrefValues(Config.KEY_BOTTOM_NAV_KEEP);
+        Preference pick = findPreference("mine_bg_pick");
+        if (pick != null) {
+            pick.setSummary(MineBackgroundStore.hasImage(requireContext())
+                    ? R.string.mine_bg_pick_summary_set
+                    : R.string.mine_bg_pick_summary_unset);
+        }
     }
 
     private void updatePrefValues(String key) {

@@ -4,11 +4,16 @@ import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Bundle;
+import android.os.ParcelFileDescriptor;
 import android.util.Log;
+
+import java.io.File;
+import java.io.FileNotFoundException;
 
 /**
  * 目标进程 -> 模块 App 的 Hook 状态回写通道。
@@ -27,6 +32,10 @@ public class StatusProvider extends ContentProvider {
     public static final String KEY_TYPE = "type";
     public static final String TYPE_MOUNTS = "mounts";
     public static final String TYPE_EXPERIMENTS = "experiments";
+    /** 「我的」页背景图片的固定 URI 路径；只接受这一个路径，避免目录穿越。 */
+    public static final String PATH_MINE_BACKGROUND = "/mine_background";
+
+    private static final String MIME_JPEG = "image/jpeg";
 
     static final String PREFS = "hook_status";
     static final String KEY_STATE = "state";
@@ -127,6 +136,46 @@ public class StatusProvider extends ContentProvider {
         }
     }
 
+    /** 背景图片只读 URI；目标进程用它经 openFile 读取本地图片。 */
+    public static Uri mineBackgroundUri(Context context) {
+        return Uri.parse("content://" + context.getPackageName() + AUTHORITY_SUFFIX
+                + PATH_MINE_BACKGROUND);
+    }
+
+    @Override
+    public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
+        // 1) 只接受固定路径，绝不把 uri 当文件路径使用。
+        if (uri == null || !PATH_MINE_BACKGROUND.equals(uri.getPath())) {
+            throw new FileNotFoundException("unsupported uri: " + uri);
+        }
+        // 2) 打开文件前先校验调用方必须是网易云音乐。
+        int uid = Binder.getCallingUid();
+        if (!isTargetUid(uid)) {
+            Log.w(TAG, "mine background read rejected: uid=" + uid);
+            throw new FileNotFoundException("uid not allowed");
+        }
+        // 3) 只提供只读访问。
+        if (mode != null && !mode.contains("r")) {
+            throw new FileNotFoundException("read-only provider");
+        }
+        Context context = getContext();
+        if (context == null) {
+            throw new FileNotFoundException("provider not ready");
+        }
+        File file = MineBackgroundStore.file(context);
+        if (!file.isFile() || file.length() <= 0) {
+            throw new FileNotFoundException("mine background not found");
+        }
+        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
+    }
+
+    @Override
+    public AssetFileDescriptor openAssetFile(Uri uri, String mode) throws FileNotFoundException {
+        ParcelFileDescriptor fd = openFile(uri, mode);
+        return fd == null ? null : new AssetFileDescriptor(fd, 0,
+                AssetFileDescriptor.UNKNOWN_LENGTH);
+    }
+
     @Override
     public Cursor query(Uri uri, String[] projection, String selection,
                         String[] selectionArgs, String sortOrder) {
@@ -135,6 +184,9 @@ public class StatusProvider extends ContentProvider {
 
     @Override
     public String getType(Uri uri) {
+        if (uri != null && PATH_MINE_BACKGROUND.equals(uri.getPath())) {
+            return MIME_JPEG;
+        }
         return null;
     }
 

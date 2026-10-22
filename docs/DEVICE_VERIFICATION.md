@@ -1,7 +1,24 @@
 # 真机验证记录
 
-> 1.1.0 的详细验收见 [`phase2/1.1.0-VERIFY-A.md`](phase2/1.1.0-VERIFY-A.md)。
-> 下文 0.1.0 / 1.0.0 记录保留为历史，其中「零失效」只代表 registered，不代表 hit。
+> 2.1.0 UI-16 的验收见下文第一节；1.1.0 的详细验收见
+> [`phase2/1.1.0-VERIFY-A.md`](phase2/1.1.0-VERIFY-A.md)。
+> 历史记录中的「零失效」只代表 registered，不代表 hit。
+
+---
+
+# 2.1.0 UI-16 验证（2026-10-22）
+
+设备：`25102RKBEC`（Android 17 / LSPosed 2.2.1 / 网易云 9.6.08）
+APK：`cloudmusictool-2.1.0.apk`（versionCode 7）
+
+| 项 | 结果 | 说明 |
+|---|---|---|
+| UI-16 挂载 | 通过 | manager `e`/`onResume`、`MyMusicProxyFragment#oc`、Profile 模型、`pc2` 解析/SP |
+| 强制原生 V4 | 是 | 日志 `forced native Mine page` |
+| validType=4 注入 | 是 | `profile model` / `mine model` / `sp write` 均命中 |
+| 头部全屏背景 | 是 | 头像/昵称/统计/快捷入口透出本地图片 |
+| 内容卡片 | 保持主题深色 | 原生 V4 卡片自绘，未完全透出；已接受 |
+| 关闭 UI-16 | 未做 | 后续回归 RN 分支恢复 |
 
 ---
 

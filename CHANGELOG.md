@@ -1,5 +1,32 @@
 # Changelog
 
+## 2.1.0 - 2026-10-22
+
+「我的」页自定义背景（versionCode 7）。
+真机环境：25102RKBEC / Android 17 / LSPosed 2.2.1 / 网易云音乐 9.6.08。
+
+### 新增
+
+- **UI-16 我的页自定义背景**（默认关）：在模块 App「首页定制」选择本地图片，
+  压缩后存入模块私有目录，并同步一份到
+  `Android/media/<模块包名>/mine_background.jpg`。
+- 启用后「我的」页强制走原生 `MyMusicFragmentV4`，复用官方全屏背景链路：
+  把 `UserBackgroundInfo.validType` 注入为 4（FullScreen），`gh2/b` 渲染全屏图，
+  本模块再把本地图片追加到 `headerBgContainer`。
+- 注入点：`Profile#setUserBackgroundInfo` / `setMineUserBackground`、
+  `pc2.e$a#B`、`pc2.f#g/s`。只改渲染决策输入，不读写 `vip` / `showEntrance`。
+- MIUI/HyperOS 上 ContentProvider 唤醒会被 `WakePathChecker` 拦截，因此目标进程
+  优先直接读取共享文件，Provider 仅作兜底。
+
+### 限制
+
+- 原生 V4 内容区（创作者中心、歌单列表卡片）仍保持主题深色背景，不会完全透出图片；
+  头部与顶部区域是完整全屏效果。
+- 仅本机可见；不上传、不影响他人、不改变会员状态。
+- 仅适配 9.6.08。
+
+---
+
 ## 2.0.1 - 2026-10-20
 
 实验页可读性补丁（versionCode 6）。

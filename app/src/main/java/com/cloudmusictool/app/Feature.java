@@ -59,6 +59,8 @@ public enum Feature {
             "ui_14_lyrics_hint", true, Group.UI, null),
     COMMUNITY_LIVE("UI-15", R.string.f_ui_15_title, R.string.f_ui_15_summary,
             "ui_15_community_live", false, Group.UI, null),
+    MINE_BACKGROUND("UI-16", R.string.f_ui_16_title, R.string.f_ui_16_summary,
+            "ui_16_mine_background", false, Group.UI, null),
 
     OAID_REPORT("PV-01", R.string.f_pv_01_title, R.string.f_pv_01_summary,
             "pv_01_oaid", false, Group.PRIVACY, null),

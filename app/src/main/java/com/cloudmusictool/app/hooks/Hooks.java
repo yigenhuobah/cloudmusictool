@@ -129,6 +129,9 @@ public final class Hooks {
                 case COMMUNITY_LIVE:
                     CommunityLiveHooks.install(module, cl, f);
                     break;
+                case MINE_BACKGROUND:
+                    MineBackgroundHooks.install(module, cl, f);
+                    break;
                 case BOTTOM_NAV:
                     BottomTabHooks.install(module, cl, config);
                     break;
