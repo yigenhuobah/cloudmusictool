@@ -29,3 +29,6 @@ captures/
 # 发布产物（仅上传 Release，不入库）
 dist/*.txt
 dist/*.md
+
+# 维护文档（仅本地保存，不入库）
+docs/

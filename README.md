@@ -91,8 +91,7 @@
 
 真机已验证命中：AD-10（冷启动 `APreloadRecommendViewTask.init`）、UI-11（`SearchGuide.isValid`）、
 UI-02（频道 6→1）、PV-06（开启后 `utils.h2#d` 注册，关闭后恢复）。
-其余新功能为“已注册、未自然触发”，未做完整的五步验证，详见
-[`docs/phase2/1.1.0-VERIFY-A.md`](docs/phase2/1.1.0-VERIFY-A.md)。
+其余新功能为“已注册、未自然触发”，未做完整的五步验证。
 
 ## 2.0.0 架构版（开发中）
 
@@ -104,7 +103,6 @@ UI-02（频道 6→1）、PV-06（开启后 `utils.h2#d` 注册，关闭后恢�
 - `ProfileExportTest` 导出 `app/build/profile9608.json`；`tools/check-mounts.sh` 直接读取该文件，
   断言 versionCode、类 descriptor、方法参数/返回类型，输出 OK/GONE/ERROR。
 - 行为与 1.2.0 等价：只搬坐标，不改 hook 体；仍只适配 9.6.08。
-- 详见 [`docs/phase2/2.0.0-ARCH.md`](docs/phase2/2.0.0-ARCH.md)。
 
 ## 已知限制
 - **只适配 9.6.08**。其他版本默认跳过；高级配置 `allow_unsupported_version` 可尝试 best-effort，但不保证。
