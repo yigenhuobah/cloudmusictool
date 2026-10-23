@@ -119,7 +119,7 @@
 
 ## 构建
 
-环境：JDK 17、Android SDK Platform 37、Gradle wrapper 8.13、AGP 8.13.2。
+环境：JDK 21（构建用；Java source/target 仍为 17）、Android SDK Platform 37、Gradle wrapper 8.13、AGP 8.13.2。
 
 ```bash
 # 单元测试（含 ProfileExportTest，导出 app/build/profile9608.json）

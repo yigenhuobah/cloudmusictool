@@ -90,8 +90,8 @@ dependencies {
 
     implementation 'io.github.libxposed:service:102.0.0'
 
-    implementation 'androidx.appcompat:appcompat:1.7.0'
-    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.8.0'
+    implementation 'com.google.android.material:material:1.14.0'
     implementation 'androidx.preference:preference:1.2.1'
 
     // DexKit 2.3.0 (最新版，用于动态定位兜底)
