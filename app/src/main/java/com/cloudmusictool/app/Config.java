@@ -28,9 +28,6 @@ public final class Config {
     /** 目标应用包名；UI 与目标进程共用，避免引用 Xposed 入口类。 */
     public static final String TARGET_PACKAGE = "com.netease.cloudmusic";
 
-    public static final String KEY_ALLOW_UNSUPPORTED = "allow_unsupported_version";
-    public static final boolean DEFAULT_ALLOW_UNSUPPORTED = false;
-
     public static final String KEY_HOME_BLOCKS_FILTER = "home_blocks_filter";
     public static final String KEY_TOP_CHANNELS_KEEP = "top_channels_keep";
     public static final String KEY_BOTTOM_NAV_KEEP = "bottom_nav_keep";
@@ -48,7 +45,6 @@ public final class Config {
     private static final String TAG = "CloudMusicTool";
 
     private final Map<Feature, Boolean> mEnabled = new EnumMap<>(Feature.class);
-    private boolean mAllowUnsupported = DEFAULT_ALLOW_UNSUPPORTED;
     private final Map<String, Set<String>> mCustomSets = new java.util.HashMap<>();
     private Map<String, String> mAbTestForceMap = Collections.emptyMap();
 
@@ -72,7 +68,6 @@ public final class Config {
                 for (Feature f : Feature.values()) {
                     config.mEnabled.put(f, sp.getBoolean(f.key, f.defaultEnabled));
                 }
-                config.mAllowUnsupported = sp.getBoolean(KEY_ALLOW_UNSUPPORTED, DEFAULT_ALLOW_UNSUPPORTED);
                 sDexKitSelfTest = sp.getBoolean(KEY_DEXKIT_SELFTEST, DEFAULT_DEXKIT_SELFTEST);
                 loadSet(sp, KEY_HOME_BLOCKS_FILTER, config.mCustomSets);
                 loadSet(sp, KEY_TOP_CHANNELS_KEEP, config.mCustomSets);
@@ -180,10 +175,6 @@ public final class Config {
             }
         }
         return false;
-    }
-
-    public boolean allowUnsupportedVersion() {
-        return mAllowUnsupported;
     }
 
     public Set<String> getFilterSet(String key) {

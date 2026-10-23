@@ -20,17 +20,32 @@ public final class ProfileUi {
 
     private static final String[] NONE = new String[0];
 
-    /** 宿主所有 HintView#maybeDisplayHint 的固定三参数签名。 */
-    private static final String[] HINT_ARGS = {
-            "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
-            "Lcom/netease/cloudmusic/module/hint/view/a;",
-            "Lcom/netease/cloudmusic/module/hint/view/r;"
-    };
+    /**
+     * 宿主所有 HintView#maybeDisplayHint 的固定三参数签名。
+     * 前两参在 9.6.08/9.6.13 保持一致，第三参（具体 HintView 子类）随版本混淆漂移：
+     * 9.6.08 是 {@code r}，9.6.13 是 {@code u}。
+     */
+    private static String[] hintArgs(boolean hintArgU) {
+        return new String[]{
+                "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+                "Lcom/netease/cloudmusic/module/hint/view/a;",
+                hintArgU
+                        ? "Lcom/netease/cloudmusic/module/hint/view/u;"
+                        : "Lcom/netease/cloudmusic/module/hint/view/r;"
+        };
+    }
 
     private ProfileUi() {
     }
 
+    /** 9.6.08 的挂载点（hint 第三参 = r）。 */
     public static List<MountSpec> mounts() {
+        return mounts(false);
+    }
+
+    /** hintArgU=true 时使用 9.6.13 的第三参（u）。 */
+    public static List<MountSpec> mounts(boolean hintArgU) {
+        String[] HINT_ARGS = hintArgs(hintArgU);
         List<MountSpec> out = new ArrayList<>();
 
         // ------------------------------------------------------------------

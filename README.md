@@ -150,7 +150,7 @@ gradlew.bat :app:assembleRelease
 
 ## 已知限制
 
-- **只适配 9.6.08**。其他版本默认跳过；高级配置 `allow_unsupported_version` 可尝试 best-effort，但不保证。
+- **适配版本：9.6.08 / 9.6.13**。其他版本默认 best-effort 继续挂载（与 QuietBox 语义一致），功能可能失效，状态卡/横幅会提示未适配。
 - 广告由服务端下发，模块只能阻止展示/上报，不能阻止接口请求。
 - 宿主存在 Tinker 风格热补丁，补丁可能替换被 hook 的实现。
 - UI-06 侧栏抽屉无可靠挂载点，保持 blocked，设置页置灰。

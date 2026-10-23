@@ -154,7 +154,8 @@ public final class TopTabHooks {
             }
             Method t0 = HookKit.findMethodQuiet(drh, "T0", List.class);
             if (t0 == null) {
-                t0 = HookKit.findByNameAndArity(drh, "T0", 1);
+                // 9.6.13: T0 -> O0（Profile 映射），兜底扫描也用映射后的名字。
+                t0 = HookKit.findByNameAndArity(drh, HookKit.mappedMethodName(drh, "T0"), 1);
             }
             if (t0 != null) {
                 HookKit.install(module, f, "dr.h#T0", t0, chain -> {
@@ -205,8 +206,12 @@ public final class TopTabHooks {
 
             String[] listMethods = {"Tc", "Lc", "hc"};
             for (String mName : listMethods) {
+                // 9.6.13 的方法名已漂移（Tc->Pc / Lc->Hc / hc->dc），
+                // 先经 Profile 把请求的旧名映射成实际名再扫描；标签保留旧名，
+                // 与 Profile/HookState 的挂载点 id 保持一致。
+                String actual = HookKit.mappedMethodName(fragCls, mName);
                 for (Method m : fragCls.getDeclaredMethods()) {
-                    if (!m.getName().equals(mName)) {
+                    if (!m.getName().equals(actual)) {
                         continue;
                     }
                     Class<?>[] pts = m.getParameterTypes();

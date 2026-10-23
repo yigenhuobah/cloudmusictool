@@ -130,6 +130,40 @@ final class HookKit {
     }
 
     /**
+     * 按「hook 请求的旧混淆方法名」在活动 Profile 中找映射坐标。
+     *
+     * hook 文件写死的是 9.6.08 的方法名（如 LoadingAdManager#E）；9.6.13 的
+     * Profile 覆盖里 methodName 已换成实际名（如 H），logicalName 保留旧逻辑名。
+     * 命中且 methodName 与请求名不同时返回该 spec（以 Profile 为准）；未命中 /
+     * 名字一致（走 findBestMethodSpec 常规路径）时返回 null。
+     */
+    private static MountSpec findSpecByRequestedName(Class<?> cls, String name) {
+        TargetProfile profile = ProfileRegistry.active();
+        if (profile == null || cls == null || name == null) {
+            return null;
+        }
+        try {
+            MountSpec spec = profile.findByLogicalName(cls.getName(), name);
+            if (spec == null || spec.methodName == null || name.equals(spec.methodName)) {
+                return null;
+            }
+            return spec;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * 把 hook 请求的旧混淆方法名映射成活动 Profile 里的实际方法名。
+     * 供 hook 文件里按名扫描（getDeclaredMethods）的调用点使用：
+     * 9.6.13 时 "Tc" -> "Pc"，9.6.08 无覆盖时原样返回请求名。
+     */
+    static String mappedMethodName(Class<?> cls, String requested) {
+        MountSpec spec = findSpecByRequestedName(cls, requested);
+        return spec != null ? spec.methodName : requested;
+    }
+
+    /**
      * 按活动 Profile 解析方法；解析结果必须与调用方期望的参数/返回类型一致，
      * 否则返回 null 交给原有逻辑，避免 Profile 与 hook 期望漂移时误挂。
      */
@@ -139,6 +173,17 @@ final class HookKit {
             return null;
         }
         try {
+            // 1) 旧方法名 -> Profile 实际坐标（方法名/参数/返回类型以 spec 为准）。
+            MountSpec mapped = findSpecByRequestedName(cls, name);
+            if (mapped != null) {
+                Method resolved = MountResolver.resolveMethod(mapped, cls, cls.getClassLoader());
+                if (resolved != null) {
+                    info(module, f.id + " profile mapped method " + cls.getName() + "#" + name
+                            + " -> " + mapped.methodName + " (" + mapped.id + ")");
+                    return resolved;
+                }
+            }
+            // 2) 常规路径：请求名即 methodName，且与 hook 期望的参数/返回一致才使用。
             MountSpec spec = findBestMethodSpec(cls, name, params);
             if (spec == null) {
                 return null;
@@ -172,6 +217,17 @@ final class HookKit {
             return null;
         }
         try {
+            // 1) 旧方法名 -> Profile 实际坐标（以 spec 为准）。
+            MountSpec mapped = findSpecByRequestedName(cls, name);
+            if (mapped != null) {
+                Method resolved = MountResolver.resolveMethod(mapped, cls, cls.getClassLoader());
+                if (resolved != null) {
+                    Log.i(TAG, "profile mapped method " + cls.getName() + "#" + name
+                            + " -> " + mapped.methodName + " (" + mapped.id + ") (quiet)");
+                    return resolved;
+                }
+            }
+            // 2) 常规路径。
             MountSpec spec = findBestMethodSpec(cls, name, params);
             if (spec == null) {
                 return null;

@@ -90,9 +90,12 @@ public final class SplashAdHooks {
         });
 
         // 4. 签名扫描：所有 (AdInfo)Z 方法统一返回 false
+        //    9.6.13 的判定方法可能已改名（E -> H），上面的 profile 映射已挂过 H，
+        //    这里把映射后的名字一并排除，避免同一方法重复挂载。
         if (adInfoCls != null) {
+            String judgeName = HookKit.mappedMethodName(managerCls, "E");
             for (Method m : managerCls.getDeclaredMethods()) {
-                if (m.getName().equals("E")) {
+                if (m.getName().equals("E") || m.getName().equals(judgeName)) {
                     continue;
                 }
                 Class<?>[] params = m.getParameterTypes();

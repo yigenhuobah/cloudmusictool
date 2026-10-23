@@ -76,9 +76,11 @@ public final class AudioAdHooks {
             Class<?> videoHelper = HookKit.findClass(module, f, cl,
                     "com.netease.cloudmusic.module.ad.podcast.PodcastVideoAdHelperImpl");
             if (videoHelper != null) {
-                Method z = HookKit.findByShape(videoHelper, "z", long.class, long.class);
+                // 9.6.13 的 render 方法已改名（z -> B），先经 Profile 映射再按名/形状扫描。
+                String zName = HookKit.mappedMethodName(videoHelper, "z");
+                Method z = HookKit.findByShape(videoHelper, zName, long.class, long.class);
                 if (z == null) {
-                    z = HookKit.findByNameAndArity(videoHelper, "z", 4);
+                    z = HookKit.findByNameAndArity(videoHelper, zName, 4);
                 }
                 HookKit.install(module, f, "PodcastVideoAdHelperImpl#z", z,
                         HookKit.skipVoid(module, f, "PodcastVideoAdHelperImpl.z"));

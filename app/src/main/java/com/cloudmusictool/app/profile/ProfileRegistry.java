@@ -10,6 +10,9 @@ public final class ProfileRegistry {
     }
 
     public static TargetProfile forVersionCode(long versionCode) {
+        if (versionCode == 9006013L) {
+            return Profile9613.PROFILE;
+        }
         if (versionCode == 9006008L) {
             return Profile9608.PROFILE;
         }
@@ -17,6 +20,9 @@ public final class ProfileRegistry {
     }
 
     public static TargetProfile forVersionName(String versionName) {
+        if ("9.6.13".equals(versionName)) {
+            return Profile9613.PROFILE;
+        }
         if ("9.6.08".equals(versionName)) {
             return Profile9608.PROFILE;
         }

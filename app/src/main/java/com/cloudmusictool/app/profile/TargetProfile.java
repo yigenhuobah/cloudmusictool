@@ -73,4 +73,32 @@ public final class TargetProfile {
         }
         return null;
     }
+
+    /**
+     * 按「hook 请求的旧混淆方法名」查找坐标（纯 JVM 可测）。
+     *
+     * hook 文件里写死的是 9.6.08 的方法名（如 LoadingAdManager#E）；新版本的
+     * Profile 覆盖里 methodName 已换成实际名（如 H），但 logicalName 仍保留旧
+     * 逻辑名。此查找匹配：classCandidates 包含 className 且 logicalName 以
+     * {@code "#"+requestedMethodName} 结尾的 spec。找不到返回 null，由调用方
+     * 走原有按名解析路径。
+     */
+    public MountSpec findByLogicalName(String className, String requestedMethodName) {
+        if (className == null || requestedMethodName == null) {
+            return null;
+        }
+        String suffix = "#" + requestedMethodName;
+        for (MountSpec spec : mounts) {
+            if (spec.logicalName == null || !spec.logicalName.endsWith(suffix)
+                    || spec.classCandidates == null) {
+                continue;
+            }
+            for (String candidate : spec.classCandidates) {
+                if (className.equals(candidate)) {
+                    return spec;
+                }
+            }
+        }
+        return null;
+    }
 }

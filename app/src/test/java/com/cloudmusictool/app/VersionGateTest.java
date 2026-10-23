@@ -8,29 +8,25 @@ import static org.junit.Assert.assertTrue;
 public class VersionGateTest {
 
     @Test
-    public void supportedVersion_exactMatchOnly() {
+    public void supportedVersions_areExplicitlyListed() {
         assertTrue(VersionGate.isSupportedVersion("9.6.08"));
+        assertTrue(VersionGate.isSupportedVersion("9.6.13"));
         assertFalse(VersionGate.isSupportedVersion("9.6.09"));
         assertFalse(VersionGate.isSupportedVersion(null));
     }
 
     @Test
     public void shouldProceed_unknownVersionIsBestEffort() {
-        assertTrue(VersionGate.shouldProceed(null, false));
+        assertTrue(VersionGate.shouldProceed(null));
     }
 
     @Test
     public void shouldProceed_supportedVersion() {
-        assertTrue(VersionGate.shouldProceed("9.6.08", false));
+        assertTrue(VersionGate.shouldProceed("9.6.13"));
     }
 
     @Test
-    public void shouldProceed_unsupportedBlockedByDefault() {
-        assertFalse(VersionGate.shouldProceed("9.6.09", false));
-    }
-
-    @Test
-    public void shouldProceed_unsupportedAllowedWhenOptedIn() {
-        assertTrue(VersionGate.shouldProceed("9.6.09", true));
+    public void shouldProceed_unsupportedVersionIsFailOpen() {
+        assertTrue(VersionGate.shouldProceed("9.6.09"));
     }
 }

@@ -13,10 +13,10 @@ import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam;
 
 public final class VersionGate {
 
-    public static final String SUPPORTED_VERSION = "9.6.08";
-    public static final long SUPPORTED_VERSION_CODE = 9006008L;
-    public static final String KEY_ALLOW_UNSUPPORTED = "allow_unsupported_version";
-    public static final boolean DEFAULT_ALLOW_UNSUPPORTED = false;
+    public static final String SUPPORTED_VERSION = "9.6.13";
+    public static final long SUPPORTED_VERSION_CODE = 9006013L;
+    public static final String LEGACY_VERSION = "9.6.08";
+    public static final long LEGACY_VERSION_CODE = 9006008L;
 
     private static final String TAG = "CloudMusicTool";
 
@@ -85,14 +85,11 @@ public final class VersionGate {
     /**
      * 版本门禁 + 活动 Profile 选择。
      *
-     * 1) versionCode 可读：9006008 激活 Profile 并放行；未适配时按 allowUnsupported
-     *    best-effort（active=null，回退硬编码）或跳过。
-     * 2) versionCode 不可读：回退原有 versionName 逻辑（未知 fail-open，未适配看 allowUnsupported）。
-     *
-     * 返回 false 时调用方应 detach()，不安装任何 hook。
+     * 已适配版本激活对应 Profile；未适配/未知版本一律 fail-open：
+     * active=null，回退硬编码挂载点，best-effort 安装。
+     * 与 QuietBox 语义一致，不再因为版本不匹配而整体跳过 hook。
      */
-    public static boolean prepareProfile(XposedModule module, PackageReadyParam param,
-                                         boolean allowUnsupported) {
+    public static boolean prepareProfile(XposedModule module, PackageReadyParam param) {
         long versionCode = resolveVersionCode(param);
         if (versionCode > 0) {
             TargetProfile profile = ProfileRegistry.forVersionCode(versionCode);
@@ -105,14 +102,10 @@ public final class VersionGate {
                 return true;
             }
             ProfileRegistry.setActive(null);
-            if (allowUnsupported) {
-                module.log(Log.WARN, TAG, "target versionCode unsupported (" + versionCode
-                        + "), but allow_unsupported_version is enabled; best-effort with hardcoded mounts");
-                return true;
-            }
-            module.log(Log.WARN, TAG, "target versionCode unsupported: " + versionCode
-                    + " (supported: " + SUPPORTED_VERSION_CODE + "), skipping hooks");
-            return false;
+            module.log(Log.WARN, TAG, "target versionCode unsupported (" + versionCode
+                    + ", supported: " + SUPPORTED_VERSION_CODE
+                    + "); best-effort with hardcoded mounts");
+            return true;
         }
 
         // versionCode 不可读：保留原有 versionName 兜底逻辑。
@@ -129,7 +122,7 @@ public final class VersionGate {
             }
         }
         ProfileRegistry.setActive(null);
-        return checkVersion(module, versionName, allowUnsupported);
+        return checkVersion(module, versionName);
     }
 
     /**
@@ -175,11 +168,9 @@ public final class VersionGate {
     }
 
     /**
-     * 校验目标版本是否符合要求。
-     * 仅当 9.6.08 时放行；若开启 allow_unsupported_version 则放行其他版本。
-     * 若版本未知（null），写 WARN 并返回 true（fail-open）。
+     * 校验目标版本。已适配版本写 INFO；未知/未适配版本写 WARN 并 fail-open。
      */
-    public static boolean checkVersion(XposedModule module, String versionName, boolean allowUnsupported) {
+    public static boolean checkVersion(XposedModule module, String versionName) {
         if (versionName == null) {
             module.log(Log.WARN, TAG, "unable to resolve target version; 版本未知，按 best-effort 继续");
             return true;
@@ -188,22 +179,17 @@ public final class VersionGate {
             module.log(Log.INFO, TAG, "target version matched: " + versionName);
             return true;
         }
-        if (allowUnsupported) {
-            module.log(Log.WARN, TAG, "target version unsupported (" + versionName
-                    + "), but allow_unsupported_version is enabled");
-            return true;
-        }
         module.log(Log.WARN, TAG, "target version unsupported: " + versionName
-                + " (supported: " + SUPPORTED_VERSION + "), skipping hooks");
-        return false;
+                + " (supported: " + SUPPORTED_VERSION + "); best-effort with hardcoded mounts");
+        return true;
     }
 
     public static boolean isSupportedVersion(String versionName) {
-        return SUPPORTED_VERSION.equals(versionName);
+        return SUPPORTED_VERSION.equals(versionName) || LEGACY_VERSION.equals(versionName);
     }
 
-    /** 纯函数版本门禁：未知版本放行，已知但未适配则看 allowUnsupported。 */
-    public static boolean shouldProceed(String versionName, boolean allowUnsupported) {
-        return versionName == null || isSupportedVersion(versionName) || allowUnsupported;
+    /** 纯函数版本门禁：与 QuietBox 一致，任何版本都 fail-open。 */
+    public static boolean shouldProceed(String versionName) {
+        return true;
     }
 }

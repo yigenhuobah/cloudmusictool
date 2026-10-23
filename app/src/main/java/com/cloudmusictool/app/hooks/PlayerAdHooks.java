@@ -29,9 +29,11 @@ public final class PlayerAdHooks {
             Class<?> delegate = HookKit.findClass(module, f, cl,
                     "com.netease.cloudmusic.module.ad.playerjar.PlayerAdJarDelegateImpl");
             if (delegate != null) {
+                // 9.6.13: k -> j（Profile 映射）；adCls 缺失时的兜底扫描也用映射后的名字。
+                String kName = HookKit.mappedMethodName(delegate, "k");
                 Method k = adCls != null
                         ? HookKit.findMethod(module, f, delegate, "k", adCls, ViewGroup.class, ViewGroup.class)
-                        : HookKit.findByNameAndArity(delegate, "k", 3);
+                        : HookKit.findByNameAndArity(delegate, kName, 3);
                 HookKit.install(module, f, "PlayerAdJarDelegateImpl#k", k,
                         HookKit.skipVoid(module, f, "PlayerAdJarDelegateImpl.k"));
 

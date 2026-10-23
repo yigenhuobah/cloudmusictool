@@ -47,7 +47,7 @@
     <string name="page_about">关于</string>
 
     <!-- 主页面页脚 -->
-    <string name="footer_limits">兼容版本：网易云音乐 9.6.08；其他版本默认跳过</string>
+    <string name="footer_limits">适配版本：网易云音乐 9.6.08 / 9.6.13；其他版本 best-effort，功能可能失效</string>
     <string name="footer_hint">修改后自动同步；部分项需重启网易云音乐生效</string>
 
     <!-- AD 广告净化 -->
