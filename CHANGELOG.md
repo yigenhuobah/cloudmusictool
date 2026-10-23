@@ -1,5 +1,39 @@
 # Changelog
 
+## 2.3.0 - 2026-10-23
+
+隐藏桌面图标（versionCode 9）。
+适配网易云音乐 9.6.08。
+
+### 新增
+
+- **隐藏桌面图标**：主设置页「其他」分组新增开关。桌面入口改由 `activity-alias`
+  `com.cloudmusictool.app.LauncherEntry` 承载，隐藏只禁用 alias，MainActivity 保留
+  `de.robv.android.xposed.category.MODULE_SETTINGS` 入口，可从 LSPosed 管理器重新打开
+  设置页恢复，不会自锁；状态以系统组件状态为准，外部改动（adb / 清数据）回到本页自动同步。
+  感谢 @Z2549 的 PR #3。
+
+### 变更
+
+- 主设置页在 EX 分组之后新增「其他」分组，用于不属于 AD/UI/PV/EN/EX 的模块级设置；
+  `DESIGN.md` 同步补充该可选分组规则。
+
+### 验证
+
+- `:app:testDebugUnitTest`：64 个用例通过（新增 `LauncherIconTest` 7 个）。
+- `:app:lintDebug`、`:app:assembleRelease` 通过。
+- 模拟器 emulator-5554（Android 15 / API 35）：2.2.0 → 2.3.0 覆盖升级、隐藏/恢复、
+  DONT_KILL_APP 不杀进程、隐藏态冷启动、外部组件状态同步、无 FATAL，全部通过；
+  MIUI 桌面缓存与 LSPosed 管理器入口未在模拟器覆盖。
+- 发布签名证书 SHA-256 与 2.2.0 一致。
+
+APK: cloudmusictool-2.3.0.apk
+versionCode: 9
+大小: 3,873,662 字节
+SHA-256: 9ae6276f2639a6c9935dad0349c9b3d8083d282b807ccff08805e6506c9a1e6a
+
+---
+
 ## 2.2.0 - 2026-10-23
 
 单页 + 二级页重构与功能统一编号（versionCode 8）。

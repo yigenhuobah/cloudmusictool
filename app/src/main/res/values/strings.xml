@@ -29,7 +29,15 @@
     <string name="group_pv">隐私保护</string>
     <string name="group_en">功能增强</string>
     <string name="group_ex">实验功能</string>
+    <string name="group_other">其他</string>
     <string name="group_pages">更多</string>
+
+    <!-- 其他 -->
+    <string name="app_hide_icon_title">隐藏桌面图标</string>
+    <string name="app_hide_icon_summary">隐藏后桌面与应用抽屉不再显示图标；可从 LSPosed 管理器打开本页恢复</string>
+    <string name="app_hide_icon_hidden_toast">桌面图标已隐藏；可从 LSPosed 管理器打开本页恢复</string>
+    <string name="app_hide_icon_shown_toast">桌面图标已恢复</string>
+    <string name="app_hide_icon_failed">修改桌面图标失败，请重试</string>
 
     <!-- 二级页入口 -->
     <string name="page_home_customize">首页定制</string>

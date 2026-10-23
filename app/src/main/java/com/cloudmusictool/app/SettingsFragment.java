@@ -3,6 +3,7 @@ package com.cloudmusictool.app;
 import android.app.Activity;
 import android.content.pm.PackageInfo;
 import android.os.Bundle;
+import android.widget.Toast;
 
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
@@ -25,6 +26,9 @@ public class SettingsFragment extends PreferenceFragmentCompat {
 
     private static final String TARGET = Config.TARGET_PACKAGE;
 
+    /** 与 res/xml/prefs.xml 的 android:key 保持一致。 */
+    private static final String KEY_HIDE_ICON = "app_hide_icon";
+
     private ConfigStore mStore;
     private ExecutorService mStatusExecutor;
     private final AtomicInteger mStatusGeneration = new AtomicInteger();
@@ -39,6 +43,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             return thread;
         });
         bindFeatures();
+        bindLauncherIcon();
         bindPages();
         refresh();
     }
@@ -86,6 +91,48 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         Preference hint = findPreference("footer_hint");
         if (hint != null) {
             hint.setSummary(R.string.footer_hint);
+        }
+    }
+
+    /**
+     * 桌面图标开关。
+     *
+     * <p>改的是本模块 launcher alias 的组件状态，与目标进程的 remote prefs 无关，
+     * 所以不走 ConfigStore。
+     */
+    private void bindLauncherIcon() {
+        Preference pref = findPreference(KEY_HIDE_ICON);
+        if (!(pref instanceof MaterialSwitchPreference)) {
+            return;
+        }
+        MaterialSwitchPreference sw = (MaterialSwitchPreference) pref;
+        sw.setTitle(R.string.app_hide_icon_title);
+        sw.setSummary(R.string.app_hide_icon_summary);
+        // 初始值交给紧随其后的 refresh() -> syncLauncherIconState()，避免重复读取 binder。
+        sw.setOnPreferenceChangeListener((preference, value) -> {
+            if (!(value instanceof Boolean)) {
+                return false;
+            }
+            boolean hide = (Boolean) value;
+            if (!LauncherIcon.setHidden(requireContext(), hide)) {
+                Toast.makeText(requireContext(),
+                        R.string.app_hide_icon_failed, Toast.LENGTH_LONG).show();
+                return false;
+            }
+            Toast.makeText(requireContext(),
+                    hide ? R.string.app_hide_icon_hidden_toast
+                            : R.string.app_hide_icon_shown_toast,
+                    Toast.LENGTH_SHORT).show();
+            return true;
+        });
+    }
+
+    /** 组件状态可能被外部改动（adb、清数据、重装），回到本页时以系统状态为准重刷一次。 */
+    private void syncLauncherIconState() {
+        Preference pref = findPreference(KEY_HIDE_ICON);
+        if (pref instanceof MaterialSwitchPreference) {
+            ((MaterialSwitchPreference) pref)
+                    .setCheckedValue(LauncherIcon.isHidden(requireContext()));
         }
     }
 
@@ -147,6 +194,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 }
             }
         }
+        syncLauncherIconState();
         refreshStatusAsync();
     }
 

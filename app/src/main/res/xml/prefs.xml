@@ -164,6 +164,14 @@
 
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="@string/group_other">
+
+        <com.cloudmusictool.app.MaterialSwitchPreference
+            android:icon="@drawable/ic_launcher_visibility"
+            android:key="app_hide_icon" />
+
+    </PreferenceCategory>
+
     <PreferenceCategory android:title="@string/group_pages">
 
         <Preference
