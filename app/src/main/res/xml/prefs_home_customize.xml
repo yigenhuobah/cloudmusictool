@@ -29,10 +29,6 @@
             android:key="mine_bg_clear"
             android:title="@string/mine_bg_clear_title"
             android:summary="@string/mine_bg_clear_summary" />
-        <Preference
-            android:key="mine_bg_note"
-            android:selectable="false"
-            android:title="@string/mine_bg_note" />
     </PreferenceCategory>
 
     <Preference

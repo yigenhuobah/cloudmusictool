@@ -194,7 +194,6 @@
     <string name="mine_bg_pick_success">背景已保存，重启网易云后生效</string>
     <string name="mine_bg_pick_failed">图片读取失败，换一张图片重试</string>
     <string name="mine_bg_cleared">背景已清除，重启网易云后恢复默认</string>
-    <string name="mine_bg_note">仅本机可见，不上传、不影响他人，也不改变会员状态</string>
 
     <!-- 首页定制页 -->
     <string name="home_customize_title">首页与导航定制</string>
