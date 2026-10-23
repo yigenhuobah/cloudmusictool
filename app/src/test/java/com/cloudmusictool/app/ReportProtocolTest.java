@@ -107,6 +107,68 @@ public class ReportProtocolTest {
         assertEquals(0, ReportProtocol.failedFeatureCount(new JSONObject()));
     }
 
+    @Test
+    public void malformedJsonIsRejected() {
+        assertFalse(ReportProtocol.isMainProcessReport("{"));
+        assertFalse(ReportProtocol.isMainProcessReport("not-json"));
+        assertFalse(ReportProtocol.isMainProcessReport("[]"));
+        assertFalse(ReportProtocol.isMainProcessReport("null"));
+        assertFalse(ReportProtocol.isMainProcessReport("{\"process\":"));
+        assertFalse(ReportProtocol.isMainProcessReport("   "));
+    }
+
+    @Test
+    public void nullAndEmptyStringInputsAreRejected() {
+        assertFalse(ReportProtocol.isMainProcessReport((String) null));
+        assertFalse(ReportProtocol.isMainProcessReport(""));
+        assertEquals(0, ReportProtocol.failedFeatureCount((JSONObject) null));
+    }
+
+    @Test
+    public void keySuffixLengthIsBounded() {
+        StringBuilder suffix = new StringBuilder();
+        for (int i = 0; i < 128; i++) {
+            suffix.append('a');
+        }
+        assertTrue(ReportProtocol.isValidKey("reg." + suffix));
+        assertFalse(ReportProtocol.isValidKey("reg." + suffix + "a"));
+        assertFalse(ReportProtocol.isValidKey("hit." + suffix + "a"));
+        assertFalse(ReportProtocol.isValidKey("skip." + suffix + "a"));
+    }
+
+    @Test
+    public void unknownKeyShapesAreRejected() {
+        assertFalse(ReportProtocol.isValidKey("foo.ad_01_splash"));
+        assertFalse(ReportProtocol.isValidKey("registration.ad_01"));
+        assertFalse(ReportProtocol.isValidKey("reg"));
+        assertFalse(ReportProtocol.isValidKey("reg.\t"));
+        assertTrue(ReportProtocol.isValidKey("hit.x"));
+    }
+
+    @Test
+    public void multiProcessHitMergeKeepsHistoricalMaximum() {
+        int merged = 0;
+        merged = ReportProtocol.mergeHit(merged, 5); // 主进程首次回传
+        merged = ReportProtocol.mergeHit(merged, 9); // :play 进程回传
+        merged = ReportProtocol.mergeHit(merged, 7); // 主进程再次回传
+        assertEquals("多进程 hit 只能取历史最大值", 9, merged);
+        assertEquals(Integer.MAX_VALUE,
+                ReportProtocol.mergeHit(Integer.MAX_VALUE, 0));
+        assertEquals(Integer.MAX_VALUE,
+                ReportProtocol.mergeHit(0, Integer.MAX_VALUE));
+    }
+
+    @Test
+    public void valueLengthCountsUnicodeChars() {
+        StringBuilder value = new StringBuilder();
+        for (int i = 0; i < ReportProtocol.MAX_VALUE_CHARS; i++) {
+            value.append('\u4e2d');
+        }
+        assertTrue(ReportProtocol.isValidValue(value.toString()));
+        value.append('\u4e2d');
+        assertFalse(ReportProtocol.isValidValue(value.toString()));
+    }
+
     private JSONObject feature(boolean enabled, int installed, String skip) throws Exception {
         JSONObject o = new JSONObject();
         o.put("enabled", enabled);

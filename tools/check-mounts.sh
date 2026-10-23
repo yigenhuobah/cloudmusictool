@@ -11,38 +11,53 @@
 #   tools/check-mounts.sh [APK路径] [--apk APK] [--dexsql PATH] [--profile JSON]
 #                         [--aapt2 PATH] [--allow-version]
 #
+# 参数优先级: CLI > 环境变量 > 常见安装路径。
 # 环境变量:
-#   APK, DEXSQL, PROFILE_JSON, AAPT2, ALLOW_VERSION=1
+#   TARGET_APK, DEXSQL, PROFILE_JSON, AAPT2, ALLOW_VERSION=1
+#   （旧变量 APK 仍作为 TARGET_APK 的别名）
 #
-# 默认值:
-#   APK        E:/download/base(2).apk（网易云 9.6.08）
-#   DEXSQL     E:/tools/dexsql/dexsql.exe
-#   PROFILE    <repo>/app/build/profile9608.json（其次 <repo>/build/profile9608.json）
+# 缓存/临时文件固定在 <repo>/tools/.dexsql-cache/（已在 .gitignore 中忽略）。
 #
 # 输出: OK / GONE / ERROR；GONE 或 ERROR 时退出码非 0。
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+CACHE_DIR="$REPO_ROOT/tools/.dexsql-cache"
 
-APK="${APK:-}"
-DEXSQL="${DEXSQL:-E:/tools/dexsql/dexsql.exe}"
+TARGET_APK="${TARGET_APK:-${APK:-}}"
+DEXSQL="${DEXSQL:-}"
 PROFILE_JSON="${PROFILE_JSON:-}"
 AAPT2="${AAPT2:-}"
 ALLOW_VERSION="${ALLOW_VERSION:-0}"
 POSITIONAL=""
 
 usage() {
-    sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
+    cat <<'EOF'
+Usage:
+  tools/check-mounts.sh [APK_PATH] [--apk APK] [--dexsql PATH] [--profile JSON]
+                        [--aapt2 PATH] [--allow-version]
+
+Arguments:
+  APK_PATH / --apk      目标 APK（网易云 9.6.08）；也可用 TARGET_APK 环境变量
+  --dexsql PATH         dexsql 可执行文件；也可用 DEXSQL
+  --profile JSON        ProfileExportTest 导出的 profile9608.json；也可用 PROFILE_JSON
+  --aapt2 PATH          aapt2 可执行文件；也可用 AAPT2（缺失时跳过 versionCode 校验）
+  --allow-version       不强制 versionCode=9006008
+  -h, --help            显示本帮助
+
+Resolution order: CLI > environment > common install paths.
+Cache: <repo>/tools/.dexsql-cache/
+EOF
 }
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --apk)
             [ $# -ge 2 ] || { echo "ERROR: --apk needs a value" >&2; exit 2; }
-            APK="$2"; shift 2 ;;
+            TARGET_APK="$2"; shift 2 ;;
         --apk=*)
-            APK="${1#*=}"; shift ;;
+            TARGET_APK="${1#*=}"; shift ;;
         --dexsql)
             [ $# -ge 2 ] || { echo "ERROR: --dexsql needs a value" >&2; exit 2; }
             DEXSQL="$2"; shift 2 ;;
@@ -72,8 +87,66 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-if [ -z "$APK" ]; then
-    APK="${POSITIONAL:-E:/download/base(2).apk}"
+# ---- 工具定位辅助 ---------------------------------------------------------
+is_executable_file() {
+    local path="$1"
+    [ -n "$path" ] && [ -f "$path" ] || return 1
+    case "$path" in
+        *.exe|*.EXE) return 0 ;;
+    esac
+    [ -x "$path" ]
+}
+
+first_executable() {
+    local candidate
+    for candidate in "$@"; do
+        if is_executable_file "$candidate"; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# SDK 根目录：环境变量、local.properties、常见安装位置（不写死机器路径）。
+sdk_roots() {
+    local value line
+    for value in "${ANDROID_HOME:-}" "${ANDROID_SDK_ROOT:-}"; do
+        [ -n "$value" ] && printf '%s\n' "$value"
+    done
+    if [ -f "$REPO_ROOT/local.properties" ]; then
+        line="$(grep -E '^[[:space:]]*sdk\.dir[[:space:]]*=' \
+            "$REPO_ROOT/local.properties" | tail -n 1 || true)"
+        value="${line#*=}"
+        value="$(printf '%s' "$value" \
+            | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+                  -e 's/\\\\/\\/g' -e 's/\\:/:/g')"
+        [ -n "$value" ] && printf '%s\n' "$value"
+    fi
+    printf '%s\n' \
+        "$HOME/Android/Sdk" \
+        "$HOME/Library/Android/sdk" \
+        "$HOME/AppData/Local/Android/Sdk" \
+        "/usr/lib/android-sdk" \
+        "/opt/android-sdk"
+}
+
+# ---- APK 定位 -------------------------------------------------------------
+if [ -z "$TARGET_APK" ]; then
+    TARGET_APK="${POSITIONAL:-}"
+fi
+if [ -z "$TARGET_APK" ]; then
+    for candidate in \
+        "$PWD"/base*.apk \
+        "$HOME/Downloads"/base*.apk \
+        "$HOME/Downloads"/*cloudmusic*.apk \
+        "$HOME/Desktop"/base*.apk; do
+        if [ -f "$candidate" ]; then
+            TARGET_APK="$candidate"
+            echo "APK (auto-detected): $TARGET_APK" >&2
+            break
+        fi
+    done
 fi
 
 # ---- profile 定位 ---------------------------------------------------------
@@ -91,61 +164,75 @@ if [ -z "$PROFILE_JSON" ]; then
     done
 fi
 
+# ---- dexsql 定位 ----------------------------------------------------------
+if [ -z "$DEXSQL" ]; then
+    if command -v dexsql >/dev/null 2>&1; then
+        DEXSQL="$(command -v dexsql)"
+    elif command -v dexsql.exe >/dev/null 2>&1; then
+        DEXSQL="$(command -v dexsql.exe)"
+    else
+        DEXSQL="$(first_executable \
+            "$REPO_ROOT/tools/dexsql/dexsql" \
+            "$REPO_ROOT/tools/dexsql/dexsql.exe" \
+            "$REPO_ROOT/tools/dexsql.exe" \
+            "$HOME/.local/bin/dexsql" \
+            "$HOME/bin/dexsql" \
+            "/usr/local/bin/dexsql" \
+            "$HOME/tools/dexsql/dexsql" \
+            "$HOME/tools/dexsql/dexsql.exe" || true)"
+    fi
+fi
+
 # ---- aapt2 定位 -----------------------------------------------------------
 if [ -z "$AAPT2" ]; then
     if command -v aapt2 >/dev/null 2>&1; then
         AAPT2="$(command -v aapt2)"
     else
-        for candidate in \
-            "/d/Android/Sdk/build-tools/35.0.0/aapt2.exe" \
-            "$HOME/AppData/Local/Android/Sdk/build-tools/35.0.0/aapt2.exe" \
-            "${ANDROID_HOME:-}/build-tools/35.0.0/aapt2.exe" \
-            "${ANDROID_SDK_ROOT:-}/build-tools/35.0.0/aapt2.exe"; do
-            if [ -n "$candidate" ] && [ -x "$candidate" ]; then
-                AAPT2="$candidate"
-                break
-            fi
-        done
-        if [ -z "$AAPT2" ]; then
-            for root in "${ANDROID_HOME:-}" "${ANDROID_SDK_ROOT:-}" \
-                        "/d/Android/Sdk" "$HOME/AppData/Local/Android/Sdk"; do
-                [ -n "$root" ] || continue
-                for candidate in "$root"/build-tools/*/aapt2.exe "$root"/build-tools/*/aapt2; do
-                    if [ -x "$candidate" ]; then
-                        AAPT2="$candidate"
-                        break 2
-                    fi
-                done
-            done
-        fi
+        while IFS= read -r sdk_root; do
+            [ -n "$sdk_root" ] || continue
+            AAPT2="$(first_executable \
+                "$sdk_root"/build-tools/*/aapt2.exe \
+                "$sdk_root"/build-tools/*/aapt2 || true)"
+            [ -n "$AAPT2" ] && break
+        done < <(sdk_roots)
     fi
 fi
 
 # ---- 输入校验 -------------------------------------------------------------
-if [ ! -f "$APK" ]; then
-    echo "ERROR: APK not found: $APK" >&2
+if [ -z "$TARGET_APK" ] || [ ! -f "$TARGET_APK" ]; then
+    echo "ERROR: APK not found: ${TARGET_APK:-<unset>}" >&2
+    echo "  Fix: pass --apk /path/to/base.apk, or export TARGET_APK=/path/to/base.apk," >&2
+    echo "       or place base*.apk in the current directory / ~/Downloads." >&2
     exit 2
 fi
-if [ ! -f "$DEXSQL" ] && [ ! -x "$DEXSQL" ]; then
-    echo "ERROR: dexsql not found: $DEXSQL" >&2
+if [ -z "$DEXSQL" ] \
+    || { ! is_executable_file "$DEXSQL" && ! command -v "$DEXSQL" >/dev/null 2>&1; }; then
+    echo "ERROR: dexsql not found: ${DEXSQL:-<unset>}" >&2
+    echo "  Fix: install dexsql and put it on PATH, or pass --dexsql /path/to/dexsql," >&2
+    echo "       or export DEXSQL=/path/to/dexsql." >&2
     exit 2
 fi
 if [ -z "$PROFILE_JSON" ] || [ ! -f "$PROFILE_JSON" ]; then
-    echo "ERROR: profile JSON not found." >&2
-    echo "       Run: cmd //c \"gradlew.bat :app:testDebugUnitTest --tests com.cloudmusictool.app.ProfileExportTest\"" >&2
-    echo "       Or pass --profile /path/to/profile9608.json" >&2
+    echo "ERROR: profile JSON not found: ${PROFILE_JSON:-<unset>}" >&2
+    echo "  Fix: ./gradlew :app:testDebugUnitTest --tests com.cloudmusictool.app.ProfileExportTest" >&2
+    echo "       or pass --profile /path/to/profile9608.json / export PROFILE_JSON=..." >&2
     exit 2
+fi
+if [ -n "$AAPT2" ] && ! is_executable_file "$AAPT2"; then
+    echo "WARN: aapt2 is not executable: $AAPT2; skipping versionCode assertion" >&2
+    echo "      Fix: pass --aapt2 /path/to/aapt2 or set ANDROID_HOME/ANDROID_SDK_ROOT." >&2
+    AAPT2=""
 fi
 
 # ---- 版本断言 -------------------------------------------------------------
-echo "APK: $APK"
+echo "APK: $TARGET_APK"
 echo "Profile: $PROFILE_JSON"
 
-if [ -n "$AAPT2" ] && [ -x "$AAPT2" ]; then
-    VERSION_CODE="$("$AAPT2" dump badging "$APK" 2>/dev/null \
+if is_executable_file "$AAPT2"; then
+    VERSION_CODE="$("$AAPT2" dump badging "$TARGET_APK" 2>/dev/null \
         | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)"
     if [ -z "$VERSION_CODE" ]; then
-        echo "ERROR: cannot read versionCode from $APK" >&2
+        echo "ERROR: cannot read versionCode from $TARGET_APK" >&2
         exit 2
     fi
     if [ "$VERSION_CODE" != "9006008" ] && [ "$ALLOW_VERSION" != "1" ]; then
@@ -157,14 +244,20 @@ if [ -n "$AAPT2" ] && [ -x "$AAPT2" ]; then
     fi
     echo "versionCode: $VERSION_CODE"
 else
-    echo "WARN: aapt2 not found; skip versionCode assertion (set AAPT2=/path/to/aapt2)"
+    echo "WARN: aapt2 not found; skip versionCode assertion" >&2
+    echo "      Fix: pass --aapt2 /path/to/aapt2, export AAPT2=..., or set ANDROID_HOME/ANDROID_SDK_ROOT."
 fi
 
 # ---- JSON -> TSV ----------------------------------------------------------
-TSV="$(mktemp)"
-RAW="$(mktemp)"
-ERR="$(mktemp)"
-trap 'rm -f "$TSV" "$RAW" "$ERR"' EXIT
+# 缓存/临时文件固定在仓库内 tools/.dexsql-cache/（已 gitignore），不写系统临时目录。
+if ! mkdir -p "$CACHE_DIR"; then
+    echo "ERROR: cannot create cache dir: $CACHE_DIR" >&2
+    exit 2
+fi
+TSV="$CACHE_DIR/mounts.tsv"
+RAW="$CACHE_DIR/query.out"
+ERR="$CACHE_DIR/query.err"
+trap 'rm -f "$TSV" "$RAW" "$ERR" "${TSV}.clean"' EXIT
 
 json_to_tsv() {
     local file="$1"
@@ -285,7 +378,7 @@ done
 # dexsql 版本差异：有 param_descriptors/return_descriptor 列时直接比对，
 # 否则退化为 descriptor 字符串匹配。
 HAS_SIG_COLUMNS=1
-METHOD_SCHEMA="$("$DEXSQL" tables --input "$APK" 2>/dev/null \
+METHOD_SCHEMA="$("$DEXSQL" tables --input "$TARGET_APK" 2>/dev/null \
     | sed -n '/^methods$/,/^[a-z_]/p')"
 if ! printf '%s\n' "$METHOD_SCHEMA" | grep -q 'param_descriptors'; then
     HAS_SIG_COLUMNS=0
@@ -310,7 +403,7 @@ fi
         printf '%s\n' "$METHOD_SQL"
     fi
     printf '.exit\n'
-} | "$DEXSQL" query --input "$APK" --interactive > "$RAW" 2> "$ERR"
+} | "$DEXSQL" query --input "$TARGET_APK" --interactive > "$RAW" 2> "$ERR"
 DEXSQL_STATUS=$?
 if [ $DEXSQL_STATUS -ne 0 ]; then
     echo "ERROR: dexsql exited with $DEXSQL_STATUS" >&2

@@ -26,6 +26,9 @@ Thumbs.db
 *.log
 captures/
 
+# check-mounts.sh 的 dexsql 缓存/临时文件
+tools/.dexsql-cache/
+
 # 发布产物（仅上传 Release，不入库）
 dist/*.txt
 dist/*.md
