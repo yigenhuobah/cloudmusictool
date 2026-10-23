@@ -179,21 +179,6 @@
             android:key="page_home_customize"
             android:title="@string/page_home_customize" />
 
-        <Preference
-            android:icon="@drawable/ic_test"
-            android:key="page_experiments"
-            android:title="@string/page_experiments" />
-
-        <Preference
-            android:icon="@drawable/ic_test"
-            android:key="page_diagnostics"
-            android:title="@string/page_diagnostics" />
-
-        <Preference
-            android:icon="@drawable/ic_about"
-            android:key="page_about"
-            android:title="@string/page_about" />
-
     </PreferenceCategory>
 
     <Preference

@@ -144,27 +144,6 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 return true;
             });
         }
-        Preference experiments = findPreference("page_experiments");
-        if (experiments != null) {
-            experiments.setOnPreferenceClickListener(p -> {
-                openPage(new ExperimentFragment());
-                return true;
-            });
-        }
-        Preference diagnostics = findPreference("page_diagnostics");
-        if (diagnostics != null) {
-            diagnostics.setOnPreferenceClickListener(p -> {
-                openPage(new DiagnosticsFragment());
-                return true;
-            });
-        }
-        Preference about = findPreference("page_about");
-        if (about != null) {
-            about.setOnPreferenceClickListener(p -> {
-                openPage(new AboutFragment());
-                return true;
-            });
-        }
     }
 
     private void openPage(androidx.fragment.app.Fragment page) {

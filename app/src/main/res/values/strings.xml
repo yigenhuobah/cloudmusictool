@@ -39,7 +39,8 @@
     <string name="app_hide_icon_shown_toast">桌面图标已恢复</string>
     <string name="app_hide_icon_failed">修改桌面图标失败，请重试</string>
 
-    <!-- 二级页入口 -->
+    <!-- 底栏与二级页入口 -->
+    <string name="tab_settings">设置</string>
     <string name="page_home_customize">首页定制</string>
     <string name="page_experiments">实验</string>
     <string name="page_diagnostics">诊断</string>
