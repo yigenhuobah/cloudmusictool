@@ -25,6 +25,12 @@ final class ConfigStore {
         mLocal = context.getSharedPreferences(Config.GROUP, Context.MODE_PRIVATE);
     }
 
+    /** 仅供单测：直接绑定给定存储，等价于框架未绑定时走本地 prefs 的路径。 */
+    ConfigStore(SharedPreferences sp) {
+        mRemote = null;
+        mLocal = sp;
+    }
+
     boolean remote() {
         return mRemote != null;
     }
@@ -109,7 +115,8 @@ final class ConfigStore {
         }
         try {
             String raw = sp.getString(key, null);
-            if (raw != null) {
+            // 与 Config.loadSet 一致：空串视为未设置，回退默认值，避免返回空集吞掉默认。
+            if (raw != null && !raw.isEmpty()) {
                 Set<String> parsed = new HashSet<>();
                 for (String part : raw.split(",")) {
                     String trimmed = part.trim();

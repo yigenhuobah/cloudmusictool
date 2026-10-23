@@ -74,12 +74,20 @@ public class StatusProvider extends ContentProvider {
             return null;
         }
         String type = extras.getString(KEY_TYPE, TYPE_MOUNTS);
-        if (TYPE_MOUNTS.equals(type) && !ReportProtocol.isMainProcessReport(json)) {
-            // :play 只装音频贴片，回传会覆盖主进程快照；只保留主进程数据。
+        // type 只认 mounts/experiments 两种：未知 type 一律拒绝，
+        // 否则调用方换个 type 字符串即可绕过 mounts 通道的门禁、直接覆盖主进程快照。
+        if (!TYPE_MOUNTS.equals(type) && !TYPE_EXPERIMENTS.equals(type)) {
+            Log.w(TAG, "status report rejected: unknown type=" + type);
+            return null;
+        }
+        boolean experiments = TYPE_EXPERIMENTS.equals(type);
+        // 凡落地 KEY_STATE（主进程快照）的报告一律过主进程门禁：
+        // :play 只装音频贴片，回传会覆盖主进程快照；只保留主进程数据。
+        if (!experiments && !ReportProtocol.isMainProcessReport(json)) {
             Log.i(TAG, "status report ignored: secondary process or invalid payload");
             return null;
         }
-        String prefsKey = TYPE_EXPERIMENTS.equals(type) ? KEY_EXPERIMENTS : KEY_STATE;
+        String prefsKey = experiments ? KEY_EXPERIMENTS : KEY_STATE;
         try {
             prefs().edit().putString(prefsKey, json).apply();
         } catch (Throwable t) {

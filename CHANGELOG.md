@@ -1,5 +1,59 @@
 # Changelog
 
+## 2.4.0 - 2026-10-24
+
+底栏导航回归 + 适配网易云音乐 9.6.13（fail-open 版本门禁，versionCode 10）。
+
+### 新增
+
+- **底栏 4 tab 导航**：设置 / 实验 / 诊断 / 关于四个顶层 tab 常驻底栏，切换用
+  hide/show 保留各 tab 滚动位置；「首页定制」保留为二级页（从设置页进入，
+  带返回箭头，进入时隐藏底栏，返回后恢复）。首页定制页移除冗余的
+  「仅本机可见」说明（功能表已有同一描述）。
+- **适配网易云音乐 9.6.13**（versionCode 9006013）：新增 `Profile9613` 挂载点总表，
+  与 `Profile9608` 双档案并存，`ProfileRegistry` 按目标 versionCode 自动选择；
+  相对 9.6.08 的混淆漂移共 34 个挂载点重定位（按 mount id 的 overrides 表 +
+  hint 第三参等分片级差异），并新增 Profile 感知的方法名映射（hook 文件写死的
+  9.6.08 混淆名按活动 Profile 换算成实际方法名）。9.6.08 仍受支持。
+- **fail-open 版本门禁**：未适配/未知版本不再因版本不匹配整体跳过 hook：
+  active Profile 置空后回退硬编码挂载点 best-effort 安装（与 QuietBox 语义一致），
+  状态卡/异常横幅提示未适配；移除 `allow_unsupported_version` 开关。
+
+### 变更
+
+- **工程整备**：新增 `tools/release.sh`（一键发版：预检 → 构建 → 校验 → 归档 →
+  可选 tag / Release / 官方仓同步）、`tools/verify-apk.sh`（Xposed 元数据 / scope /
+  R8 keep / Manifest / 版本号 / 签名证书校验）、`tools/preflight.sh`（JDK 21 + SDK +
+  单测 + lint 预检）、CI（test + lint）；接入 JaCoCo 覆盖率报告；新增 prefs/Feature
+  一致性与 Hook 注册表等单测；appcompat 1.8.0 / material 1.14.0；构建基线 JDK 21
+  （Java 字节码仍 17）。
+- 移除未使用的 `compileOnly io.github.libxposed:annotation:1.0.0` 依赖：
+  全部源码零引用，compileOnly 不进入 APK，删除不影响功能与产物。
+- `tools/check-mounts.sh` 支持双档案：期望 versionCode 取自所选 profile JSON
+  （9608 / 9613 各自携带），不再硬编码单一版本号。
+
+### 修复
+
+- `StatusProvider` 上报 type 只认 mounts/experiments，未知 type 一律拒绝，
+  防止绕过 mounts 通道的主进程门禁覆盖主进程快照。
+- EX-02 启动任务编排改用 installOne 传入的会话级 config 快照，不二次 `Config.load`。
+- `ConfigStore` 读取 Set 时空串视为未设置回退默认值，与 `Config.loadSet` 一致。
+- 主界面 tab 切换的刷新挂在事务 `runOnCommit` 之后，落在真正切到的新 tab 上。
+
+### 验证
+
+- `:app:testDebugUnitTest`：123 个用例通过；`:app:lintDebug`、
+  `:app:assembleRelease`、`bash tools/preflight.sh`、`bash tools/verify-apk.sh` 通过。
+- 模拟器（网易云 9.6.13 / versionCode 9006013）运行时：115 registered / 0 skip /
+  10 mapped，无 FATAL。
+
+APK: cloudmusictool-2.4.0.apk
+versionCode: 10
+大小: 4,231,517 字节
+SHA-256: a378b3eeb5658f12d2d39efc3a1017ea926d345f33ddf865366bcdd27209e7de
+
+---
+
 ## 2.3.0 - 2026-10-23
 
 隐藏桌面图标（versionCode 9）。

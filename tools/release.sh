@@ -247,6 +247,7 @@ sync_official_repo() {
 
     if [ "$DRY_RUN" -eq 1 ]; then
         printf '[dry-run] clone %s 到临时目录\n' "$OFFICIAL_REPO"
+        printf '[dry-run] git rm 根目录已跟踪的旧 APK（如有）\n'
         printf '[dry-run] cp README.md + %s 到官方仓\n' "$(basename "$APK")"
         printf '[dry-run] git add / commit / tag %s\n' "$official_tag"
         [ "$NO_PUSH" -eq 1 ] || printf '[dry-run] git push 分支与 tag %s\n' "$official_tag"
@@ -260,6 +261,14 @@ sync_official_repo() {
         run gh repo clone "$OFFICIAL_REPO" "$work_dir"
     else
         run git clone "https://github.com/${OFFICIAL_REPO}.git" "$work_dir"
+    fi
+
+    # 防御性清理：官方仓根目录若历史上跟踪过 APK 产物，先 git rm 再提交新资产，
+    # 避免根目录堆积多版本 APK；SUMMARY / README 不动。
+    mapfile -t tracked_apks < <(git -C "$work_dir" ls-files -- '*.apk' | grep -v /)
+    if [ "${#tracked_apks[@]}" -gt 0 ]; then
+        log "官方仓清理根目录旧 APK：${tracked_apks[*]}"
+        git -C "$work_dir" rm -q -- "${tracked_apks[@]}"
     fi
 
     [ -f "$work_dir/SUMMARY" ] || warn "官方仓没有 SUMMARY（脚本不会创建/删除它）"

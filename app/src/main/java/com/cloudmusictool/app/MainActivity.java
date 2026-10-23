@@ -209,8 +209,9 @@ public class MainActivity extends AppCompatActivity {
 
         mCurrentFragment = target;
         mSelectedTab = tabId;
-        // 切回某个 tab 时刷新一次，等价于二级页时代 onResume 的行为。
-        refreshCurrent();
+        // commit() 只是把事务入队，hide/show 要等事务执行才生效；刷新必须挂在事务完成后，
+        // 才会落在切到的新 tab 上（等价于二级页时代 onResume 的行为）。
+        tx.runOnCommit(this::refreshCurrent);
     }
 
     private Fragment currentFragment() {

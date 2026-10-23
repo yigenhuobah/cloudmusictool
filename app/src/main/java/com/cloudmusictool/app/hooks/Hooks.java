@@ -104,7 +104,7 @@ public final class Hooks {
         map.put(Feature.CLIPBOARD,
                 (module, cl, config, f) -> ClipboardHooks.install(module, cl, f));
         map.put(Feature.STARTUP_ORCHESTRATION,
-                (module, cl, config, f) -> StartupOrchestrationHooks.install(module, cl, f));
+                (module, cl, config, f) -> StartupOrchestrationHooks.install(module, cl, config, f));
 
         // UI-06 DRAWER 当前 blocked，刻意不注册 installer。
         return map;

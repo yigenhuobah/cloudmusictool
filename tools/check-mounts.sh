@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # 云音乐工具箱 · 挂载点体检 v2
 #
-# 数据源：ProfileExportTest 导出的 build/profile9608.json（与代码共用同一份清单）。
+# 数据源：ProfileExportTest 导出的 build/profile9608.json / profile9613.json
+#（与代码共用同一份清单，9.6.08 / 9.6.13 各一份）。
 # 检查项：
-#   1) aapt2 dump badging 的 versionCode 必须是 9006008（--allow-version 可跳过）；
+#   1) aapt2 dump badging 的 versionCode 必须与所选 profile JSON 顶层的
+#      versionCode 一致（--allow-version 可跳过）；
 #   2) 每个 mount 的 classCandidates 至少有一个能在 classes 表中找到；
 #   3) 有 methodName 的 mount，必须在 methods 表中找到同参数/返回类型的方法。
 #
@@ -39,11 +41,12 @@ Usage:
                         [--aapt2 PATH] [--allow-version]
 
 Arguments:
-  APK_PATH / --apk      目标 APK（网易云 9.6.08）；也可用 TARGET_APK 环境变量
+  APK_PATH / --apk      目标 APK（网易云 9.6.08 / 9.6.13）；也可用 TARGET_APK 环境变量
   --dexsql PATH         dexsql 可执行文件；也可用 DEXSQL
-  --profile JSON        ProfileExportTest 导出的 profile9608.json；也可用 PROFILE_JSON
+  --profile JSON        ProfileExportTest 导出的 profile9608.json / profile9613.json；
+                        也可用 PROFILE_JSON（期望 versionCode 取自该 JSON）
   --aapt2 PATH          aapt2 可执行文件；也可用 AAPT2（缺失时跳过 versionCode 校验）
-  --allow-version       不强制 versionCode=9006008
+  --allow-version       不强制 versionCode 与 profile JSON 一致
   -h, --help            显示本帮助
 
 Resolution order: CLI > environment > common install paths.
@@ -153,10 +156,15 @@ fi
 if [ -z "$PROFILE_JSON" ]; then
     for candidate in \
         "$REPO_ROOT/app/build/profile9608.json" \
+        "$REPO_ROOT/app/build/profile9613.json" \
         "$REPO_ROOT/build/profile9608.json" \
+        "$REPO_ROOT/build/profile9613.json" \
         "$PWD/app/build/profile9608.json" \
+        "$PWD/app/build/profile9613.json" \
         "$PWD/build/profile9608.json" \
-        "$REPO_ROOT/app/profile9608.json"; do
+        "$PWD/build/profile9613.json" \
+        "$REPO_ROOT/app/profile9608.json" \
+        "$REPO_ROOT/app/profile9613.json"; do
         if [ -f "$candidate" ]; then
             PROFILE_JSON="$candidate"
             break
@@ -215,7 +223,7 @@ fi
 if [ -z "$PROFILE_JSON" ] || [ ! -f "$PROFILE_JSON" ]; then
     echo "ERROR: profile JSON not found: ${PROFILE_JSON:-<unset>}" >&2
     echo "  Fix: ./gradlew :app:testDebugUnitTest --tests com.cloudmusictool.app.ProfileExportTest" >&2
-    echo "       or pass --profile /path/to/profile9608.json / export PROFILE_JSON=..." >&2
+    echo "       or pass --profile /path/to/profile9608.json|profile9613.json / export PROFILE_JSON=..." >&2
     exit 2
 fi
 if [ -n "$AAPT2" ] && ! is_executable_file "$AAPT2"; then
@@ -225,6 +233,19 @@ if [ -n "$AAPT2" ] && ! is_executable_file "$AAPT2"; then
 fi
 
 # ---- 版本断言 -------------------------------------------------------------
+# 期望 versionCode 取自 profile JSON 顶层字段（ProfileExportTest 导出时写入），
+# 9608 / 9613 各自携带对应值，不再硬编码单一版本号。
+profile_version_code() {
+    local file="$1"
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("versionCode", ""))' "$file" 2>/dev/null
+    elif command -v python >/dev/null 2>&1; then
+        python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("versionCode", ""))' "$file" 2>/dev/null
+    elif command -v jq >/dev/null 2>&1; then
+        jq -r '.versionCode // empty' "$file" 2>/dev/null
+    fi
+}
+
 echo "APK: $TARGET_APK"
 echo "Profile: $PROFILE_JSON"
 
@@ -235,12 +256,17 @@ if is_executable_file "$AAPT2"; then
         echo "ERROR: cannot read versionCode from $TARGET_APK" >&2
         exit 2
     fi
-    if [ "$VERSION_CODE" != "9006008" ] && [ "$ALLOW_VERSION" != "1" ]; then
-        echo "ERROR: versionCode=$VERSION_CODE (expected 9006008); use --allow-version to override" >&2
+    EXPECTED_VERSION_CODE="$(profile_version_code "$PROFILE_JSON")"
+    if [ -z "$EXPECTED_VERSION_CODE" ]; then
+        echo "ERROR: cannot read versionCode from profile JSON: $PROFILE_JSON (need python3/python or jq)" >&2
         exit 2
     fi
-    if [ "$VERSION_CODE" != "9006008" ]; then
-        echo "WARN: versionCode=$VERSION_CODE (expected 9006008), continuing due to --allow-version"
+    if [ "$VERSION_CODE" != "$EXPECTED_VERSION_CODE" ] && [ "$ALLOW_VERSION" != "1" ]; then
+        echo "ERROR: versionCode=$VERSION_CODE (expected $EXPECTED_VERSION_CODE, per $PROFILE_JSON); use --allow-version to override" >&2
+        exit 2
+    fi
+    if [ "$VERSION_CODE" != "$EXPECTED_VERSION_CODE" ]; then
+        echo "WARN: versionCode=$VERSION_CODE (expected $EXPECTED_VERSION_CODE), continuing due to --allow-version"
     fi
     echo "versionCode: $VERSION_CODE"
 else

@@ -2,7 +2,7 @@
 
 网易云音乐 Android 客户端的 LSPosed 体验优化模块：去广告、精简界面、收敛弹窗、隐私加固。
 
-> 当前版本 **2.3.0**（versionCode 9）。适配网易云音乐 **9.6.08**（versionCode 9006008）。
+> 当前版本 **2.4.0**（versionCode 10）。适配网易云音乐 **9.6.08 / 9.6.13**（versionCode 9006008 / 9006013）。
 > 与网易官方无任何关联，仅供学习研究和个人设备使用。
 
 **仓库**：<https://github.com/yigenhuobah/cloudmusictool> ｜ **下载**：[Releases](https://github.com/yigenhuobah/cloudmusictool/releases)
@@ -11,7 +11,7 @@
 
 | 项 | 值 |
 |---|---|
-| 目标应用 | `com.netease.cloudmusic` **9.6.08** (versionCode 9006008) |
+| 目标应用 | `com.netease.cloudmusic` **9.6.08 / 9.6.13** (versionCode 9006008 / 9006013) |
 | 模块包名 | `io.github.yigenhuobah.cloudmusictool` |
 | Xposed API | libxposed API 102（`minApiVersion=102` / `targetApiVersion=102`） |
 | 系统要求 | Android 10+（minSdk 29） |
@@ -27,15 +27,15 @@
 
 ## 界面
 
-单页设置 + 二级页，无底部导航：
+底栏 4 tab（设置 / 实验 / 诊断 / 关于）+ 二级页：
 
-- **主页面**：四态状态卡（正在连接框架… / 未激活 / 框架已连接 / 已激活）、异常横幅、功能开关、模块级设置（隐藏桌面图标）、二级页入口、页脚。
-- **首页定制**：发现页推荐卡片、顶部频道、底部导航的保留清单；「我的」页自定义背景。
+- **设置**（默认 tab）：四态状态卡（正在连接框架… / 未激活 / 框架已连接 / 已激活）、异常横幅、功能开关、模块级设置（隐藏桌面图标）、页脚；「首页定制」入口在本 tab。
+- **首页定制**（二级页，工具栏带返回箭头）：发现页推荐卡片、顶部频道、底部导航的保留清单；「我的」页自定义背景。
 - **实验**：只读展示目标进程命中的 ABTest，支持白名单内单 key 强开。
 - **诊断**：逐功能显示 `编号 标题 · registered · hit N · skip 原因`，无数据 `—`；页首刷新时间，页尾刷新与复制。
 - **关于**：模块版本、目标应用、源码、四模块互链、免责声明、MIT 许可证。
 
-状态卡只有四种状态，版本不匹配与多功能失败通过红色异常横幅提示，不新增第五态。
+tab 切换用 hide/show 保留各自滚动位置；非设置 tab 按返回先回设置 tab，再按才退出。状态卡只有四种状态，版本不匹配与多功能失败通过红色异常横幅提示，不新增第五态。
 
 ## 功能
 
@@ -114,7 +114,7 @@
 
 - `StatusProvider` 每次 `call` 校验 `Binder.getCallingUid()` 属于目标应用，其他 UID 拒绝。
 - 只回传计数与 skip 原因，不存用户内容、账号、设备标识或业务数据。
-- 主页面不显示逐功能诊断；诊断页进入与 `onResume` 时刷新，不自动轮询。
+- 设置页不显示逐功能诊断；切到诊断 tab 或 `onResume` 时刷新，不自动轮询。
 - 异常横幅条件：目标版本不匹配，或已启用且明确失败功能数 ≥ 2。
 
 ## 构建
@@ -122,7 +122,7 @@
 环境：JDK 21（构建用；Java source/target 仍为 17）、Android SDK Platform 37、Gradle wrapper 8.13、AGP 8.13.2。
 
 ```bash
-# 单元测试（含 ProfileExportTest，导出 app/build/profile9608.json）
+# 单元测试（含 ProfileExportTest，导出 app/build/profile9608.json 与 profile9613.json）
 gradlew.bat :app:testDebugUnitTest
 
 # 挂载点体检（默认 APK/dexsql 见脚本头部；输出 OK/GONE/ERROR）
@@ -142,7 +142,7 @@ gradlew.bat :app:assembleRelease
 
 依赖：
 
-- `compileOnly io.github.libxposed:api:102.0.0` / `annotation:1.0.0`
+- `compileOnly io.github.libxposed:api:102.0.0`
 - `implementation io.github.libxposed:service:102.0.0`
 - `implementation org.luckypray:dexkit:2.3.0`（硬编码失败时兜底，已启用 legacy JNI 打包）
 - AppCompat / Material / androidx.preference

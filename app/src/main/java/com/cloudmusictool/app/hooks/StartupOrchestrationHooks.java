@@ -50,24 +50,18 @@ public final class StartupOrchestrationHooks {
     private StartupOrchestrationHooks() {
     }
 
-    public static void install(XposedModule module, ClassLoader cl, Feature feature) {
+    public static void install(XposedModule module, ClassLoader cl, Config config, Feature feature) {
         if (feature == null) {
             HookKit.warn(module, "EX-02 install skipped: feature is null");
             return;
         }
         Feature f = feature;
 
-        final Set<String> blocklist;
-        try {
-            Config config = Config.load(module);
-            Set<String> configured = config.getFilterSet(Config.KEY_STARTUP_TASK_BLOCKLIST);
-            blocklist = configured == null || configured.isEmpty()
-                    ? Collections.emptySet()
-                    : Collections.unmodifiableSet(new HashSet<>(configured));
-        } catch (Throwable t) {
-            HookKit.error(module, f.id + " read startup_task_blocklist failed", t);
-            return;
-        }
+        // 与 PV-03 一致：使用 installOne 传入的会话级 config 快照，不二次 Config.load。
+        Set<String> configured = config.getFilterSet(Config.KEY_STARTUP_TASK_BLOCKLIST);
+        final Set<String> blocklist = configured == null || configured.isEmpty()
+                ? Collections.emptySet()
+                : Collections.unmodifiableSet(new HashSet<>(configured));
 
         if (blocklist.isEmpty()) {
             HookKit.info(module, f.id
