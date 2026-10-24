@@ -1,5 +1,40 @@
 # Changelog
 
+## 2.4.1 - 2026-10-24
+
+深度代码评审第二轮修复（协议/并发/性能）。
+
+### 修复
+
+- **回传协议边界真强制**：`StatusProvider` 落盘前对两种通道按结构白名单整体校验
+  （根键 / Feature 名 / 字段集 / 条数 ≤800 / 字符串 ≤256 / 总量 ≤64KB），不合拒绝；
+  退役与真实协议脱节的 reg./hit./skip. 白名单死抽象。
+- **「我的」页背景三连修**：external 共享副本写入改 tmp+rename 原子替换；
+  `clear()`/`syncExternal()` 与导入共用单线程队列 FIFO 串行，消除「清除被在途
+  导入撤销」「导入报成功但文件已清空」等交错终态；目标进程位图缓存按源文件
+  指纹失效，换图/清除后即时生效，不再需要强杀网易云。
+- **PV-03 启动任务黑名单套用核心任务保护名单**（与 EX-02 共享同一来源），
+  用户配错黑名单不会误杀受保护启动任务。
+- **AbTest 挂载失败进入诊断页**（原仅 logcat 可见）；删除 EN-01 无消费死坐标。
+- **JsonFilter 零删除快路径**：延迟序列化 + 零删除原引用返回 + 嵌套串廉价预门；
+  实测 500KB 零命中 18.8ms → 0.19ms（≈98×），过滤语义不变。
+- **死代码清理**：`VersionGate.shouldProceed`（恒真）、`DexKitAnchors.of`、
+  `ProfileRegistry.clearActive`、`HookState.markNotFound` 旧重载、
+  `MineBackgroundStore.calculateInSampleSize` 包装。
+
+### 变更
+
+- `ExperimentFragment` 改用 `StatusProvider.readExperiments` 单一读取入口。
+
+### 验证
+
+- `:app:testDebugUnitTest`：140 个用例通过（2.4.0 为 123）；七组修复经
+  变异验证、补丁回放与独立基准复测验收。
+- 真机（网易云音乐 9.6.13 / versionCode 9006013，KernelSU + LSPosed，与第三方模块
+  共存环境）冷启动验证：136 挂载全部注册、进程稳定无 FATAL、回传协议零拒绝。
+  注：x86_64 模拟器上宿主防篡改库（libpoison.so）有启动崩溃复现，与本版改动的
+  关联未证实（真机不重现），待模拟器环境恢复后复查。
+
 ## 2.4.0 - 2026-10-24
 
 底栏导航回归 + 适配网易云音乐 9.6.13（fail-open 版本门禁，versionCode 10）。

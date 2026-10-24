@@ -2,7 +2,7 @@
 
 网易云音乐 Android 客户端的 LSPosed 体验优化模块：去广告、精简界面、收敛弹窗、隐私加固。
 
-> 当前版本 **2.4.0**（versionCode 10）。适配网易云音乐 **9.6.08 / 9.6.13**（versionCode 9006008 / 9006013）。
+> 当前版本 **2.4.1**（versionCode 11）。适配网易云音乐 **9.6.08 / 9.6.13**（versionCode 9006008 / 9006013）。
 > 与网易官方无任何关联，仅供学习研究和个人设备使用。
 
 **仓库**：<https://github.com/yigenhuobah/cloudmusictool> ｜ **下载**：[Releases](https://github.com/yigenhuobah/cloudmusictool/releases)
@@ -113,7 +113,7 @@ tab 切换用 hide/show 保留各自滚动位置；非设置 tab 按返回先回
 ```
 
 - `StatusProvider` 每次 `call` 校验 `Binder.getCallingUid()` 属于目标应用，其他 UID 拒绝。
-- 只回传计数与 skip 原因，不存用户内容、账号、设备标识或业务数据。
+- 回传内容仅计数、挂载状态与 skip 原因；payload 在 Provider 边界按结构白名单整体校验（根键 / Feature 名 / 字段集 / 条数 ≤800 / 字符串 ≤256 / 总量 ≤64KB），不合拒绝。
 - 设置页不显示逐功能诊断；切到诊断 tab 或 `onResume` 时刷新，不自动轮询。
 - 异常横幅条件：目标版本不匹配，或已启用且明确失败功能数 ≥ 2。
 
