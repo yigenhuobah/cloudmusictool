@@ -48,6 +48,7 @@ final class JsonFilter {
     /**
      * 递归过滤 JSON 树：删除 blockCode 命中 hideSet 的对象。
      * 原地修改 JSONObject/JSONArray；removed[0] 累计删除数。
+     * 零删除子树不产生任何变更，按原引用/原串返回，避免无产出的拷贝与重序列化。
      */
     static Object filterValue(Object node, Set<String> hideSet, int[] removed, int depth) {
         if (depth > 6) {
@@ -64,7 +65,10 @@ final class JsonFilter {
                 Object val = obj.opt(key);
                 if (val instanceof JSONObject || val instanceof JSONArray) {
                     try {
-                        obj.put(key, filterValue(val, hideSet, removed, depth + 1));
+                        Object filtered = filterValue(val, hideSet, removed, depth + 1);
+                        if (filtered != val) {
+                            obj.put(key, filtered);
+                        }
                     } catch (Throwable ignored) {
                     }
                 } else if (val instanceof String) {
@@ -86,6 +90,7 @@ final class JsonFilter {
         }
         if (node instanceof JSONArray) {
             JSONArray arr = (JSONArray) node;
+            int removedBefore = removed[0];
             JSONArray out = new JSONArray();
             for (int i = 0; i < arr.length(); i++) {
                 Object item = arr.opt(i);
@@ -112,19 +117,65 @@ final class JsonFilter {
                     out.put(item);
                 }
             }
-            return out;
+            // 零删除：子树无任何变更，返回原数组引用，避免拷贝被上层重序列化
+            return removed[0] > removedBefore ? out : arr;
         }
         return node;
     }
 
-    private static Object filterNestedString(String s, Set<String> hideSet, int[] removed, int depth) {
+    /**
+     * 嵌套 JSON 字符串过滤。hideSet 任一值都未出现的串解析后不可能有删除，
+     * 先行快门原样返回；确有删除才重序列化，零删除返回原串。
+     * 包私有便于 JVM 单测直接断言零命中路径不重序列化。
+     */
+    static Object filterNestedString(String s, Set<String> hideSet, int[] removed, int depth) {
+        if (!mayMatchAny(s, hideSet)) {
+            return s;
+        }
         try {
+            int before = removed[0];
             String t = s.trim();
             Object root = t.startsWith("{") ? new JSONObject(t) : new JSONArray(t);
             Object filtered = filterValue(root, hideSet, removed, depth);
-            return filtered.toString();
+            return removed[0] > before ? filtered.toString() : s;
         } catch (Throwable ignored) {
             return s;
         }
+    }
+
+    /**
+     * 快门：s 是否可能含 hideSet 任一值。hideSet 全部由 JSON 序列化不改写字面的值组成
+     * 且都未在 s 中出现时返回 false（解析不可能命中，可跳过 parse）；否则保守返回 true，
+     * 保证删除语义与全量解析完全一致。
+     */
+    private static boolean mayMatchAny(String s, Set<String> hideSet) {
+        boolean maybe = false;
+        for (String v : hideSet) {
+            if (isScanSafe(v)) {
+                if (s.contains(v)) {
+                    return true;
+                }
+            } else {
+                maybe = true;
+            }
+        }
+        return maybe;
+    }
+
+    /**
+     * v 是否每个字符都不会被 JSON 序列化改写：排除控制符与非 ASCII，
+     * 以及引号、反斜杠和部分序列化器会转义的 / &lt; &gt; &amp; ' =。
+     */
+    private static boolean isScanSafe(String v) {
+        if (v.isEmpty()) {
+            return false;
+        }
+        for (int i = 0; i < v.length(); i++) {
+            char c = v.charAt(i);
+            if (c < 0x20 || c >= 0x7F || "\"\\/<>&'=".indexOf(c) >= 0) {
+                return false;
+            }
+        }
+        return true;
     }
 }
