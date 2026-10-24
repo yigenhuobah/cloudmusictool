@@ -10,8 +10,9 @@ import org.json.JSONObject;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -23,7 +24,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * 通过模块 App 的 StatusProvider 回写（remote prefs 在宿主进程只读，不能反向写）。
  *
  * 写入策略：
- * - 普通状态变化最多每 2 秒触发一次；
+ * - 普通状态变化按「领先 + 尾沿」节流：窗口首个变化立即发送（保持安装期响应性），
+ *   窗口内后续变化在窗口关闭时合并为一次尾沿发送（携带最新状态），避免最后一次
+ *   变化落在节流窗口内且之后无事件而永不上报；
  * - 安装结束后由 Hooks.installAll 调用一次 flush() 发送最终快照；
  * - buildJson + ContentResolver.call 在单线程工作线程执行，避免阻塞主线程；
  * - 目标 Context 只反射解析一次并缓存。
@@ -44,13 +47,13 @@ public final class HookState {
     private static final Set<String> sAbTestFailedKeys = ConcurrentHashMap.newKeySet();
     private static volatile String sAbTestLastFailure;
 
-    private static final ExecutorService sExecutor = Executors.newSingleThreadExecutor(r -> {
+    // 包私有可整体替换：单测注入假时钟与可数执行器（不启动真线程）。
+    static volatile ScheduledExecutorService sExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "CloudMusicTool-HookState");
         t.setDaemon(true);
         return t;
     });
-    private static final AtomicLong sLastPublish = new AtomicLong(0L);
-    private static final AtomicBoolean sPublishQueued = new AtomicBoolean(false);
+    static volatile PublishThrottle sThrottle = new PublishThrottle(System::currentTimeMillis);
 
     private static volatile String sModulePackage;
     private static volatile String sProcessName;
@@ -343,26 +346,107 @@ public final class HookState {
         return o;
     }
 
-    /** 节流触发：最多每 2 秒排队一次，实际发送在工作线程。 */
+    /**
+     * 节流触发：领先沿立即发送，窗口内后续变化合并为窗口关闭时的一次尾沿（携带最新状态）。
+     * 实际发送在工作线程；决策与发送解耦，决策逻辑见 {@link PublishThrottle}。
+     */
     private static void publish() {
-        long now = System.currentTimeMillis();
-        long last = sLastPublish.get();
-        if (now - last < PUBLISH_INTERVAL_MS) {
-            return;
+        PublishThrottle.Decision d = sThrottle.decide();
+        if (d.sendNow) {
+            sExecutor.execute(HookState::doPublish);
         }
-        if (!sLastPublish.compareAndSet(last, now)) {
-            return;
+        if (d.hasTrailing()) {
+            sExecutor.schedule(() -> {
+                if (sThrottle.onWindowClose()) {
+                    doPublish();
+                }
+            }, d.trailingDelayMs, TimeUnit.MILLISECONDS);
         }
-        if (!sPublishQueued.compareAndSet(false, true)) {
-            return;
+    }
+
+    /**
+     * 领先 + 尾沿节流决策（评审 concurrency-4：旧实现只做领先沿，2 秒窗口内的变化
+     * 被直接丢弃且窗口推进先于队列 CAS，最后一次状态变化可能永不上报）。
+     *
+     * - 窗口首个变化：开窗并立即发送（领先沿，保持安装期响应性）；
+     * - 窗口内后续变化：只置 pending，尾沿检查任务只排队一次；
+     * - 窗口关闭：pending 置位则发送一次尾沿（发送时才取快照，携带最新状态），
+     *   随后关窗，下一次变化重新开窗走领先沿。
+     *
+     * 时钟经 {@link Clock} 注入、决策与发送解耦，纯 JVM 直测（HookStatePublishScheduleTest）。
+     */
+    static final class PublishThrottle {
+
+        /** 时钟抽象：生产用系统时钟，测试注入假时钟。 */
+        interface Clock {
+            long now();
         }
-        sExecutor.execute(() -> {
-            try {
-                doPublish();
-            } finally {
-                sPublishQueued.set(false);
+
+        /** 一次变化的调度决策：sendNow 立即发送；hasTrailing() 时需在 trailingDelayMs 后检查尾沿。 */
+        static final class Decision {
+            final boolean sendNow;
+            final long trailingDelayMs;
+
+            private Decision(boolean sendNow, long trailingDelayMs) {
+                this.sendNow = sendNow;
+                this.trailingDelayMs = trailingDelayMs;
             }
-        });
+
+            /** 是否需要排队一次尾沿检查任务。 */
+            boolean hasTrailing() {
+                return trailingDelayMs != NO_TRAILING;
+            }
+        }
+
+        /** 窗口关闭（无窗口）标记；取 -1 避免与「窗口开在时刻 0」的合法起点冲突。 */
+        private static final long NO_WINDOW = -1L;
+        /** 无需调度尾沿的标记。 */
+        private static final long NO_TRAILING = -1L;
+
+        private final Clock mClock;
+        /** 当前窗口起点；NO_WINDOW 表示窗口关闭。 */
+        private final AtomicLong mWindowStart = new AtomicLong(NO_WINDOW);
+        /** 窗口内有变化待尾沿发送。 */
+        private final AtomicBoolean mPending = new AtomicBoolean(false);
+        /** 尾沿检查任务是否已排队。 */
+        private final AtomicBoolean mTrailingQueued = new AtomicBoolean(false);
+
+        PublishThrottle(Clock clock) {
+            mClock = clock;
+        }
+
+        /**
+         * 计算一次状态变化的调度决策。线程安全（基于 CAS，CAS 失败重读重判）。
+         */
+        Decision decide() {
+            for (;;) {
+                long now = mClock.now();
+                long start = mWindowStart.get();
+                if (start == NO_WINDOW || now - start >= PUBLISH_INTERVAL_MS) {
+                    // 无窗口或窗口已过期：本变化开新窗，立即发送（领先沿）。
+                    if (mWindowStart.compareAndSet(start, now)) {
+                        return new Decision(true, NO_TRAILING);
+                    }
+                    continue;
+                }
+                // 窗口内：只置 pending，尾沿检查任务排队一次，不重复排。
+                mPending.set(true);
+                if (mTrailingQueued.compareAndSet(false, true)) {
+                    return new Decision(false, PUBLISH_INTERVAL_MS - (now - start));
+                }
+                return new Decision(false, NO_TRAILING);
+            }
+        }
+
+        /**
+         * 窗口关闭时检查尾沿：pending 置位则消费并返回 true（调用方发送一次尾沿），
+         * 无论是否发送都关窗，允许下一次变化重新开窗走领先沿。
+         */
+        boolean onWindowClose() {
+            mTrailingQueued.set(false);
+            mWindowStart.set(NO_WINDOW);
+            return mPending.getAndSet(false);
+        }
     }
 
     private static void doPublish() {
@@ -386,8 +470,7 @@ public final class HookState {
             Bundle extras = new Bundle();
             extras.putString("json", json);
             ctx.getContentResolver().call(
-                    android.net.Uri.parse("content://" + pkg + ".status"),
-                    "report", null, extras);
+                    StatusProvider.authority(pkg), "report", null, extras);
         } catch (Throwable t) {
             if (!sPublishFailureLogged) {
                 sPublishFailureLogged = true;

@@ -44,7 +44,7 @@ public class StatusProvider extends ContentProvider {
     static final String KEY_EXPERIMENTS = "experiments";
 
     private static final String TAG = "CloudMusicTool";
-    private static final String TARGET_PACKAGE = "com.netease.cloudmusic";
+    private static final String TARGET_PACKAGE = Config.TARGET_PACKAGE;
 
     @Override
     public boolean onCreate() {
@@ -182,6 +182,15 @@ public class StatusProvider extends ContentProvider {
     public static Uri mineBackgroundUri(Context context) {
         return Uri.parse("content://" + context.getPackageName() + AUTHORITY_SUFFIX
                 + PATH_MINE_BACKGROUND);
+    }
+
+    /**
+     * Hook 状态回写通道的 authority URI：content://&lt;pkg&gt;.status。
+     * 目标进程经 ContentResolver.call("report") 回写；与 Manifest 的
+     * ${applicationId}.status 一致（pkg 即模块 App 包名）。
+     */
+    public static Uri authority(String pkg) {
+        return Uri.parse("content://" + pkg + AUTHORITY_SUFFIX);
     }
 
     @Override
