@@ -15,8 +15,10 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 
+import com.cloudmusictool.app.Config;
 import com.cloudmusictool.app.Feature;
 import com.cloudmusictool.app.HookState;
+import com.cloudmusictool.app.SampleSize;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -128,9 +130,12 @@ public final class MineBackgroundHooks {
      * 只在 EN-01 开启时安装，关闭后宿主恢复原 RN 分支。
      */
     private static void installProxyHook(XposedModule module, Feature f, ClassLoader cl) {
+        Class<?> proxy = HookKit.findClass(module, f, cl,
+                "com.netease.cloudmusic.fragment.MyMusicProxyFragment");
+        if (proxy == null) {
+            return;
+        }
         try {
-            Class<?> proxy = Class.forName(
-                    "com.netease.cloudmusic.fragment.MyMusicProxyFragment", false, cl);
             Method oc = proxy.getDeclaredMethod("oc");
             HookKit.install(module, f, "MyMusicProxyFragment#oc", oc, chain -> {
                 HookKit.hit(module, f, "forced native Mine page");
@@ -155,53 +160,57 @@ public final class MineBackgroundHooks {
      * 渲染链路没有 VIP 校验。
      */
     private static void installFullScreenInjection(XposedModule module, Feature f, ClassLoader cl) {
-        try {
-            Class<?> parser = Class.forName("pc2.e$a", false, cl);
-            Method b = parser.getDeclaredMethod("B", org.json.JSONObject.class);
-            HookKit.install(module, f, "BgInfoParser#B", b, chain -> {
-                List<Object> args = chain.getArgs();
-                if (!args.isEmpty() && args.get(0) instanceof org.json.JSONObject) {
-                    if (forceFullScreen(module, f, (org.json.JSONObject) args.get(0))) {
-                        HookKit.hit(module, f, "injected fullScreen validType=4 (network)");
+        Class<?> parser = HookKit.findClass(module, f, cl, "pc2.e$a");
+        if (parser != null) {
+            try {
+                Method b = parser.getDeclaredMethod("B", org.json.JSONObject.class);
+                HookKit.install(module, f, "BgInfoParser#B", b, chain -> {
+                    List<Object> args = chain.getArgs();
+                    if (!args.isEmpty() && args.get(0) instanceof org.json.JSONObject) {
+                        if (forceFullScreen(module, f, (org.json.JSONObject) args.get(0))) {
+                            HookKit.hit(module, f, "injected fullScreen validType=4 (network)");
+                        }
                     }
-                }
-                return chain.proceed();
-            });
-        } catch (Throwable t) {
-            HookKit.warn(module, f.id + " BgInfoParser#B hook failed: " + t.getMessage());
+                    return chain.proceed();
+                });
+            } catch (Throwable t) {
+                HookKit.warn(module, f.id + " BgInfoParser#B hook failed: " + t.getMessage());
+            }
         }
 
-        try {
-            Class<?> store = Class.forName("pc2.f", false, cl);
-            Method g = store.getDeclaredMethod("g", long.class);
-            HookKit.install(module, f, "BgStore#g", g, chain -> {
-                Object result = chain.proceed();
-                if (result instanceof String) {
-                    String patched = patchBackgroundJson(module, f, (String) result);
-                    if (patched != null) {
-                        HookKit.hit(module, f, "injected fullScreen validType=4 (sp read)");
-                        return patched;
+        Class<?> store = HookKit.findClass(module, f, cl, "pc2.f");
+        if (store != null) {
+            try {
+                Method g = store.getDeclaredMethod("g", long.class);
+                HookKit.install(module, f, "BgStore#g", g, chain -> {
+                    Object result = chain.proceed();
+                    if (result instanceof String) {
+                        String patched = patchBackgroundJson(module, f, (String) result);
+                        if (patched != null) {
+                            HookKit.hit(module, f, "injected fullScreen validType=4 (sp read)");
+                            return patched;
+                        }
                     }
-                }
-                return result;
-            });
+                    return result;
+                });
 
-            Method s = store.getDeclaredMethod("s", long.class, String.class);
-            HookKit.install(module, f, "BgStore#s", s, chain -> {
-                List<Object> args = chain.getArgs();
-                if (args.size() > 1 && args.get(1) instanceof String) {
-                    String patched = patchBackgroundJson(module, f, (String) args.get(1));
-                    if (patched != null) {
-                        Object[] newArgs = args.toArray();
-                        newArgs[1] = patched;
-                        HookKit.hit(module, f, "injected fullScreen validType=4 (sp write)");
-                        return chain.proceed(newArgs);
+                Method s = store.getDeclaredMethod("s", long.class, String.class);
+                HookKit.install(module, f, "BgStore#s", s, chain -> {
+                    List<Object> args = chain.getArgs();
+                    if (args.size() > 1 && args.get(1) instanceof String) {
+                        String patched = patchBackgroundJson(module, f, (String) args.get(1));
+                        if (patched != null) {
+                            Object[] newArgs = args.toArray();
+                            newArgs[1] = patched;
+                            HookKit.hit(module, f, "injected fullScreen validType=4 (sp write)");
+                            return chain.proceed(newArgs);
+                        }
                     }
-                }
-                return chain.proceed();
-            });
-        } catch (Throwable t) {
-            HookKit.warn(module, f.id + " BgStore hook failed: " + t.getMessage());
+                    return chain.proceed();
+                });
+            } catch (Throwable t) {
+                HookKit.warn(module, f.id + " BgStore hook failed: " + t.getMessage());
+            }
         }
     }
 
@@ -210,43 +219,49 @@ public final class MineBackgroundHooks {
      * 只改 validType/backgroundValue/fullScreen，不碰 vip/showEntrance。
      */
     private static void installProfileModelHooks(XposedModule module, Feature f, ClassLoader cl) {
+        Class<?> profile = HookKit.findClass(module, f, cl, "com.netease.cloudmusic.meta.Profile");
+        if (profile == null) {
+            return;
+        }
         try {
-            Class<?> profile = Class.forName("com.netease.cloudmusic.meta.Profile", false, cl);
-            Class<?> infoClass = Class.forName(
-                    "com.netease.cloudmusic.meta.virtual.UserBackgroundInfo", false, cl);
-            Method setInfo = profile.getDeclaredMethod("setUserBackgroundInfo", infoClass);
-            HookKit.install(module, f, "Profile#setUserBackgroundInfo", setInfo, chain -> {
-                List<Object> args = chain.getArgs();
-                if (!args.isEmpty() && args.get(0) != null) {
-                    if (forceFullScreenModel(module, f, args.get(0))) {
-                        HookKit.hit(module, f, "injected fullScreen validType=4 (profile model)");
+            Class<?> infoClass = HookKit.findClass(module, f, cl,
+                    "com.netease.cloudmusic.meta.virtual.UserBackgroundInfo");
+            if (infoClass != null) {
+                Method setInfo = profile.getDeclaredMethod("setUserBackgroundInfo", infoClass);
+                HookKit.install(module, f, "Profile#setUserBackgroundInfo", setInfo, chain -> {
+                    List<Object> args = chain.getArgs();
+                    if (!args.isEmpty() && args.get(0) != null) {
+                        if (forceFullScreenModel(module, f, args.get(0))) {
+                            HookKit.hit(module, f, "injected fullScreen validType=4 (profile model)");
+                        }
                     }
-                }
-                return chain.proceed();
-            });
+                    return chain.proceed();
+                });
+            }
         } catch (Throwable t) {
             HookKit.warn(module, f.id + " Profile#setUserBackgroundInfo hook failed: "
                     + t.getMessage());
         }
 
         try {
-            Class<?> profile = Class.forName("com.netease.cloudmusic.meta.Profile", false, cl);
-            Class<?> mineClass = Class.forName(
-                    "com.netease.cloudmusic.meta.MineUserBackground", false, cl);
-            Method setMine = profile.getDeclaredMethod("setMineUserBackground", mineClass);
-            HookKit.install(module, f, "Profile#setMineUserBackground", setMine, chain -> {
-                List<Object> args = chain.getArgs();
-                if (!args.isEmpty()) {
-                    Object replacement = fullScreenMineBackground(mineClass);
-                    if (replacement != null) {
-                        Object[] newArgs = args.toArray();
-                        newArgs[0] = replacement;
-                        HookKit.hit(module, f, "injected fullScreen (mine model)");
-                        return chain.proceed(newArgs);
+            Class<?> mineClass = HookKit.findClass(module, f, cl,
+                    "com.netease.cloudmusic.meta.MineUserBackground");
+            if (mineClass != null) {
+                Method setMine = profile.getDeclaredMethod("setMineUserBackground", mineClass);
+                HookKit.install(module, f, "Profile#setMineUserBackground", setMine, chain -> {
+                    List<Object> args = chain.getArgs();
+                    if (!args.isEmpty()) {
+                        Object replacement = fullScreenMineBackground(mineClass);
+                        if (replacement != null) {
+                            Object[] newArgs = args.toArray();
+                            newArgs[0] = replacement;
+                            HookKit.hit(module, f, "injected fullScreen (mine model)");
+                            return chain.proceed(newArgs);
+                        }
                     }
-                }
-                return chain.proceed();
-            });
+                    return chain.proceed();
+                });
+            }
         } catch (Throwable t) {
             HookKit.warn(module, f.id + " Profile#setMineUserBackground hook failed: "
                     + t.getMessage());
@@ -256,11 +271,14 @@ public final class MineBackgroundHooks {
     private static boolean forceFullScreenModel(XposedModule module, Feature f, Object info) {
         try {
             invoke(info, "setValidType", new Class<?>[]{int.class}, 4);
-            Object value = invokeNoArg(info, "getBackgroundValue");
+            Object value = HookKit.invokeNoArg(info, "getBackgroundValue");
             if (value == null) {
-                Class<?> valueClass = Class.forName(
-                        "com.netease.cloudmusic.meta.virtual.UserBackgroundValue",
-                        false, info.getClass().getClassLoader());
+                Class<?> valueClass = HookKit.findClass(module, f,
+                        info.getClass().getClassLoader(),
+                        "com.netease.cloudmusic.meta.virtual.UserBackgroundValue");
+                if (valueClass == null) {
+                    return false;
+                }
                 value = valueClass.newInstance();
                 invoke(info, "setBackgroundValue", new Class<?>[]{valueClass}, value);
             }
@@ -560,7 +578,7 @@ public final class MineBackgroundHooks {
             if (sForcedFullScreen && !hostFullScreen) {
                 Activity activity = findActivity(container.getContext());
                 Object fragment = findMineFragment(activity);
-                Object vm = fragment == null ? null : invokeNoArg(fragment, "pe");
+                Object vm = fragment == null ? null : HookKit.invokeNoArg(fragment, "pe");
                 if (vm != null) {
                     invoke(vm, "W1", new Class<?>[]{boolean.class}, false);
                     sForcedFullScreen = false;
@@ -593,9 +611,9 @@ public final class MineBackgroundHooks {
             if (fragment == null) {
                 return;
             }
-            Object vm = invokeNoArg(fragment, "pe");
+            Object vm = HookKit.invokeNoArg(fragment, "pe");
             if (vm != null) {
-                Object was = invokeNoArg(vm, "D1");
+                Object was = HookKit.invokeNoArg(vm, "D1");
                 if (Boolean.FALSE.equals(was)) {
                     invoke(vm, "W1", new Class<?>[]{boolean.class}, true);
                     sForcedFullScreen = true;
@@ -611,10 +629,11 @@ public final class MineBackgroundHooks {
 
     private static ViewGroup headerBgContainer(Object manager) {
         try {
-            Field field = findField(manager.getClass(), "a");
+            Field field = HookKit.findField(manager.getClass(), "a");
             if (field == null) {
                 return null;
             }
+            field.setAccessible(true);
             Object value = field.get(manager);
             return value instanceof ViewGroup ? (ViewGroup) value : null;
         } catch (Throwable t) {
@@ -624,15 +643,19 @@ public final class MineBackgroundHooks {
 
     private static boolean isSelfPage(Object manager) {
         try {
-            Field field = findField(manager.getClass(), "b");
-            return field != null && field.getType() == boolean.class && field.getBoolean(manager);
+            Field field = HookKit.findField(manager.getClass(), "b");
+            if (field == null || field.getType() != boolean.class) {
+                return false;
+            }
+            field.setAccessible(true);
+            return field.getBoolean(manager);
         } catch (Throwable t) {
             return false;
         }
     }
 
     private static int managerType(Object manager) {
-        Object value = invokeNoArg(manager, "c");
+        Object value = HookKit.invokeNoArg(manager, "c");
         return value instanceof Integer ? (Integer) value : -1;
     }
 
@@ -641,7 +664,7 @@ public final class MineBackgroundHooks {
             int id = sFlHeaderImageId;
             if (id == 0) {
                 id = view.getResources().getIdentifier(
-                        "flHeaderImage", "id", "com.netease.cloudmusic");
+                        "flHeaderImage", "id", Config.TARGET_PACKAGE);
                 if (id == 0) {
                     id = FL_HEADER_IMAGE_FALLBACK;
                 }
@@ -702,22 +725,11 @@ public final class MineBackgroundHooks {
         return null;
     }
 
-    private static Object invokeNoArg(Object target, String name) {
-        if (target == null) {
-            return null;
-        }
-        Method method = findMethod(target.getClass(), name, new Class<?>[0]);
-        if (method == null) {
-            return null;
-        }
-        try {
-            method.setAccessible(true);
-            return method.invoke(target);
-        } catch (Throwable t) {
-            return null;
-        }
-    }
-
+    /**
+     * 带参调用仍保留最小私有实现：HookKit 只有无参 invokeNoArg，且其方法定位
+     * （findMethodQuiet）仅查声明类本身；这里的宿主方法（如 pe/W1/kd）需要沿
+     * 继承链查找非 public 声明，也不该为运行期反射失败登记 HookState。
+     */
     private static Object invoke(Object target, String name, Class<?>[] types, Object... args) {
         if (target == null) {
             return null;
@@ -739,20 +751,6 @@ public final class MineBackgroundHooks {
         while (current != null && current != Object.class) {
             try {
                 return current.getDeclaredMethod(name, types);
-            } catch (Throwable ignored) {
-                current = current.getSuperclass();
-            }
-        }
-        return null;
-    }
-
-    private static Field findField(Class<?> type, String name) {
-        Class<?> current = type;
-        while (current != null && current != Object.class) {
-            try {
-                Field field = current.getDeclaredField(name);
-                field.setAccessible(true);
-                return field;
             } catch (Throwable ignored) {
                 current = current.getSuperclass();
             }
@@ -787,7 +785,8 @@ public final class MineBackgroundHooks {
             return null;
         }
         BitmapFactory.Options opts = new BitmapFactory.Options();
-        opts.inSampleSize = sampleSize(bounds.outWidth, bounds.outHeight, 1440, 2560);
+        opts.inSampleSize = SampleSize.calculateInSampleSize(
+                bounds.outWidth, bounds.outHeight, 1440, 2560);
         opts.inPreferredConfig = Bitmap.Config.RGB_565;
         try (InputStream in = new FileInputStream(file)) {
             return BitmapFactory.decodeStream(in, null, opts);
@@ -825,7 +824,8 @@ public final class MineBackgroundHooks {
         }
 
         BitmapFactory.Options opts = new BitmapFactory.Options();
-        opts.inSampleSize = sampleSize(bounds.outWidth, bounds.outHeight, maxWidth, maxHeight);
+        opts.inSampleSize = SampleSize.calculateInSampleSize(
+                bounds.outWidth, bounds.outHeight, maxWidth, maxHeight);
         opts.inPreferredConfig = Bitmap.Config.RGB_565;
         try (InputStream in = context.getContentResolver().openInputStream(uri)) {
             if (in == null) {
@@ -835,17 +835,5 @@ public final class MineBackgroundHooks {
         } catch (Throwable t) {
             return null;
         }
-    }
-
-    static int sampleSize(int outWidth, int outHeight, int reqWidth, int reqHeight) {
-        int sample = 1;
-        if (outWidth <= 0 || outHeight <= 0 || reqWidth <= 0 || reqHeight <= 0) {
-            return sample;
-        }
-        while ((outWidth / (sample * 2)) >= reqWidth
-                && (outHeight / (sample * 2)) >= reqHeight) {
-            sample *= 2;
-        }
-        return sample;
     }
 }
