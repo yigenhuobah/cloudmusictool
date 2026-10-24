@@ -6,6 +6,7 @@ import android.content.ContextWrapper;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Environment;
 import android.os.Handler;
@@ -60,6 +61,16 @@ public final class MineBackgroundHooks {
     private static final String TAG_IMAGE = "cloudmusictool.mine.bg.image";
     private static final String TAG_SCRIM = "cloudmusictool.mine.bg.scrim";
 
+    /**
+     * 官方 FullScreen 分支的内容区遮罩色：gd() 在 z15 条件（manager 类型 4 且
+     * 背景图经官方加载器真实加载完成）成立时为 bottomAreaMask 设此色（约 10%
+     * 白），内容区透出背景图。取值与 9.6.13 反编译的 ColorDrawable(452984831)
+     * 完全一致。
+     */
+    static final int FULLSCREEN_CONTENT_SCRIM = 0x1AFFFFFF;
+    /** 内容区遮罩 view 的资源名；旧版本不存在时整页增强静默降级为头部效果。 */
+    static final String CONTENT_MASK_VIEW = "bottomAreaMask";
+
     /** 模块包名缺失时的兜底 URL；只要非空，宿主就会进入 FullScreen 分支。 */
     private static final String FULL_PIC_PLACEHOLDER =
             "content://local/cloudmusictool/mine_background";
@@ -73,6 +84,7 @@ public final class MineBackgroundHooks {
     private static volatile long[] sCachedFingerprint;
     private static volatile boolean sForcedFullScreen;
     private static volatile int sFlHeaderImageId;
+    private static volatile int sContentMaskId;
 
     private MineBackgroundHooks() {
     }
@@ -82,6 +94,7 @@ public final class MineBackgroundHooks {
         installFullScreenInjection(module, f, cl);
         installProxyHook(module, f, cl);
         installProfileModelHooks(module, f, cl);
+        installContentMaskHooks(module, cl, f);
     }
 
     // ---------------------------------------------------------------- native
@@ -504,6 +517,7 @@ public final class MineBackgroundHooks {
             addImageToContainer(module, f, container, bitmap);
             showHeaderLayer(container);
             applyFullScreen(module, f, manager, container);
+            forceContentMask(module, f, container);
             HookKit.hit(module, f, "manager applied local background");
         } catch (Throwable t) {
             HookKit.warn(module, f.id + " applyBitmap failed: " + t.getMessage());
@@ -589,6 +603,7 @@ public final class MineBackgroundHooks {
             if (fl != null && !hostFullScreen) {
                 fl.setAlpha(0f);
             }
+            requestHostRestyle(container);
             HookKit.info(module, f.id + " local background cleared");
         } catch (Throwable t) {
             HookKit.warn(module, f.id + " clearApplied failed: " + t.getMessage());
@@ -623,6 +638,105 @@ public final class MineBackgroundHooks {
         } catch (Throwable t) {
             HookKit.warn(module, f.id + " full-screen state failed: " + t.getMessage());
         }
+    }
+
+    // ------------------------------------------------------------ content mask
+
+    /**
+     * 整页透出（Issue #1）：官方 gd() 在「manager 类型为 FullScreen 且背景图经
+     * 官方加载器真实加载完成（zg2.b#T1 通知）」时把内容区遮罩 bottomAreaMask
+     * 设为半透明，内容区透出背景图；否则设主题深色。模块贴的是本地图片，官方
+     * 加载链路对 file:// 失败，T1 永不触发，gd() 退回深色遮罩把内容区盖死——
+     * 这就是 2.1.0「头部透出、内容区深色」的根因。
+     *
+     * 此处在 gd() 之后按「模块已贴图」补设官方同款半透明；宿主每次重设主题色
+     * 都被即时纠正。9.6.08 为 gd()V、9.6.13 为 gd(String)，两种签名都挂；
+     * bottomAreaMask 资源不存在（更旧版本）时静默降级为仅头部效果。
+     */
+    private static void installContentMaskHooks(XposedModule module, ClassLoader cl, Feature f) {
+        Class<?> fragment = HookKit.findClass(module, f, cl, MINE_FRAGMENT);
+        if (fragment == null) {
+            return;
+        }
+        boolean installed = false;
+        for (Method m : fragment.getDeclaredMethods()) {
+            if (!"gd".equals(m.getName()) || m.getParameterTypes().length > 1) {
+                continue;
+            }
+            HookKit.install(module, f, "fragment#gd", m, chain -> {
+                Object result = chain.proceed();
+                try {
+                    Object self = chain.getThisObject();
+                    Method getView = findMethod(self.getClass(), "getView", new Class<?>[0]);
+                    View fragmentView = getView == null ? null : (View) getView.invoke(self);
+                    if (fragmentView != null) {
+                        forceContentMask(module, f, fragmentView);
+                    }
+                } catch (Throwable t) {
+                    HookKit.warn(module, f.id + " fragment#gd mask failed: " + t.getMessage());
+                }
+                return result;
+            });
+            installed = true;
+        }
+        if (!installed) {
+            HookState.note(f, "gd 未找到，整页遮罩增强不生效");
+        }
+    }
+
+    /** 模块已贴图时把内容区遮罩设为官方全屏分支同款半透明；未贴图不干预。 */
+    private static void forceContentMask(XposedModule module, Feature f, View anyView) {
+        try {
+            Bitmap bitmap = sCachedBitmap;
+            if (bitmap == null || bitmap.isRecycled()) {
+                return;
+            }
+            View mask = anyView.getRootView().findViewById(resolveMaskId(anyView));
+            if (mask == null) {
+                return;
+            }
+            mask.setBackground(new ColorDrawable(FULLSCREEN_CONTENT_SCRIM));
+            HookKit.hit(module, f, "content mask translucent (full page)");
+        } catch (Throwable t) {
+            HookKit.warn(module, f.id + " forceContentMask failed: " + t.getMessage());
+        }
+    }
+
+    /** 清除背景后让宿主 gd() 重算遮罩；位图已置空，after-hook 放行官方主题色。 */
+    private static void requestHostRestyle(ViewGroup container) {
+        try {
+            Object fragment = findMineFragment(findActivity(container.getContext()));
+            if (fragment == null) {
+                return;
+            }
+            Method zero = findMethod(fragment.getClass(), "gd", new Class<?>[0]);
+            if (zero != null) {
+                zero.setAccessible(true);
+                zero.invoke(fragment);
+                return;
+            }
+            Method one = findMethod(fragment.getClass(), "gd", new Class<?>[]{String.class});
+            if (one != null) {
+                one.setAccessible(true);
+                one.invoke(fragment, "cloudmusictool_clear");
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static int resolveMaskId(View view) {
+        int id = sContentMaskId;
+        if (id != 0) {
+            return id;
+        }
+        try {
+            id = view.getResources().getIdentifier(
+                    CONTENT_MASK_VIEW, "id", Config.TARGET_PACKAGE);
+            sContentMaskId = id;
+        } catch (Throwable t) {
+            id = 0;
+        }
+        return id;
     }
 
     // ---------------------------------------------------------------- views
