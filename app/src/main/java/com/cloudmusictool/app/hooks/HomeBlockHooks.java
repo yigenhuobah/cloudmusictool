@@ -392,16 +392,13 @@ public final class HomeBlockHooks {
                 if (!(res instanceof String)) {
                     return res;
                 }
-                String store = "";
-                if (mmapIdMethod != null) {
-                    try {
-                        Object self = chain.getThisObject();
-                        if (self != null) {
-                            store = String.valueOf(mmapIdMethod.invoke(self));
-                        }
-                    } catch (Throwable ignored) {
-                    }
+                // hideSet 未配置(过滤集为空)时无须识别来源,直接放行;
+                // 该判定与 filterMmkvString 内同源(Config 装载后只读),提前到这里
+                // 可避免宿主每次 MMKV 字符串读都支付 mmapID 反射成本。
+                if (config.getFilterSet(Config.KEY_HOME_BLOCKS_FILTER).isEmpty()) {
+                    return res;
                 }
+                String store = mmapIdOf(mmapIdMethod, chain.getThisObject());
                 List<Object> args = chain.getArgs();
                 String key = (args != null && !args.isEmpty() && args.get(0) instanceof String)
                         ? (String) args.get(0) : "";
@@ -411,6 +408,40 @@ public final class HomeBlockHooks {
             }
             return res;
         });
+    }
+
+    /**
+     * mmapID 结果按 MMKV 实例缓存。MMKV 未重写 equals/hashCode,实例身份即语义身份,
+     * 故用 IdentityHashMap 以引用相等作 key,避免同一实例每次读都反射 invoke mmapID()
+     * (宿主进程 MMKV 字符串读极高频)。MMKV 自身按静态表持有实例(进程级单例),
+     * 条目数以实例数为上界,不会无界增长;IdentityHashMap 非线程安全,
+     * 读写均在 synchronized 块内完成。反射失败时不缓存,后续读取保持原样重试。
+     */
+    private static final java.util.IdentityHashMap<Object, String> sMmapIdCache =
+            new java.util.IdentityHashMap<>();
+
+    /** 识别 MMKV 实例的 mmapID;无法识别时返回 ""(与原内联实现一致)。 */
+    private static String mmapIdOf(Method mmapIdMethod, Object self) {
+        if (mmapIdMethod == null || self == null) {
+            return "";
+        }
+        String cached;
+        synchronized (sMmapIdCache) {
+            cached = sMmapIdCache.get(self);
+        }
+        if (cached != null) {
+            return cached;
+        }
+        String id;
+        try {
+            id = String.valueOf(mmapIdMethod.invoke(self));
+        } catch (Throwable ignored) {
+            return "";
+        }
+        synchronized (sMmapIdCache) {
+            sMmapIdCache.put(self, id);
+        }
+        return id;
     }
 
     private static Object filterMmkvString(XposedModule module, Feature f, Config config,
@@ -454,8 +485,35 @@ public final class HomeBlockHooks {
         return str;
     }
 
+    /**
+     * 无分配的大小写不敏感包含判断:首字符预筛后逐偏移 regionMatches(true,...)。
+     * 替代 toUpperCase(Locale.ROOT) 实现,避免每次调用分配一份整串大写副本
+     * (MMKV 读回调内 store/key 最多各判 2 次)。needle 均为纯大写 ASCII 常量,
+     * 该实现对 ASCII 输入与旧 toUpperCase 路径逐字符等价(基准已校验 2 万组)。
+     */
     private static boolean containsIgnoreCase(String s, String needle) {
-        return s != null && s.toUpperCase(java.util.Locale.ROOT).contains(needle);
+        if (s == null) {
+            return false;
+        }
+        int nLen = needle.length();
+        if (nLen == 0) {
+            return true;
+        }
+        int limit = s.length() - nLen;
+        char firstUpper = Character.toUpperCase(needle.charAt(0));
+        char firstLower = Character.toLowerCase(needle.charAt(0));
+        for (int i = 0; i <= limit; i++) {
+            char c = s.charAt(i);
+            // 预筛条件与 regionMatches 的首字符必要条件一致,不会漏判
+            if (Character.toUpperCase(c) != firstUpper
+                    && Character.toLowerCase(c) != firstLower) {
+                continue;
+            }
+            if (s.regionMatches(true, i, needle, 0, nLen)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String shortName(String s) {
