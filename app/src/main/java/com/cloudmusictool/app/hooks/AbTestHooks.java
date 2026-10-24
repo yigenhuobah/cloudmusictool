@@ -3,10 +3,6 @@ package com.cloudmusictool.app.hooks;
 import com.cloudmusictool.app.AbTestPolicy;
 import com.cloudmusictool.app.Config;
 import com.cloudmusictool.app.HookState;
-import com.cloudmusictool.app.profile.MountResolver;
-import com.cloudmusictool.app.profile.MountSpec;
-import com.cloudmusictool.app.profile.ProfileRegistry;
-import com.cloudmusictool.app.profile.TargetProfile;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -93,9 +89,10 @@ public final class AbTestHooks {
 
     private static void installManagerHook(XposedModule module, ClassLoader cl) {
         try {
-            Class<?> cls = findClass(module, cl, CLS_MANAGER);
-            Method m = findMethod(module, cls, "checkExperiment", null, String.class, boolean.class);
-            hook(module, "ABTestManagerImpl#checkExperiment", m, chain -> {
+            Class<?> cls = HookKit.findClass(module, null, cl, CLS_MANAGER);
+            Method m = HookKit.findMethod(module, null, cls, "checkExperiment", null,
+                    new Class<?>[]{String.class, boolean.class}, (String[]) null);
+            install(module, "ABTestManagerImpl#checkExperiment", m, chain -> {
                 Object result = chain.proceed();
                 try {
                     String key = argString(chain, 0);
@@ -125,9 +122,10 @@ public final class AbTestHooks {
     private static void installGroupKeysHook(XposedModule module, ClassLoader cl,
                                              String className, String label) {
         try {
-            Class<?> cls = findClass(module, cl, className);
-            Method m = findMethod(module, cls, "getGroupKeys", String.class);
-            hook(module, label, m, chain -> {
+            Class<?> cls = HookKit.findClass(module, null, cl, className);
+            Method m = HookKit.findMethod(module, null, cls, "getGroupKeys", String.class,
+                    new Class<?>[0], (String[]) null);
+            install(module, label, m, chain -> {
                 try {
                     Object self = chain.getThisObject();
                     String key = fieldString(self, "abtestname");
@@ -148,9 +146,10 @@ public final class AbTestHooks {
 
     private static void installModelHook(XposedModule module, ClassLoader cl) {
         try {
-            Class<?> cls = findClass(module, cl, CLS_MODEL);
-            Method m = findMethod(module, cls, "x", null, String.class, boolean.class);
-            hook(module, "abtest2.b#x", m, chain -> {
+            Class<?> cls = HookKit.findClass(module, null, cl, CLS_MODEL);
+            Method m = HookKit.findMethod(module, null, cls, "x", null,
+                    new Class<?>[]{String.class, boolean.class}, (String[]) null);
+            install(module, "abtest2.b#x", m, chain -> {
                 Object result = chain.proceed();
                 try {
                     String key = argString(chain, 0);
@@ -179,9 +178,10 @@ public final class AbTestHooks {
 
     private static void installStartupHook(XposedModule module, ClassLoader cl) {
         try {
-            Class<?> cls = findClass(module, cl, CLS_STARTUP_AB);
-            Method m = findMethod(module, cls, "getGroup", String.class, String.class);
-            hook(module, "StartupABManager#getGroup", m, chain -> {
+            Class<?> cls = HookKit.findClass(module, null, cl, CLS_STARTUP_AB);
+            Method m = HookKit.findMethod(module, null, cls, "getGroup", String.class,
+                    new Class<?>[]{String.class}, (String[]) null);
+            install(module, "StartupABManager#getGroup", m, chain -> {
                 Object result = chain.proceed();
                 try {
                     String key = argString(chain, 0);
@@ -198,82 +198,28 @@ public final class AbTestHooks {
     }
 
     /**
-     * ABTest 坐标同样走多版本 Profile：先查活动 Profile 的类坐标，
-     * 失败回退硬编码类名。ABTEST 不是 Feature，不参与 HookState critical 统计。
+     * 经 HookKit 的 Feature 可空路径安装：类/方法定位（含 Profile 坐标与 DexKit
+     * 兜底）与返回类型校验全部复用主管线，本侧只按返回值落 ABTest 观测账
+     * （ABTEST 不是 Feature，HookKit 不感知 abtest 通道，不写 Feature 级计数）。
      */
-    private static Class<?> findClass(XposedModule module, ClassLoader cl, String className)
-            throws ClassNotFoundException {
-        try {
-            TargetProfile profile = ProfileRegistry.active();
-            if (profile != null) {
-                MountSpec spec = profile.findClassSpec(className);
-                if (spec != null) {
-                    Class<?> resolved = MountResolver.resolveClass(spec, cl);
-                    if (resolved != null) {
-                        HookKit.info(module, "ABTEST profile class " + className + " -> " + spec.id);
-                        return resolved;
-                    }
-                }
-            }
-        } catch (Throwable t) {
-            HookKit.warn(module, "ABTEST profile class resolve error " + className
-                    + ": " + t.getMessage());
+    private static void install(XposedModule module, String label, Method m,
+                                XposedInterface.Hooker hooker) {
+        if (m == null) {
+            recordMiss(label);
+            return;
         }
-        return Class.forName(className, false, cl);
-    }
-
-    /** 方法级同理：Profile 命中且签名一致则使用，否则回退 getDeclaredMethod。 */
-    private static Method findMethod(XposedModule module, Class<?> cls, String name,
-                                     Class<?> returnType, Class<?>... params)
-            throws NoSuchMethodException {
-        try {
-            TargetProfile profile = ProfileRegistry.active();
-            if (profile != null) {
-                MountSpec spec = profile.findMethodSpec(cls.getName(), name);
-                if (spec != null) {
-                    Method resolved = MountResolver.resolveMethod(spec, cls, cls.getClassLoader());
-                    if (resolved != null
-                            && paramsMatch(resolved.getParameterTypes(), params)
-                            && (returnType == null || returnType == resolved.getReturnType())) {
-                        HookKit.info(module, "ABTEST profile method " + cls.getName() + "#" + name
-                                + " -> " + spec.id);
-                        return resolved;
-                    }
-                }
-            }
-        } catch (Throwable t) {
-            HookKit.warn(module, "ABTEST profile method resolve error "
-                    + cls.getName() + "#" + name + ": " + t.getMessage());
-        }
-        return cls.getDeclaredMethod(name, params);
-    }
-
-    private static boolean paramsMatch(Class<?>[] actual, Class<?>[] expected) {
-        if (actual.length != expected.length) {
-            return false;
-        }
-        for (int i = 0; i < actual.length; i++) {
-            if (actual[i] != expected[i] && !actual[i].equals(expected[i])) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static void hook(XposedModule module, String label, Method m,
-                             XposedInterface.Hooker hooker) {
-        try {
-            module.hook(m)
-                    .setId("ABTEST#" + label)
-                    .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
-                    .intercept(hooker);
+        if (HookKit.install(module, null, label, m, hooker)) {
             HookState.abTestInstalled(label);
-            HookKit.info(module, "ABTEST registered " + label);
-        } catch (Throwable t) {
+        } else {
             HookState.abTestNotFound(label);
-            HookState.noteAbTest("hook failed " + label + ": " + t.getMessage());
-            HookKit.error(module, "ABTEST hook failed " + label, t);
+            HookState.noteAbTest("hook failed " + label);
         }
+    }
+
+    /** 定位失败（HookKit 返回 null）：skip 日志已由 HookKit 统一输出，这里只落观测账。 */
+    private static void recordMiss(String label) {
+        HookState.abTestNotFound(label);
+        HookState.noteAbTest("skip " + label);
     }
 
     /**

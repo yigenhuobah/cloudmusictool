@@ -40,7 +40,18 @@ final class HookKit {
     private static final long HIT_WINDOW_MS = 5000L;
     private static final Map<String, long[]> HIT_STATE = new ConcurrentHashMap<>();
 
+    /**
+     * Feature 可空路径的固定日志前缀：目前仅 ABTest 通道使用（ABTEST 不是 Feature，
+     * 不参与 HookState 的 Feature 级计数），取值与 Profile 的 ABTEST 特征列一致。
+     */
+    private static final String NULL_FEATURE_PREFIX = "ABTEST";
+
     private HookKit() {
+    }
+
+    /** 日志前缀：f 为 null 时（ABTest 通道）用固定标识，其余沿用 feature id。 */
+    private static String logPrefix(Feature f) {
+        return f != null ? f.id : NULL_FEATURE_PREFIX;
     }
 
     static void info(XposedModule module, String msg) {
@@ -82,21 +93,23 @@ final class HookKit {
                         info(module, "DexKit selftest located=" + fallback.getName()
                                 + " elapsed=" + elapsed + "ms");
                     }
-                    info(module, f.id + " DexKit fallback located class " + name + " -> " + fallback.getName());
+                    info(module, logPrefix(f) + " DexKit fallback located class " + name + " -> " + fallback.getName());
                     return fallback;
                 }
                 if (selftest) {
                     info(module, "DexKit selftest located=null elapsed=" + elapsed + "ms");
                 }
             } catch (Throwable dexT) {
-                warn(module, f.id + " DexKit class query failed for " + name + ": " + dexT.getMessage());
+                warn(module, logPrefix(f) + " DexKit class query failed for " + name + ": " + dexT.getMessage());
             }
         } else if (selftest) {
             warn(module, "DexKit selftest requested but no anchors for " + name);
         }
-        warn(module, f.id + " skip: class not found " + name);
-        HookState.markNotFound(f, "class:" + name, isCriticalMount(name, null));
-        HookState.note(f, "类未找到 " + name);
+        warn(module, logPrefix(f) + " skip: class not found " + name);
+        if (f != null) {
+            HookState.markNotFound(f, "class:" + name, isCriticalMount(name, null));
+            HookState.note(f, "类未找到 " + name);
+        }
         return null;
     }
 
@@ -120,11 +133,11 @@ final class HookKit {
             }
             Class<?> resolved = MountResolver.resolveClass(spec, cl);
             if (resolved != null) {
-                info(module, f.id + " profile class " + name + " -> " + spec.id);
+                info(module, logPrefix(f) + " profile class " + name + " -> " + spec.id);
             }
             return resolved;
         } catch (Throwable t) {
-            warn(module, f.id + " profile class resolve error " + name + ": " + t.getMessage());
+            warn(module, logPrefix(f) + " profile class resolve error " + name + ": " + t.getMessage());
             return null;
         }
     }
@@ -178,7 +191,7 @@ final class HookKit {
             if (mapped != null) {
                 Method resolved = MountResolver.resolveMethod(mapped, cls, cls.getClassLoader());
                 if (resolved != null) {
-                    info(module, f.id + " profile mapped method " + cls.getName() + "#" + name
+                    info(module, logPrefix(f) + " profile mapped method " + cls.getName() + "#" + name
                             + " -> " + mapped.methodName + " (" + mapped.id + ")");
                     return resolved;
                 }
@@ -198,10 +211,10 @@ final class HookKit {
             if (returnType != null && !sameType(returnType, resolved.getReturnType())) {
                 return null;
             }
-            info(module, f.id + " profile method " + cls.getName() + "#" + name + " -> " + spec.id);
+            info(module, logPrefix(f) + " profile method " + cls.getName() + "#" + name + " -> " + spec.id);
             return resolved;
         } catch (Throwable t) {
-            warn(module, f.id + " profile method resolve error "
+            warn(module, logPrefix(f) + " profile method resolve error "
                     + cls.getName() + "#" + name + ": " + t.getMessage());
             return null;
         }
@@ -362,19 +375,21 @@ final class HookKit {
                 ClassLoader cl = cls.getClassLoader();
                 m = DexKitLocator.findMethod(cl, cls.getName(), name, returnType, params, anchors);
                 if (m != null) {
-                    info(module, f.id + " DexKit fallback located method " + cls.getName() + "#" + name);
+                    info(module, logPrefix(f) + " DexKit fallback located method " + cls.getName() + "#" + name);
                     return m;
                 }
             } catch (Throwable dexT) {
-                warn(module, f.id + " DexKit method query failed: " + dexT.getMessage());
+                warn(module, logPrefix(f) + " DexKit method query failed: " + dexT.getMessage());
             }
         }
         if (m == null) {
             String clsName = cls == null ? "?" : cls.getName();
-            warn(module, f.id + " skip: method not found " + clsName + "#" + name);
-            HookState.markNotFound(f, "method:" + clsName + "#" + name,
-                    isCriticalMount(cls == null ? null : clsName, name));
-            HookState.note(f, "方法未找到 " + name);
+            warn(module, logPrefix(f) + " skip: method not found " + clsName + "#" + name);
+            if (f != null) {
+                HookState.markNotFound(f, "method:" + clsName + "#" + name,
+                        isCriticalMount(cls == null ? null : clsName, name));
+                HookState.note(f, "方法未找到 " + name);
+            }
         }
         return m;
     }
@@ -542,16 +557,20 @@ final class HookKit {
         }
         try {
             module.hook(m)
-                    .setId(f.id + "#" + label)
+                    .setId(logPrefix(f) + "#" + label)
                     .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
                     .intercept(hooker);
-            HookState.installed(f, label);
-            info(module, f.id + " registered " + label);
+            if (f != null) {
+                HookState.installed(f, label);
+            }
+            info(module, logPrefix(f) + " registered " + label);
             return true;
         } catch (Throwable t) {
-            error(module, f.id + " hook failed " + label, t);
-            HookState.markNotFound(f, "hook:" + label, isCriticalExecutable(m));
-            HookState.note(f, "hook 失败 " + label);
+            error(module, logPrefix(f) + " hook failed " + label, t);
+            if (f != null) {
+                HookState.markNotFound(f, "hook:" + label, isCriticalExecutable(m));
+                HookState.note(f, "hook 失败 " + label);
+            }
             return false;
         }
     }
@@ -568,18 +587,22 @@ final class HookKit {
         Class<?> rt = ((Method) m).getReturnType();
         if (hooker instanceof ConstBoolHooker) {
             if (rt != boolean.class && rt != Boolean.class) {
-                warn(module, f.id + " return type mismatch: " + label + " -> "
+                warn(module, logPrefix(f) + " return type mismatch: " + label + " -> "
                         + rt.getName() + " (constBool requires boolean); not installed");
-                HookState.markNotFound(f, "rettype:" + label, isCriticalExecutable(m));
-                HookState.note(f, "返回类型不匹配 " + label);
+                if (f != null) {
+                    HookState.markNotFound(f, "rettype:" + label, isCriticalExecutable(m));
+                    HookState.note(f, "返回类型不匹配 " + label);
+                }
                 return false;
             }
         } else if (hooker instanceof SkipVoidHooker) {
             if (rt.isPrimitive() && rt != void.class) {
-                warn(module, f.id + " return type mismatch: " + label + " -> "
+                warn(module, logPrefix(f) + " return type mismatch: " + label + " -> "
                         + rt.getName() + " (skipVoid cannot return null); not installed");
-                HookState.markNotFound(f, "rettype:" + label, isCriticalExecutable(m));
-                HookState.note(f, "返回类型不匹配 " + label);
+                if (f != null) {
+                    HookState.markNotFound(f, "rettype:" + label, isCriticalExecutable(m));
+                    HookState.note(f, "返回类型不匹配 " + label);
+                }
                 return false;
             }
         }
