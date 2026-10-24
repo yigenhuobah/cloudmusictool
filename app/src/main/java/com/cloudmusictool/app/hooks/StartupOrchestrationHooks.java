@@ -27,8 +27,8 @@ public final class StartupOrchestrationHooks {
     private static final String STARTUP_TASK =
             "com.netease.cloudmusic.core.startup.StartupTask";
 
-    /** 核心启动任务：跳过/降级会直接导致崩溃或登录态异常。 */
-    private static final Set<String> PROTECTED_TASKS = Collections.unmodifiableSet(
+    /** 核心启动任务：跳过/降级会直接导致崩溃或登录态异常。PV-03 与本类共享（经 {@link #isProtected}）。 */
+    public static final Set<String> PROTECTED_TASKS = Collections.unmodifiableSet(
             new HashSet<>(Arrays.asList(
                     "CoreInitTask",
                     "NativeInitTask",
@@ -241,7 +241,8 @@ public final class StartupOrchestrationHooks {
         return !isProtected(taskName) && !isProtected(simpleName);
     }
 
-    private static boolean isProtected(String name) {
+    /** 保护判定：清单命中或 ServiceFacade 前缀命中；PV-03（StartupBlacklistHooks）与本类共用。 */
+    public static boolean isProtected(String name) {
         if (name == null) {
             return false;
         }

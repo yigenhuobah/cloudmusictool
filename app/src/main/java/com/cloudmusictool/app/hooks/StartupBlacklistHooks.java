@@ -12,6 +12,10 @@ import io.github.libxposed.api.XposedModule;
 
 /**
  * PV-03 启动任务黑名单：拦截启动黑名单中的非必要任务与追踪组件。
+ *
+ * 核心任务保护名单（PROTECTED_TASKS + ServiceFacade 前缀）与 EX-02 共享
+ * （StartupOrchestrationHooks.isProtected）：受保护任务命中黑名单也不拦截，
+ * 避免用户误配黑名单误杀核心启动任务。
  */
 public final class StartupBlacklistHooks {
 
@@ -57,9 +61,7 @@ public final class StartupBlacklistHooks {
                                 } catch (Throwable ignored) {
                                 }
                             }
-                            boolean blocked = (taskName != null && blocklist.contains(taskName))
-                                    || (simpleName != null && blocklist.contains(simpleName));
-                            if (blocked) {
+                            if (shouldSkip(blocklist, taskName, simpleName)) {
                                 HookKit.hit(module, f, "StartupTask.needExecute blocked "
                                         + (taskName != null ? taskName : simpleName));
                                 return Boolean.FALSE;
@@ -75,5 +77,21 @@ public final class StartupBlacklistHooks {
         } catch (Throwable t) {
             HookKit.error(module, f.id + " StartupTask hook failed", t);
         }
+    }
+
+    /**
+     * needExecute 拦截判定：黑名单命中且未受保护才跳过。
+     * 保护判定（{@code StartupOrchestrationHooks.isProtected}，含 ServiceFacade 前缀）
+     * 与 EX-02 共用：受保护任务即使被列入黑名单也放行原返回，与 EX-02 的
+     * shouldOrchestrate 保护语义对称。
+     */
+    private static boolean shouldSkip(Set<String> blocklist, String taskName, String simpleName) {
+        boolean blocked = (taskName != null && blocklist.contains(taskName))
+                || (simpleName != null && blocklist.contains(simpleName));
+        if (!blocked) {
+            return false;
+        }
+        return !StartupOrchestrationHooks.isProtected(taskName)
+                && !StartupOrchestrationHooks.isProtected(simpleName);
     }
 }
