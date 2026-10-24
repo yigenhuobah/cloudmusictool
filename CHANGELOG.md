@@ -1,5 +1,41 @@
 # Changelog
 
+## 2.4.2 - 2026-10-24
+
+深度代码评审第三轮：调度/管线重构与热路径性能（无新功能）。
+
+### 修复
+
+- **诊断回传改领先+尾沿调度并收敛为共享管线**：`TargetProcessPublisher` 统一
+  HookState 与 ExperimentState 两套回传（共享执行器/Context 反射缓存/authority），
+  窗口内状态变化不再丢失，最后一次变化必随尾沿上报——冷启动后诊断页
+  数分钟级延迟的问题根治；实验通道首事件改为立即发送。
+- **AbTest 定位并入 HookKit 主管线**（获得 Profile 参数消歧/旧名映射；DexKit
+  兜底待锚点补充后自动生效）；**EN-01 全部类定位改走 HookKit**，失败进入
+  诊断页（原仅 logcat 可见）。
+
+### 变更
+
+- HookKit 返回类型校验收紧：skipVoid 现要求精确 void 返回（全仓 26 个
+  skipVoid 站点已逐一审计确认为 void 后收紧），9 个文件的逐处样板检查
+  收敛为 `installVoidByName`/`installConstFalse` 中心助手。
+- 「我的」页 hook 的反射样板与 sampleSize 手工副本删除；set 型配置与
+  强开映射解析收敛为 `PrefsSetCodec`/`ForceMapCodec` 单一实现；目标包名
+  常量收敛到 `Config.TARGET_PACKAGE`。
+
+### 性能
+
+- **MMKV 读取 hook 零分配快路径**：mmapID 按实例缓存（每读 1 次反射→0）、
+  相关性判定改首字符预筛+regionMatches（最坏 240B/读分配→0）、黑名单为空
+  时连查表都不进。基准前后对照见评审产物。
+- **hit 限流键与 detail 解耦**：被限流的命中不再拼字符串/进锁；限流表
+  超 512 条自动清空重建，消除长会话无界增长。
+
+### 验证
+
+- `:app:testDebugUnitTest`：162 个用例通过（2.4.1 为 140）；两波七组经
+  全站点审计门、补丁回放与基准复测验收。
+
 ## 2.4.1 - 2026-10-24
 
 深度代码评审第二轮修复（协议/并发/性能）。

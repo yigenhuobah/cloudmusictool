@@ -2,7 +2,7 @@
 
 网易云音乐 Android 客户端的 LSPosed 体验优化模块：去广告、精简界面、收敛弹窗、隐私加固。
 
-> 当前版本 **2.4.1**（versionCode 11）。适配网易云音乐 **9.6.08 / 9.6.13**（versionCode 9006008 / 9006013）。
+> 当前版本 **2.4.2**（versionCode 12）。适配网易云音乐 **9.6.08 / 9.6.13**（versionCode 9006008 / 9006013）。
 > 与网易官方无任何关联，仅供学习研究和个人设备使用。
 
 **仓库**：<https://github.com/yigenhuobah/cloudmusictool> ｜ **下载**：[Releases](https://github.com/yigenhuobah/cloudmusictool/releases)
