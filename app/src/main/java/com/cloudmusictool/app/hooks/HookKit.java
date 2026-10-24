@@ -18,6 +18,7 @@ import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
@@ -39,6 +40,10 @@ final class HookKit {
             "com.netease.cloudmusic.module.ad.LoadingAdManager";
     private static final long HIT_WINDOW_MS = 5000L;
     private static final Map<String, long[]> HIT_STATE = new ConcurrentHashMap<>();
+    /** HIT_STATE 无界治理阈值：entry 超过即整表清空重建。 */
+    private static final int HIT_STATE_MAX_ENTRIES = 512;
+    /** 清空告警 warning-once：进程生命周期内只打一次。 */
+    private static final AtomicBoolean HIT_STATE_CLEAR_WARNED = new AtomicBoolean(false);
 
     /**
      * Feature 可空路径的固定日志前缀：目前仅 ABTest 通道使用（ABTEST 不是 Feature，
@@ -576,7 +581,7 @@ final class HookKit {
     }
 
     /**
-     * 安装前校验返回值：constBool 只能挂 boolean/Boolean，skipVoid 不能挂非 void 原始类型。
+     * 安装前校验返回值：constBool 只能挂 boolean/Boolean，skipVoid 只能挂 void 方法。
      * 不匹配时拒绝安装并 WARN，避免“hook 静默不生效”或返回 null 导致宿主 NPE。
      */
     private static boolean validateReturnType(XposedModule module, Feature f, String label,
@@ -596,9 +601,9 @@ final class HookKit {
                 return false;
             }
         } else if (hooker instanceof SkipVoidHooker) {
-            if (rt.isPrimitive() && rt != void.class) {
+            if (rt != void.class) {
                 warn(module, logPrefix(f) + " return type mismatch: " + label + " -> "
-                        + rt.getName() + " (skipVoid cannot return null); not installed");
+                        + rt.getName() + " (skipVoid requires void); not installed");
                 if (f != null) {
                     HookState.markNotFound(f, "rettype:" + label, isCriticalExecutable(m));
                     HookState.note(f, "返回类型不匹配 " + label);
@@ -619,10 +624,33 @@ final class HookKit {
     }
 
     static void hit(XposedModule module, Feature f, String detail) {
+        // 旧签名：限流键缺省取 detail，键形与重构前完全一致，清单外调用方行为不变。
+        hit(module, f, detail, detail);
+    }
+
+    /**
+     * 命中记账 + 限流日志。按 label 限流：每个挂载点首次必打，之后 5 秒最多 1 条。
+     * label 作限流键（须为稳定前缀，不含随 payload 变化的量），detail 仅在真正打日志时拼接；
+     * 快速路径（窗口内被限流）不拼 detail、不进 map 写路径。entry 数超
+     * {@link #HIT_STATE_MAX_ENTRIES} 时整表清空重建，防止 detail 含变化量的调用方
+     * 造成无界慢泄漏。
+     */
+    static void hit(XposedModule module, Feature f, String label, String detail) {
         long now = System.currentTimeMillis();
-        // 按 label 限流：每个挂载点首次必打，之后 5 秒最多 1 条。
-        String key = f.id + "|" + detail;
-        long[] state = HIT_STATE.computeIfAbsent(key, k -> new long[]{0L, 0L});
+        String key = f.id + "|" + label;
+        long[] state = HIT_STATE.get(key);
+        if (state != null && state[1] != 0L && now - state[0] < HIT_WINDOW_MS) {
+            // 快速路径：本次不打日志，只记 Feature 级命中数。
+            HookState.hit(f);
+            return;
+        }
+        if (HIT_STATE.size() > HIT_STATE_MAX_ENTRIES) {
+            HIT_STATE.clear();
+            if (HIT_STATE_CLEAR_WARNED.compareAndSet(false, true)) {
+                warn(module, "HIT_STATE entries exceed " + HIT_STATE_MAX_ENTRIES + ", cleared");
+            }
+        }
+        state = HIT_STATE.computeIfAbsent(key, k -> new long[]{0L, 0L});
         boolean log;
         synchronized (state) {
             log = state[1] == 0L || now - state[0] >= HIT_WINDOW_MS;
@@ -643,6 +671,27 @@ final class HookKit {
 
     static XposedInterface.Hooker constBool(XposedModule module, Feature f, String detail, boolean value) {
         return new ConstBoolHooker(module, f, detail, value);
+    }
+
+    /**
+     * 按名定位方法并安装 skipVoid hook：定位 → 返回类型校验（要求精确 void）→
+     * 安装 → 登记（HookState.installed / markNotFound）全在中心层完成，
+     * hook 文件不再自写 getReturnType 检查样板。
+     */
+    static boolean installVoidByName(XposedModule module, Feature f, Class<?> cls,
+                                     String name, String label) {
+        Method m = findMethod(module, f, cls, name);
+        return install(module, f, label, m, skipVoid(module, f, label));
+    }
+
+    /**
+     * 按名定位 boolean 无参方法并安装 const-false hook：定位 → 返回类型校验（要求
+     * boolean/Boolean）→ 安装 → 登记 全在中心层完成，hook 文件不再自写检查样板。
+     */
+    static boolean installConstFalse(XposedModule module, Feature f, Class<?> cls,
+                                     String name, String label) {
+        Method m = findMethod(module, f, cls, name, boolean.class, new Class<?>[0]);
+        return install(module, f, label, m, constBool(module, f, label + " -> false", false));
     }
 
     private static final class SkipVoidHooker implements XposedInterface.Hooker {

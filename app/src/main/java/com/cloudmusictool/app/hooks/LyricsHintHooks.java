@@ -32,17 +32,9 @@ public final class LyricsHintHooks {
         try {
             Class<?> cls = HookKit.findClass(module, f, cl, LYRICS_BOTTOM_HINT);
             if (cls != null) {
-                Method m = HookKit.findMethod(module, f, cls, "maybeDisplayHint");
-                if (m != null) {
-                    if (m.getReturnType() == void.class) {
-                        HookKit.install(module, f, "LyricsBottomHintView#maybeDisplayHint", m,
-                                HookKit.skipVoid(module, f, "LyricsBottomHintView.maybeDisplayHint"));
-                    } else {
-                        HookKit.warn(module, f.id
-                                + " skip LyricsBottomHintView#maybeDisplayHint: unexpected return "
-                                + m.getReturnType());
-                    }
-                }
+                // 定位/返回类型校验/安装/登记收敛到 HookKit.installVoidByName。
+                HookKit.installVoidByName(module, f, cls, "maybeDisplayHint",
+                        "LyricsBottomHintView#maybeDisplayHint");
             }
         } catch (Throwable t) {
             HookKit.error(module, f.id + " LyricsBottomHintView hook failed", t);
@@ -54,14 +46,9 @@ public final class LyricsHintHooks {
             if (cls != null) {
                 Method m = HookKit.findMethod(module, f, cls, "checkAndShowLrcOptionHint",
                         void.class, new Class<?>[0]);
-                if (m != null && m.getReturnType() == void.class) {
-                    HookKit.install(module, f, "LyricViewContainer#checkAndShowLrcOptionHint", m,
-                            HookKit.skipVoid(module, f, "LyricViewContainer.checkAndShowLrcOptionHint"));
-                } else if (m != null) {
-                    HookKit.warn(module, f.id
-                            + " skip LyricViewContainer#checkAndShowLrcOptionHint: unexpected return "
-                            + m.getReturnType());
-                }
+                // 返回类型校验收敛到 HookKit.validateReturnType（skipVoid 要求精确 void）。
+                HookKit.install(module, f, "LyricViewContainer#checkAndShowLrcOptionHint", m,
+                        HookKit.skipVoid(module, f, "LyricViewContainer.checkAndShowLrcOptionHint"));
             }
         } catch (Throwable t) {
             HookKit.error(module, f.id + " LyricViewContainer hook failed", t);
@@ -73,17 +60,7 @@ public final class LyricsHintHooks {
         try {
             Class<?> cls = HookKit.findClass(module, f, cl, LYRICS_VIDEO_TIPS_DIALOG);
             if (cls != null) {
-                Method m = HookKit.findMethod(module, f, cls, "oc");
-                if (m != null) {
-                    if (m.getReturnType() == void.class) {
-                        HookKit.install(module, f, "LyricVideoTipsDialog#oc", m,
-                                HookKit.skipVoid(module, f, "LyricVideoTipsDialog.oc"));
-                    } else {
-                        HookKit.warn(module, f.id
-                                + " skip LyricVideoTipsDialog#oc: unexpected return "
-                                + m.getReturnType());
-                    }
-                }
+                HookKit.installVoidByName(module, f, cls, "oc", "LyricVideoTipsDialog#oc");
             }
         } catch (Throwable t) {
             HookKit.error(module, f.id + " LyricVideoTipsDialog hook failed", t);

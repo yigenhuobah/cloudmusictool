@@ -2,8 +2,6 @@ package com.cloudmusictool.app.hooks;
 
 import com.cloudmusictool.app.Feature;
 
-import java.lang.reflect.Method;
-
 import io.github.libxposed.api.XposedModule;
 
 /**
@@ -28,18 +26,8 @@ public final class SearchGuideHooks {
             if (cls == null) {
                 return;
             }
-            Method m = HookKit.findMethod(module, f, cls, "isValid",
-                    boolean.class, new Class<?>[0]);
-            if (m == null) {
-                return;
-            }
-            if (m.getReturnType() != boolean.class && m.getReturnType() != Boolean.class) {
-                HookKit.warn(module, f.id + " skip SearchGuide#isValid: unexpected return "
-                        + m.getReturnType());
-                return;
-            }
-            HookKit.install(module, f, "SearchGuide#isValid", m,
-                    HookKit.constBool(module, f, "SearchGuide.isValid -> false", false));
+            // 定位/返回类型校验/安装/登记收敛到 HookKit.installConstFalse。
+            HookKit.installConstFalse(module, f, cls, "isValid", "SearchGuide#isValid");
         } catch (Throwable t) {
             HookKit.error(module, f.id + " SearchGuide hook failed", t);
         }

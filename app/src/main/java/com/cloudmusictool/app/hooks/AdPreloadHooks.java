@@ -2,8 +2,6 @@ package com.cloudmusictool.app.hooks;
 
 import com.cloudmusictool.app.Feature;
 
-import java.lang.reflect.Method;
-
 import io.github.libxposed.api.XposedModule;
 
 /**
@@ -36,17 +34,8 @@ public final class AdPreloadHooks {
                     HookKit.warn(module, f.id + " skip " + simpleName + ": class not present in this build");
                     continue;
                 }
-                Method init = HookKit.findMethod(module, f, cls, "init");
-                if (init == null) {
-                    continue;
-                }
-                if (init.getReturnType() != void.class) {
-                    HookKit.warn(module, f.id + " skip " + simpleName + "#init: unexpected return "
-                            + init.getReturnType());
-                    continue;
-                }
-                HookKit.install(module, f, simpleName + "#init", init,
-                        HookKit.skipVoid(module, f, simpleName + ".init"));
+                // 定位/返回类型校验/安装/登记收敛到 HookKit.installVoidByName。
+                HookKit.installVoidByName(module, f, cls, "init", simpleName + "#init");
             } catch (Throwable t) {
                 HookKit.error(module, f.id + " " + className + " hook failed", t);
             }

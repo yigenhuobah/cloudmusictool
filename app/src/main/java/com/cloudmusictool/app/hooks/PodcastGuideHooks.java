@@ -2,8 +2,6 @@ package com.cloudmusictool.app.hooks;
 
 import com.cloudmusictool.app.Feature;
 
-import java.lang.reflect.Method;
-
 import io.github.libxposed.api.XposedModule;
 
 /**
@@ -32,9 +30,10 @@ public final class PodcastGuideHooks {
         try {
             Class<?> cls = HookKit.findClass(module, f, cl, BOTTOM_GUIDE_MANAGER);
             if (cls != null) {
-                installConstFalse(module, f, cls, "isTimeToShowFMAutoPlayGuide",
+                // 定位/返回类型校验/安装/登记收敛到 HookKit.installConstFalse。
+                HookKit.installConstFalse(module, f, cls, "isTimeToShowFMAutoPlayGuide",
                         "PodcastBottomGuideManager#isTimeToShowFMAutoPlayGuide");
-                installConstFalse(module, f, cls, "isTimeToShowVoiceBookGuide",
+                HookKit.installConstFalse(module, f, cls, "isTimeToShowVoiceBookGuide",
                         "PodcastBottomGuideManager#isTimeToShowVoiceBookGuide");
             }
         } catch (Throwable t) {
@@ -45,17 +44,8 @@ public final class PodcastGuideHooks {
         try {
             Class<?> cls = HookKit.findClass(module, f, cl, PLAYER_AIDJ_GUIDE);
             if (cls != null) {
-                Method m = HookKit.findMethod(module, f, cls, "showGuide");
-                if (m != null) {
-                    if (m.getReturnType() == void.class) {
-                        HookKit.install(module, f, "PlayerAIDJSwitchGuideView#showGuide", m,
-                                HookKit.skipVoid(module, f, "PlayerAIDJSwitchGuideView.showGuide"));
-                    } else {
-                        HookKit.warn(module, f.id
-                                + " skip PlayerAIDJSwitchGuideView#showGuide: unexpected return "
-                                + m.getReturnType());
-                    }
-                }
+                HookKit.installVoidByName(module, f, cls, "showGuide",
+                        "PlayerAIDJSwitchGuideView#showGuide");
             }
         } catch (Throwable t) {
             HookKit.error(module, f.id + " PlayerAIDJSwitchGuideView hook failed", t);
@@ -65,39 +55,11 @@ public final class PodcastGuideHooks {
         try {
             Class<?> cls = HookKit.findClass(module, f, cl, FM_AIDJ_SWITCH);
             if (cls != null) {
-                Method m = HookKit.findMethod(module, f, cls, "maybeDisplayHint");
-                if (m != null) {
-                    if (m.getReturnType() == void.class) {
-                        HookKit.install(module, f, "FMAIDJSwitchView#maybeDisplayHint", m,
-                                HookKit.skipVoid(module, f, "FMAIDJSwitchView.maybeDisplayHint"));
-                    } else {
-                        HookKit.warn(module, f.id
-                                + " skip FMAIDJSwitchView#maybeDisplayHint: unexpected return "
-                                + m.getReturnType());
-                    }
-                }
+                HookKit.installVoidByName(module, f, cls, "maybeDisplayHint",
+                        "FMAIDJSwitchView#maybeDisplayHint");
             }
         } catch (Throwable t) {
             HookKit.error(module, f.id + " FMAIDJSwitchView hook failed", t);
-        }
-    }
-
-    private static void installConstFalse(XposedModule module, Feature f, Class<?> cls,
-                                          String name, String label) {
-        try {
-            Method m = HookKit.findMethod(module, f, cls, name,
-                    boolean.class, new Class<?>[0]);
-            if (m == null) {
-                return;
-            }
-            if (m.getReturnType() != boolean.class && m.getReturnType() != Boolean.class) {
-                HookKit.warn(module, f.id + " skip " + label + ": unexpected return " + m.getReturnType());
-                return;
-            }
-            HookKit.install(module, f, label, m,
-                    HookKit.constBool(module, f, label + " -> false", false));
-        } catch (Throwable t) {
-            HookKit.error(module, f.id + " " + label + " hook failed", t);
         }
     }
 }

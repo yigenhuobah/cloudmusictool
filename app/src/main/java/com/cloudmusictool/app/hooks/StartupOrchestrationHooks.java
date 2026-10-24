@@ -85,7 +85,8 @@ public final class StartupOrchestrationHooks {
                             try {
                                 String task = taskNameOf(chain.getThisObject());
                                 if (shouldOrchestrate(blocklist, chain.getThisObject())) {
-                                    HookKit.hit(module, f, "StartupTask.runOnUIThread -> false " + task);
+                                    HookKit.hit(module, f, "StartupTask.runOnUIThread",
+                                            "StartupTask.runOnUIThread -> false " + task);
                                     return Boolean.FALSE;
                                 }
                                 return chain.proceed();
@@ -121,8 +122,8 @@ public final class StartupOrchestrationHooks {
                                 int shifted = current > Integer.MAX_VALUE - PRIORITY_PENALTY
                                         ? Integer.MAX_VALUE
                                         : current + PRIORITY_PENALTY;
-                                HookKit.hit(module, f, "StartupTask.priority " + current
-                                        + " -> " + shifted + " " + task);
+                                HookKit.hit(module, f, "StartupTask.priority",
+                                        "StartupTask.priority " + current + " -> " + shifted + " " + task);
                                 return shifted;
                             } catch (Throwable t) {
                                 HookKit.error(module, f.id + " intercept error StartupTask#priority", t);
@@ -149,8 +150,8 @@ public final class StartupOrchestrationHooks {
                                 Object stage = chain.proceed();
                                 String task = taskNameOf(chain.getThisObject());
                                 if (shouldOrchestrate(blocklist, chain.getThisObject())) {
-                                    HookKit.hit(module, f, "StartupTask.runOnStage kept " + stage
-                                            + " " + task);
+                                    HookKit.hit(module, f, "StartupTask.runOnStage",
+                                            "StartupTask.runOnStage kept " + stage + " " + task);
                                 }
                                 return stage;
                             } catch (Throwable t) {
@@ -177,7 +178,8 @@ public final class StartupOrchestrationHooks {
                         try {
                             String task = taskNameOf(chain.getThisObject());
                             if (shouldOrchestrate(blocklist, chain.getThisObject())) {
-                                HookKit.hit(module, f, "StartupTask.degradeInit skipped " + task);
+                                HookKit.hit(module, f, "StartupTask.degradeInit",
+                                        "StartupTask.degradeInit skipped " + task);
                                 return null;
                             }
                             return chain.proceed();

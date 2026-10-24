@@ -40,14 +40,9 @@ public final class PlayerHintHooks {
             if (cls != null) {
                 Method m = HookKit.findMethod(module, f, cls, "renderCommentListAndShow",
                         void.class, new Class<?>[]{List.class});
-                if (m != null && m.getReturnType() == void.class) {
-                    HookKit.install(module, f, "PlayerCommentPopView#renderCommentListAndShow", m,
-                            HookKit.skipVoid(module, f, "PlayerCommentPopView.renderCommentListAndShow"));
-                } else if (m != null) {
-                    HookKit.warn(module, f.id
-                            + " skip PlayerCommentPopView#renderCommentListAndShow: unexpected return "
-                            + m.getReturnType());
-                }
+                // 返回类型校验收敛到 HookKit.validateReturnType（skipVoid 要求精确 void）。
+                HookKit.install(module, f, "PlayerCommentPopView#renderCommentListAndShow", m,
+                        HookKit.skipVoid(module, f, "PlayerCommentPopView.renderCommentListAndShow"));
             }
         } catch (Throwable t) {
             HookKit.error(module, f.id + " PlayerCommentPopView hook failed", t);
@@ -80,17 +75,9 @@ public final class PlayerHintHooks {
             if (cls == null) {
                 return;
             }
-            Method m = HookKit.findMethod(module, f, cls, "maybeDisplayHint");
-            if (m == null) {
-                return;
-            }
-            if (m.getReturnType() != void.class) {
-                HookKit.warn(module, f.id + " skip " + simpleName + "#maybeDisplayHint: unexpected return "
-                        + m.getReturnType());
-                return;
-            }
-            HookKit.install(module, f, simpleName + "#maybeDisplayHint", m,
-                    HookKit.skipVoid(module, f, simpleName + ".maybeDisplayHint"));
+            // 定位/返回类型校验/安装/登记收敛到 HookKit.installVoidByName。
+            HookKit.installVoidByName(module, f, cls, "maybeDisplayHint",
+                    simpleName + "#maybeDisplayHint");
         } catch (Throwable t) {
             HookKit.error(module, f.id + " " + simpleName + " hook failed", t);
         }
@@ -101,13 +88,7 @@ public final class PlayerHintHooks {
         try {
             Method m = HookKit.findMethod(module, f, cls, name,
                     void.class, new Class<?>[]{Context.class});
-            if (m == null) {
-                return;
-            }
-            if (m.getReturnType() != void.class) {
-                HookKit.warn(module, f.id + " skip " + label + ": unexpected return " + m.getReturnType());
-                return;
-            }
+            // 返回类型校验收敛到 HookKit.validateReturnType（skipVoid 要求精确 void）。
             HookKit.install(module, f, label, m, HookKit.skipVoid(module, f, label));
         } catch (Throwable t) {
             HookKit.error(module, f.id + " " + label + " hook failed", t);

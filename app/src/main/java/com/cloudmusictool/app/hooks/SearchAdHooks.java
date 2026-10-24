@@ -33,8 +33,8 @@ public final class SearchAdHooks {
         try {
             Class<?> cls = HookKit.findClass(module, f, cl, MANAGER);
             if (cls != null) {
-                installVoidByName(module, f, cls, "newStyle", "RNSearchAdViewManger#newStyle");
-                installVoidByName(module, f, cls, "oldStyle", "RNSearchAdViewManger#oldStyle");
+                HookKit.installVoidByName(module, f, cls, "newStyle", "RNSearchAdViewManger#newStyle");
+                HookKit.installVoidByName(module, f, cls, "oldStyle", "RNSearchAdViewManger#oldStyle");
 
                 // hideAllViews 是官方“隐藏全部广告视图”入口，必须放行而不是 no-op，
                 // 否则已经渲染出来的广告视图无法被清除。
@@ -66,23 +66,6 @@ public final class SearchAdHooks {
         installAdItem(module, f, cl, MEDIUM_ITEM, "SearchAdItemMediumView");
     }
 
-    private static void installVoidByName(XposedModule module, Feature f, Class<?> cls,
-                                          String name, String label) {
-        try {
-            Method m = HookKit.findMethod(module, f, cls, name);
-            if (m == null) {
-                return;
-            }
-            if (m.getReturnType() != void.class) {
-                HookKit.warn(module, f.id + " skip " + label + ": unexpected return " + m.getReturnType());
-                return;
-            }
-            HookKit.install(module, f, label, m, HookKit.skipVoid(module, f, label));
-        } catch (Throwable t) {
-            HookKit.error(module, f.id + " " + label + " hook failed", t);
-        }
-    }
-
     private static void installAdItem(XposedModule module, Feature f, ClassLoader cl,
                                       String className, String simpleName) {
         try {
@@ -90,17 +73,8 @@ public final class SearchAdHooks {
             if (cls == null) {
                 return;
             }
-            Method m = HookKit.findMethod(module, f, cls, "e");
-            if (m == null) {
-                return;
-            }
-            if (m.getReturnType() != void.class) {
-                HookKit.warn(module, f.id + " skip " + simpleName + "#e: unexpected return "
-                        + m.getReturnType());
-                return;
-            }
-            HookKit.install(module, f, simpleName + "#e", m,
-                    HookKit.skipVoid(module, f, simpleName + ".e"));
+            // 定位/返回类型校验/安装/登记收敛到 HookKit.installVoidByName。
+            HookKit.installVoidByName(module, f, cls, "e", simpleName + "#e");
         } catch (Throwable t) {
             HookKit.error(module, f.id + " " + simpleName + " hook failed", t);
         }

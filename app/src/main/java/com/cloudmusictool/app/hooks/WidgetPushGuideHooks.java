@@ -42,18 +42,8 @@ public final class WidgetPushGuideHooks {
         try {
             Class<?> cls = HookKit.findClass(module, f, cl, WIDGET_GUIDE_HELPER);
             if (cls != null) {
-                Method m = HookKit.findMethod(module, f, cls, "a",
-                        boolean.class, new Class<?>[0]);
-                if (m != null) {
-                    if (m.getReturnType() == boolean.class || m.getReturnType() == Boolean.class) {
-                        HookKit.install(module, f, "WidgetAddGuideDialogHelper$a#a", m,
-                                HookKit.constBool(module, f, "WidgetAddGuideDialogHelper$a.a -> false", false));
-                    } else {
-                        HookKit.warn(module, f.id
-                                + " skip WidgetAddGuideDialogHelper$a#a: unexpected return "
-                                + m.getReturnType());
-                    }
-                }
+                // 定位/返回类型校验/安装/登记收敛到 HookKit.installConstFalse。
+                HookKit.installConstFalse(module, f, cls, "a", "WidgetAddGuideDialogHelper$a#a");
             }
         } catch (Throwable t) {
             HookKit.error(module, f.id + " WidgetAddGuideDialogHelper$a hook failed", t);

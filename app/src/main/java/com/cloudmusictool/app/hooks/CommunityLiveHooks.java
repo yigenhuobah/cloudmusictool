@@ -103,17 +103,9 @@ public final class CommunityLiveHooks {
             if (cls == null) {
                 return;
             }
-            Method m = HookKit.findMethod(module, f, cls, "maybeDisplayHint");
-            if (m == null) {
-                return;
-            }
-            if (m.getReturnType() != void.class) {
-                HookKit.warn(module, f.id + " skip " + simpleName + "#maybeDisplayHint: unexpected return "
-                        + m.getReturnType());
-                return;
-            }
-            HookKit.install(module, f, simpleName + "#maybeDisplayHint", m,
-                    HookKit.skipVoid(module, f, simpleName + ".maybeDisplayHint"));
+            // 定位/返回类型校验/安装/登记收敛到 HookKit.installVoidByName。
+            HookKit.installVoidByName(module, f, cls, "maybeDisplayHint",
+                    simpleName + "#maybeDisplayHint");
         } catch (Throwable t) {
             HookKit.error(module, f.id + " " + simpleName + " hook failed", t);
         }
