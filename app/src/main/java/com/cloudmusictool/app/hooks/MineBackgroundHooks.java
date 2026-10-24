@@ -67,6 +67,8 @@ public final class MineBackgroundHooks {
     private static final AtomicBoolean sApplying = new AtomicBoolean(false);
 
     private static volatile Bitmap sCachedBitmap;
+    /** sCachedBitmap 对应 external 源文件的 {lastModified, length} 指纹;null 表示缓存经 provider 兜底读取,无源文件可 stat。 */
+    private static volatile long[] sCachedFingerprint;
     private static volatile boolean sForcedFullScreen;
     private static volatile int sFlHeaderImageId;
 
@@ -377,7 +379,7 @@ public final class MineBackgroundHooks {
                 return;
             }
             Bitmap bitmap = sCachedBitmap;
-            if (bitmap == null || bitmap.isRecycled()) {
+            if (bitmap == null || bitmap.isRecycled() || cachedSourceStale(modulePackage)) {
                 loadAsync(module, f, manager, container, context,
                         Uri.parse("content://" + modulePackage + ".status/mine_background"));
                 return;
@@ -390,6 +392,36 @@ public final class MineBackgroundHooks {
         }
     }
 
+    /**
+     * 缓存命中前校验 external 源文件指纹:模块 App 侧换图/清除会写/删
+     * Android/media/&lt;模块包名&gt;/mine_background.jpg,指纹变化或文件消失
+     * 说明缓存已过期,需丢弃缓存重走 loadAsync(加载成功则替换缓存,
+     * 加载失败走 clearApplied 清除旧背景)。
+     *
+     * 已知限制:缓存经 provider 读 internal 的兜底路径(external 不可读时)
+     * 拿不到源文件指纹,此处无法 stat 校验,维持原行为直接用缓存。
+     */
+    private static boolean cachedSourceStale(String modulePackage) {
+        long[] fingerprint = sCachedFingerprint;
+        if (fingerprint == null) {
+            return false;
+        }
+        File external = externalFile(modulePackage);
+        if (external == null) {
+            return false;
+        }
+        try {
+            if (!external.isFile()) {
+                return true;
+            }
+            return external.lastModified() != fingerprint[0]
+                    || external.length() != fingerprint[1];
+        } catch (Throwable t) {
+            // stat 失败降级为「用缓存」,避免校验本身影响贴图
+            return false;
+        }
+    }
+
     // ---------------------------------------------------------------- image
 
     private static void loadAsync(XposedModule module, Feature f, Object manager,
@@ -399,6 +431,7 @@ public final class MineBackgroundHooks {
         }
         new Thread(() -> {
             Bitmap decoded = null;
+            long[] fingerprint = null;
             try {
                 // 优先读共享目录：MIUI/HyperOS 会拦截模块 Provider 的跨进程唤醒。
                 File external = externalFile(HookState.modulePackage());
@@ -406,6 +439,10 @@ public final class MineBackgroundHooks {
                     decoded = decodeFile(external);
                     if (decoded == null) {
                         HookKit.warn(module, f.id + " external background unreadable, fallback provider");
+                    } else {
+                        // 解码成功后紧跟 stat,把源文件指纹与位图成对缓存,
+                        // 供 apply() 命中缓存时校验模块侧换图/清除事件。
+                        fingerprint = fingerprintOf(external);
                     }
                 }
                 if (decoded == null) {
@@ -415,6 +452,7 @@ public final class MineBackgroundHooks {
                 HookKit.warn(module, f.id + " background decode failed: " + t.getMessage());
             }
             final Bitmap bitmap = decoded;
+            final long[] sourceFingerprint = fingerprint;
             MAIN.post(() -> {
                 sLoading.set(false);
                 if (bitmap == null || bitmap.isRecycled()) {
@@ -422,11 +460,21 @@ public final class MineBackgroundHooks {
                     return;
                 }
                 sCachedBitmap = bitmap;
+                sCachedFingerprint = sourceFingerprint;
                 if (container.isAttachedToWindow()) {
                     applyBitmap(module, f, manager, container, bitmap);
                 }
             });
         }, "CloudMusicTool-MineBg").start();
+    }
+
+    /** 读取源文件指纹 {lastModified, length};stat 失败返回 null,按「无指纹可比」处理。 */
+    private static long[] fingerprintOf(File file) {
+        try {
+            return new long[]{file.lastModified(), file.length()};
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     private static void applyBitmap(XposedModule module, Feature f, Object manager,
@@ -502,6 +550,7 @@ public final class MineBackgroundHooks {
             clearContainer(container);
             Bitmap cached = sCachedBitmap;
             sCachedBitmap = null;
+            sCachedFingerprint = null;
             if (cached != null && !cached.isRecycled()) {
                 cached.recycle();
             }
