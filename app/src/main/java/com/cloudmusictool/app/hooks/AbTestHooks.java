@@ -2,6 +2,7 @@ package com.cloudmusictool.app.hooks;
 
 import com.cloudmusictool.app.AbTestPolicy;
 import com.cloudmusictool.app.Config;
+import com.cloudmusictool.app.HookState;
 import com.cloudmusictool.app.profile.MountResolver;
 import com.cloudmusictool.app.profile.MountSpec;
 import com.cloudmusictool.app.profile.ProfileRegistry;
@@ -117,7 +118,7 @@ public final class AbTestHooks {
                 return result;
             });
         } catch (Throwable t) {
-            HookKit.warn(module, "ABTEST skip ABTestManagerImpl#checkExperiment: " + t.getMessage());
+            recordNotFound(module, "ABTestManagerImpl#checkExperiment", "skip", t);
         }
     }
 
@@ -141,7 +142,7 @@ public final class AbTestHooks {
                 return chain.proceed();
             });
         } catch (Throwable t) {
-            HookKit.warn(module, "ABTEST skip " + label + ": " + t.getMessage());
+            recordNotFound(module, label, "skip", t);
         }
     }
 
@@ -172,7 +173,7 @@ public final class AbTestHooks {
                 return result;
             });
         } catch (Throwable t) {
-            HookKit.warn(module, "ABTEST skip abtest2.b#x: " + t.getMessage());
+            recordNotFound(module, "abtest2.b#x", "skip", t);
         }
     }
 
@@ -192,7 +193,7 @@ public final class AbTestHooks {
                 return result;
             });
         } catch (Throwable t) {
-            HookKit.warn(module, "ABTEST skip StartupABManager#getGroup: " + t.getMessage());
+            recordNotFound(module, "StartupABManager#getGroup", "skip", t);
         }
     }
 
@@ -266,10 +267,25 @@ public final class AbTestHooks {
                     .setId("ABTEST#" + label)
                     .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
                     .intercept(hooker);
+            HookState.abTestInstalled(label);
             HookKit.info(module, "ABTEST registered " + label);
         } catch (Throwable t) {
+            HookState.abTestNotFound(label);
+            HookState.noteAbTest("hook failed " + label + ": " + t.getMessage());
             HookKit.error(module, "ABTEST hook failed " + label, t);
         }
+    }
+
+    /**
+     * 定位/安装失败的观测落账：失败按 label 去重计入 HookState，原因文本进根级
+     * abtest 概要；日志与原 warn 文本保持一致。ABTEST 不是 Feature，不进 features。
+     */
+    private static void recordNotFound(XposedModule module, String label, String what,
+                                       Throwable t) {
+        String why = what + " " + label + ": " + t.getMessage();
+        HookState.abTestNotFound(label);
+        HookState.noteAbTest(why);
+        HookKit.warn(module, "ABTEST " + why);
     }
 
     // ------------------------------------------------------------------

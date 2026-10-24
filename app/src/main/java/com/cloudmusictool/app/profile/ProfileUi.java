@@ -313,10 +313,6 @@ public final class ProfileUi {
         // ------------------------------------------------------------------
         // EN-01 我的页自定义背景（纯本地渲染，不碰会员字段）
         // ------------------------------------------------------------------
-        // 9.6.08 的「我的」Tab 是 RN 页面；原生 manager 只覆盖旧布局。
-        out.add(m("EN-01", "RnMineFragment#onResume", true,
-                "com.netease.cloudmusic.fragment.RnMineFragment",
-                "onResume", "V", NONE));
         out.add(m("EN-01", "MyMusicProfileHeaderBgViewHolderManager#e", true,
                 "com.netease.cloudmusic.vh.MyMusicProfileHeaderBgViewHolderManager",
                 "e", "V",

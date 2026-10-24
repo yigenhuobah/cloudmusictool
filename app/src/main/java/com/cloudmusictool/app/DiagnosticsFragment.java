@@ -120,6 +120,14 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
         if (root.optBoolean("truncated", false)) {
             summary = summary + "\n" + getString(R.string.diag_truncated);
         }
+        // ABTest 不是 Feature，不占 features 结构；有记录时并入数据来源摘要展示。
+        JSONObject abtest = root.optJSONObject("abtest");
+        if (abtest != null) {
+            String reason = abtest.optString("lastFailure", "");
+            summary = summary + "\nABTest 已装 " + abtest.optInt("installed", 0)
+                    + " · 失败 " + abtest.optInt("failed", 0)
+                    + (reason.isEmpty() ? "" : " · " + reason);
+        }
         return summary;
     }
 

@@ -154,7 +154,19 @@ public class ProfileExportTest {
                     profile.criticalCount(f.id) > 0);
         }
 
-        // 3) 回读导出文件，确保 JSON 可解析且条目数一致。
+        // 3) EN-01 的 critical 必须落在真实挂载点 MyMusicProfileHeaderBgViewHolderManager#e。
+        // RnMineFragment#onResume 全仓零消费（死坐标），曾以 critical 名义满足上面的断言，禁止回归。
+        MountSpec en01Critical = null;
+        for (MountSpec spec : profile.forFeature("EN-01")) {
+            assertFalse("dead mount registered: " + spec.id,
+                    "EN-01/RnMineFragment#onResume".equals(spec.id));
+            if (spec.critical && "EN-01/MyMusicProfileHeaderBgViewHolderManager#e".equals(spec.id)) {
+                en01Critical = spec;
+            }
+        }
+        assertNotNull("EN-01 critical not on real mount", en01Critical);
+
+        // 4) 回读导出文件，确保 JSON 可解析且条目数一致。
         String exported = new String(java.nio.file.Files.readAllBytes(outFile.toPath()),
                 StandardCharsets.UTF_8);
         JSONObject parsed = new JSONObject(exported);

@@ -4,6 +4,7 @@ import android.content.Context;
 import android.os.Bundle;
 import android.util.Log;
 
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.Map;
@@ -35,6 +36,13 @@ public final class HookState {
     private static final int MAX_FAILURE_CHARS = 160;
 
     private static final Map<Feature, State> sStates = new ConcurrentHashMap<>();
+
+    // ABTEST 不是 Feature（AbTestHooks 本地定位/安装），单独一组静态计数，
+    // 经同一 publish 节奏回传，诊断页在根级 "abtest" 概要中展示。
+    private static final AtomicInteger sAbTestInstalled = new AtomicInteger();
+    private static final AtomicInteger sAbTestFailed = new AtomicInteger();
+    private static final Set<String> sAbTestFailedKeys = ConcurrentHashMap.newKeySet();
+    private static volatile String sAbTestLastFailure;
 
     private static final ExecutorService sExecutor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "CloudMusicTool-HookState");
@@ -142,20 +150,9 @@ public final class HookState {
         publish();
     }
 
-    /** 兼容旧调用：无 label 时每次都计数。 */
-    public static void markNotFound(Feature f) {
-        markNotFound(f, null);
-    }
-
     /**
-     * 同一 Feature 的同一 mount label 只记一次失败，避免 findClass/findMethod 两步查找重复计数。
-     */
-    public static void markNotFound(Feature f, String label) {
-        markNotFound(f, label, false);
-    }
-
-    /**
-     * 同上，并标记该挂载点是否为 Profile 中的 critical。
+     * 同一 Feature 的同一 mount label 只记一次失败，避免 findClass/findMethod 两步查找重复计数，
+     * 并标记该挂载点是否为 Profile 中的 critical。
      * critical 标记单独去重：即使 failed 已计过，也只在首次标记 critical 时累加。
      */
     public static void markNotFound(Feature f, String label, boolean critical) {
@@ -188,6 +185,37 @@ public final class HookState {
             s.lastFailureAt = System.currentTimeMillis();
             Log.i(TAG, f.id + " " + text);
         }
+        publish();
+    }
+
+    // ------------------------------------------------------------------
+    // ABTest 观测（ABTEST 不是 Feature，不进 features 结构）
+    // ------------------------------------------------------------------
+
+    /** ABTest 挂载点安装成功；label 仅对齐 Feature 级 API 形态，不参与计数。 */
+    public static void abTestInstalled(String label) {
+        if (label == null) {
+            return;
+        }
+        sAbTestInstalled.incrementAndGet();
+        publish();
+    }
+
+    /** ABTest 挂载点定位/安装失败；同一 label 只记一次，避免多步查找重复计数。 */
+    public static void abTestNotFound(String label) {
+        if (label == null || !sAbTestFailedKeys.add(label)) {
+            return;
+        }
+        sAbTestFailed.incrementAndGet();
+        publish();
+    }
+
+    /** 记录 ABTest 最近失败原因（与 Feature 级 note 同风格，超长截断）。 */
+    public static void noteAbTest(String text) {
+        if (text == null) {
+            return;
+        }
+        sAbTestLastFailure = truncate(text, MAX_FAILURE_CHARS);
         publish();
     }
 
@@ -256,6 +284,7 @@ public final class HookState {
                     }
                 }
             }
+            JSONObject abtest = abTestSummary();
             root.put("updatedAt", System.currentTimeMillis());
             if (sProcessName != null) {
                 root.put("process", sProcessName);
@@ -267,6 +296,9 @@ public final class HookState {
             root.put("noHitFeatures", noHit);
             root.put("degradedFeatures", degradedCount);
             root.put("unavailableFeatures", unavailableCount);
+            if (abtest != null) {
+                root.put("abtest", abtest);
+            }
             root.put("features", features);
             String json = root.toString();
             if (json.length() > MAX_JSON_CHARS) {
@@ -283,6 +315,9 @@ public final class HookState {
                 compact.put("noHitFeatures", noHit);
                 compact.put("degradedFeatures", degradedCount);
                 compact.put("unavailableFeatures", unavailableCount);
+                if (abtest != null) {
+                    compact.put("abtest", abtest);
+                }
                 compact.put("truncated", true);
                 return compact.toString();
             }
@@ -290,6 +325,22 @@ public final class HookState {
         } catch (Throwable t) {
             return null;
         }
+    }
+
+    /** 有任一 ABTest 记录时返回根级概要对象，否则 null（无记录不输出该键）。 */
+    private static JSONObject abTestSummary() throws JSONException {
+        int installed = sAbTestInstalled.get();
+        int failed = sAbTestFailed.get();
+        if (installed == 0 && failed == 0) {
+            return null;
+        }
+        JSONObject o = new JSONObject();
+        o.put("installed", installed);
+        o.put("failed", failed);
+        if (sAbTestLastFailure != null) {
+            o.put("lastFailure", sAbTestLastFailure);
+        }
+        return o;
     }
 
     /** 节流触发：最多每 2 秒排队一次，实际发送在工作线程。 */
