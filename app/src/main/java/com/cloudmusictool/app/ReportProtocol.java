@@ -1,21 +1,35 @@
 package com.cloudmusictool.app;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.Deque;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Set;
 
 /**
  * 诊断回传协议（纯 JVM 逻辑，供 StatusProvider 与单测共用）。
  *
- * 目标进程只回传计数与 skip 原因，不包含用户内容、账号、设备标识或业务数据。
- * key 白名单：reg.<key> / hit.<key> / skip.<key>；value 最长 256 字符；
- * 单次最多 800 条；hit 多进程回传取历史最大值。
+ * 这里是边界强制的真实契约：StatusProvider.handle 在落盘前按通道调用
+ * validateMountsPayload / validateExperimentsPayload，结构之外的 payload
+ * 整体拒绝（不截断、不部分接受）。
+ *
+ * - mounts 通道（HookState.buildJson 产出）：根键白名单
+ *   {updatedAt, process, enabledFeatures, installed, expected, failed,
+ *   noHitFeatures, degradedFeatures, unavailableFeatures, truncated, features,
+ *   abtest}（允许集，缺省键合法；abtest 为新版本将新增的键）；
+ *   process 为空（旧版兼容）或主进程名；features 的键必须是 Feature 枚举名，
+ *   每个 feature 对象的键 ⊆ {@link #FEATURE_KEYS}。
+ * - experiments 通道（ExperimentState.buildJson 产出）：根键白名单
+ *   {updatedAt, process, items}；items 至多 {@link #MAX_ENTRIES} 条，每条为对象。
+ * - 公共上限：任意字符串值 ≤ {@link #MAX_VALUE_CHARS} 字符；
+ *   payload 总量 ≤ {@link #MAX_PAYLOAD_CHARS}（isValidPayload）。
  */
 public final class ReportProtocol {
 
-    public static final String PREFIX_REG = "reg.";
-    public static final String PREFIX_HIT = "hit.";
-    public static final String PREFIX_SKIP = "skip.";
     public static final int MAX_VALUE_CHARS = 256;
     public static final int MAX_ENTRIES = 800;
     public static final int MAX_PAYLOAD_CHARS = 64 * 1024;
@@ -23,35 +37,143 @@ public final class ReportProtocol {
     /** 主进程名；子进程回传不计入失败功能数，避免未装 hook 的子进程误报。 */
     public static final String MAIN_PROCESS = "com.netease.cloudmusic";
 
+    /** mounts 通道根键白名单（与 HookState.buildJson 的字段面一致）。 */
+    private static final Set<String> MOUNTS_ROOT_KEYS = new HashSet<>(Arrays.asList(
+            "updatedAt", "process", "enabledFeatures", "installed", "expected",
+            "failed", "noHitFeatures", "degradedFeatures", "unavailableFeatures",
+            "truncated", "features", "abtest"));
+
+    /** 单个 feature 对象的字段白名单。 */
+    private static final Set<String> FEATURE_KEYS = new HashSet<>(Arrays.asList(
+            "id", "enabled", "expected", "installed", "failed", "criticalFailed",
+            "hit", "hitCount", "degraded", "unavailable", "lastFailure"));
+
+    /** experiments 通道根键白名单（与 ExperimentState.buildJson 的字段面一致）。 */
+    private static final Set<String> EXPERIMENTS_ROOT_KEYS = new HashSet<>(Arrays.asList(
+            "updatedAt", "process", "items"));
+
+    /** Feature 枚举名集合；features 的键必须是其中之一。 */
+    private static final Set<String> FEATURE_NAMES = featureNames();
+
     private ReportProtocol() {
     }
 
-    public static boolean isValidKey(String key) {
-        if (key == null || key.length() <= 3) {
-            return false;
+    private static Set<String> featureNames() {
+        Set<String> names = new HashSet<>();
+        for (Feature f : Feature.values()) {
+            names.add(f.name());
         }
-        if (!key.startsWith(PREFIX_REG) && !key.startsWith(PREFIX_HIT)
-                && !key.startsWith(PREFIX_SKIP)) {
-            return false;
+        return names;
+    }
+
+    /**
+     * mounts 通道结构校验。
+     *
+     * @return null 表示结构合法；非 null 为拒绝原因（可直接进日志）。
+     */
+    public static String validateMountsPayload(JSONObject root) {
+        if (root == null) {
+            return "payload is not an object";
         }
-        String suffix = key.substring(key.indexOf('.') + 1);
-        if (suffix.isEmpty() || suffix.length() > 128) {
-            return false;
+        String reason = unknownRootKey(root, MOUNTS_ROOT_KEYS);
+        if (reason != null) {
+            return reason;
         }
-        for (int i = 0; i < suffix.length(); i++) {
-            if (Character.isWhitespace(suffix.charAt(i))) {
-                return false;
+        // 缺 process 字段按主进程兼容（与 isMainProcessReport 一致）。
+        if (!isMainProcessReport(root)) {
+            return "unexpected process: " + root.optString("process", "");
+        }
+        Object features = root.opt("features");
+        if (!(features == null || features instanceof JSONObject)) {
+            return "features is not an object";
+        }
+        if (features != null) {
+            Iterator<String> names = ((JSONObject) features).keys();
+            while (names.hasNext()) {
+                String name = names.next();
+                if (!FEATURE_NAMES.contains(name)) {
+                    return "unknown feature key: " + name;
+                }
+                Object entry = ((JSONObject) features).opt(name);
+                if (!(entry instanceof JSONObject)) {
+                    return "feature entry is not an object: " + name;
+                }
+                Iterator<String> fields = ((JSONObject) entry).keys();
+                while (fields.hasNext()) {
+                    String field = fields.next();
+                    if (!FEATURE_KEYS.contains(field)) {
+                        return "unknown feature field: " + name + "." + field;
+                    }
+                }
             }
         }
-        return true;
+        return checkStringValues(root);
     }
 
-    public static boolean isValidValue(String value) {
-        return value != null && value.length() <= MAX_VALUE_CHARS;
+    /**
+     * experiments 通道结构校验。
+     *
+     * @return null 表示结构合法；非 null 为拒绝原因（可直接进日志）。
+     */
+    public static String validateExperimentsPayload(JSONObject root) {
+        if (root == null) {
+            return "payload is not an object";
+        }
+        String reason = unknownRootKey(root, EXPERIMENTS_ROOT_KEYS);
+        if (reason != null) {
+            return reason;
+        }
+        Object items = root.opt("items");
+        if (!(items == null || items instanceof JSONArray)) {
+            return "items is not an array";
+        }
+        if (items != null) {
+            JSONArray array = (JSONArray) items;
+            if (array.length() > MAX_ENTRIES) {
+                return "too many items: " + array.length();
+            }
+            for (int i = 0; i < array.length(); i++) {
+                if (!(array.opt(i) instanceof JSONObject)) {
+                    return "item is not an object: index " + i;
+                }
+            }
+        }
+        return checkStringValues(root);
     }
 
-    public static int mergeHit(int previous, int incoming) {
-        return Math.max(previous, incoming);
+    private static String unknownRootKey(JSONObject root, Set<String> allowed) {
+        Iterator<String> keys = root.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            if (!allowed.contains(key)) {
+                return "unknown root key: " + key;
+            }
+        }
+        return null;
+    }
+
+    /** 任意字符串值 ≤ MAX_VALUE_CHARS；迭代遍历，深嵌套 payload 不会撑爆调用栈。 */
+    private static String checkStringValues(JSONObject root) {
+        Deque<Object> pending = new ArrayDeque<>();
+        pending.push(root);
+        while (!pending.isEmpty()) {
+            Object node = pending.pop();
+            if (node instanceof JSONObject) {
+                JSONObject obj = (JSONObject) node;
+                Iterator<String> keys = obj.keys();
+                while (keys.hasNext()) {
+                    pending.push(obj.opt(keys.next()));
+                }
+            } else if (node instanceof JSONArray) {
+                JSONArray array = (JSONArray) node;
+                for (int i = 0; i < array.length(); i++) {
+                    pending.push(array.opt(i));
+                }
+            } else if (node instanceof String && ((String) node).length() > MAX_VALUE_CHARS) {
+                return "string value exceeds " + MAX_VALUE_CHARS + " chars";
+            }
+        }
+        return null;
     }
 
     public static boolean isValidPayload(String json) {

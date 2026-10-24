@@ -15,6 +15,8 @@ import android.util.Log;
 import java.io.File;
 import java.io.FileNotFoundException;
 
+import org.json.JSONObject;
+
 /**
  * 目标进程 -> 模块 App 的 Hook 状态回写通道。
  *
@@ -85,6 +87,21 @@ public class StatusProvider extends ContentProvider {
         // :play 只装音频贴片，回传会覆盖主进程快照；只保留主进程数据。
         if (!experiments && !ReportProtocol.isMainProcessReport(json)) {
             Log.i(TAG, "status report ignored: secondary process or invalid payload");
+            return null;
+        }
+        // 结构白名单：payload 必须与生产者 schema 一致（ReportProtocol 的真实契约），
+        // 半信任调用方写入未知键/超长字符串/超量条目在此整体拒绝。
+        try {
+            JSONObject root = new JSONObject(json);
+            String reason = experiments
+                    ? ReportProtocol.validateExperimentsPayload(root)
+                    : ReportProtocol.validateMountsPayload(root);
+            if (reason != null) {
+                Log.w(TAG, "status report rejected: " + reason);
+                return null;
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "status report rejected: malformed json");
             return null;
         }
         String prefsKey = experiments ? KEY_EXPERIMENTS : KEY_STATE;

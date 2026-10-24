@@ -1,7 +1,6 @@
 package com.cloudmusictool.app;
 
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.widget.Toast;
 
@@ -29,10 +28,6 @@ import java.util.Set;
  * 强开结果写入 remote prefs 的 abtest_force_map（JSON 对象），重启网易云生效。
  */
 public class ExperimentFragment extends PreferenceFragmentCompat {
-
-    /** 与 StatusProvider 约定的观测数据落盘位置（固定文件名/key，不依赖 A 侧静态方法）。 */
-    private static final String PREFS_HOOK_STATUS = "hook_status";
-    private static final String KEY_EXPERIMENTS = "experiments";
 
     private static final int MAX_OBSERVED = 200;
 
@@ -364,9 +359,7 @@ public class ExperimentFragment extends PreferenceFragmentCompat {
     private Map<String, Observed> readObserved() {
         LinkedHashMap<String, Observed> out = new LinkedHashMap<>();
         try {
-            SharedPreferences sp = requireContext()
-                    .getSharedPreferences(PREFS_HOOK_STATUS, Context.MODE_PRIVATE);
-            String raw = sp.getString(KEY_EXPERIMENTS, null);
+            String raw = StatusProvider.readExperiments(requireContext());
             if (raw == null || raw.isEmpty()) {
                 return out;
             }
