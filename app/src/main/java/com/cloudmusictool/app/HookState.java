@@ -1,7 +1,5 @@
 package com.cloudmusictool.app;
 
-import android.content.Context;
-import android.os.Bundle;
 import android.util.Log;
 
 import org.json.JSONException;
@@ -10,12 +8,7 @@ import org.json.JSONObject;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 目标进程内的 Hook 健康度状态。
@@ -28,13 +21,13 @@ import java.util.concurrent.atomic.AtomicLong;
  *   窗口内后续变化在窗口关闭时合并为一次尾沿发送（携带最新状态），避免最后一次
  *   变化落在节流窗口内且之后无事件而永不上报；
  * - 安装结束后由 Hooks.installAll 调用一次 flush() 发送最终快照；
- * - buildJson + ContentResolver.call 在单线程工作线程执行，避免阻塞主线程；
- * - 目标 Context 只反射解析一次并缓存。
+ * - 发送（节流调度、单线程工作线程、targetContext 解析、authority 拼接、
+ *   warning-once 日志）统一委托共享回传管线 {@link TargetProcessPublisher}，
+ *   与 ExperimentState 共用；节流决策见其 PublishThrottle。
  */
 public final class HookState {
 
     private static final String TAG = "CloudMusicTool";
-    private static final long PUBLISH_INTERVAL_MS = 2000L;
     private static final int MAX_JSON_CHARS = 64 * 1024;
     private static final int MAX_FAILURE_CHARS = 160;
 
@@ -47,19 +40,41 @@ public final class HookState {
     private static final Set<String> sAbTestFailedKeys = ConcurrentHashMap.newKeySet();
     private static volatile String sAbTestLastFailure;
 
-    // 包私有可整体替换：单测注入假时钟与可数执行器（不启动真线程）。
-    static volatile ScheduledExecutorService sExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
-        Thread t = new Thread(r, "CloudMusicTool-HookState");
-        t.setDaemon(true);
-        return t;
-    });
-    static volatile PublishThrottle sThrottle = new PublishThrottle(System::currentTimeMillis);
+    // 节流器包私有可整体替换：单测注入假时钟；执行器与发送管线在 TargetProcessPublisher。
+    static volatile TargetProcessPublisher.PublishThrottle sThrottle =
+            new TargetProcessPublisher.PublishThrottle(System::currentTimeMillis);
 
     private static volatile String sModulePackage;
     private static volatile String sProcessName;
-    private static volatile Context sTargetContext;
-    private static volatile boolean sContextWarningLogged;
-    private static volatile boolean sPublishFailureLogged;
+
+    /** mounts 通道描述：内容与告警文案固定，调度与发送由共享管线执行。 */
+    private static final TargetProcessPublisher.Channel sChannel = new TargetProcessPublisher.Channel() {
+        @Override
+        public String modulePackage() {
+            return sModulePackage;
+        }
+
+        @Override
+        public String type() {
+            // 与既有线上格式一致不写 type 键：StatusProvider 缺省按 mounts 处理。
+            return null;
+        }
+
+        @Override
+        public String buildJson() {
+            return HookState.buildJson();
+        }
+
+        @Override
+        public String contextUnavailableWarning() {
+            return "hook status not published: target Context unavailable";
+        }
+
+        @Override
+        public String publishFailureWarning(Throwable t) {
+            return "hook status publish failed: " + t.getMessage();
+        }
+    };
 
     private HookState() {
     }
@@ -237,7 +252,15 @@ public final class HookState {
         if (sModulePackage == null || sModulePackage.isEmpty()) {
             return;
         }
-        sExecutor.execute(HookState::doPublish);
+        TargetProcessPublisher.flush(sChannel);
+    }
+
+    /**
+     * 节流触发：领先沿立即发送，窗口内后续变化合并为窗口关闭时的一次尾沿（携带最新状态）。
+     * 决策与发送均委托共享回传管线 {@link TargetProcessPublisher}。
+     */
+    private static void publish() {
+        TargetProcessPublisher.publish(sThrottle, sChannel);
     }
 
     private static String buildJson() {
@@ -344,166 +367,6 @@ public final class HookState {
             o.put("lastFailure", sAbTestLastFailure);
         }
         return o;
-    }
-
-    /**
-     * 节流触发：领先沿立即发送，窗口内后续变化合并为窗口关闭时的一次尾沿（携带最新状态）。
-     * 实际发送在工作线程；决策与发送解耦，决策逻辑见 {@link PublishThrottle}。
-     */
-    private static void publish() {
-        PublishThrottle.Decision d = sThrottle.decide();
-        if (d.sendNow) {
-            sExecutor.execute(HookState::doPublish);
-        }
-        if (d.hasTrailing()) {
-            sExecutor.schedule(() -> {
-                if (sThrottle.onWindowClose()) {
-                    doPublish();
-                }
-            }, d.trailingDelayMs, TimeUnit.MILLISECONDS);
-        }
-    }
-
-    /**
-     * 领先 + 尾沿节流决策（评审 concurrency-4：旧实现只做领先沿，2 秒窗口内的变化
-     * 被直接丢弃且窗口推进先于队列 CAS，最后一次状态变化可能永不上报）。
-     *
-     * - 窗口首个变化：开窗并立即发送（领先沿，保持安装期响应性）；
-     * - 窗口内后续变化：只置 pending，尾沿检查任务只排队一次；
-     * - 窗口关闭：pending 置位则发送一次尾沿（发送时才取快照，携带最新状态），
-     *   随后关窗，下一次变化重新开窗走领先沿。
-     *
-     * 时钟经 {@link Clock} 注入、决策与发送解耦，纯 JVM 直测（HookStatePublishScheduleTest）。
-     */
-    static final class PublishThrottle {
-
-        /** 时钟抽象：生产用系统时钟，测试注入假时钟。 */
-        interface Clock {
-            long now();
-        }
-
-        /** 一次变化的调度决策：sendNow 立即发送；hasTrailing() 时需在 trailingDelayMs 后检查尾沿。 */
-        static final class Decision {
-            final boolean sendNow;
-            final long trailingDelayMs;
-
-            private Decision(boolean sendNow, long trailingDelayMs) {
-                this.sendNow = sendNow;
-                this.trailingDelayMs = trailingDelayMs;
-            }
-
-            /** 是否需要排队一次尾沿检查任务。 */
-            boolean hasTrailing() {
-                return trailingDelayMs != NO_TRAILING;
-            }
-        }
-
-        /** 窗口关闭（无窗口）标记；取 -1 避免与「窗口开在时刻 0」的合法起点冲突。 */
-        private static final long NO_WINDOW = -1L;
-        /** 无需调度尾沿的标记。 */
-        private static final long NO_TRAILING = -1L;
-
-        private final Clock mClock;
-        /** 当前窗口起点；NO_WINDOW 表示窗口关闭。 */
-        private final AtomicLong mWindowStart = new AtomicLong(NO_WINDOW);
-        /** 窗口内有变化待尾沿发送。 */
-        private final AtomicBoolean mPending = new AtomicBoolean(false);
-        /** 尾沿检查任务是否已排队。 */
-        private final AtomicBoolean mTrailingQueued = new AtomicBoolean(false);
-
-        PublishThrottle(Clock clock) {
-            mClock = clock;
-        }
-
-        /**
-         * 计算一次状态变化的调度决策。线程安全（基于 CAS，CAS 失败重读重判）。
-         */
-        Decision decide() {
-            for (;;) {
-                long now = mClock.now();
-                long start = mWindowStart.get();
-                if (start == NO_WINDOW || now - start >= PUBLISH_INTERVAL_MS) {
-                    // 无窗口或窗口已过期：本变化开新窗，立即发送（领先沿）。
-                    if (mWindowStart.compareAndSet(start, now)) {
-                        return new Decision(true, NO_TRAILING);
-                    }
-                    continue;
-                }
-                // 窗口内：只置 pending，尾沿检查任务排队一次，不重复排。
-                mPending.set(true);
-                if (mTrailingQueued.compareAndSet(false, true)) {
-                    return new Decision(false, PUBLISH_INTERVAL_MS - (now - start));
-                }
-                return new Decision(false, NO_TRAILING);
-            }
-        }
-
-        /**
-         * 窗口关闭时检查尾沿：pending 置位则消费并返回 true（调用方发送一次尾沿），
-         * 无论是否发送都关窗，允许下一次变化重新开窗走领先沿。
-         */
-        boolean onWindowClose() {
-            mTrailingQueued.set(false);
-            mWindowStart.set(NO_WINDOW);
-            return mPending.getAndSet(false);
-        }
-    }
-
-    private static void doPublish() {
-        String pkg = sModulePackage;
-        if (pkg == null || pkg.isEmpty()) {
-            return;
-        }
-        String json = buildJson();
-        if (json == null) {
-            return;
-        }
-        try {
-            Context ctx = targetContext();
-            if (ctx == null) {
-                if (!sContextWarningLogged) {
-                    sContextWarningLogged = true;
-                    Log.w(TAG, "hook status not published: target Context unavailable");
-                }
-                return;
-            }
-            Bundle extras = new Bundle();
-            extras.putString("json", json);
-            ctx.getContentResolver().call(
-                    StatusProvider.authority(pkg), "report", null, extras);
-        } catch (Throwable t) {
-            if (!sPublishFailureLogged) {
-                sPublishFailureLogged = true;
-                Log.w(TAG, "hook status publish failed: " + t.getMessage());
-            }
-        }
-    }
-
-    /** 反射 ActivityThread.currentApplication()，成功一次后缓存。 */
-    private static Context targetContext() {
-        Context cached = sTargetContext;
-        if (cached != null) {
-            return cached;
-        }
-        synchronized (HookState.class) {
-            if (sTargetContext != null) {
-                return sTargetContext;
-            }
-            try {
-                Class<?> at = Class.forName("android.app.ActivityThread");
-                Object thread = at.getMethod("currentActivityThread").invoke(null);
-                if (thread == null) {
-                    return null;
-                }
-                Object app = at.getMethod("getApplication").invoke(thread);
-                if (app instanceof Context) {
-                    sTargetContext = (Context) app;
-                }
-            } catch (Throwable t) {
-                return null;
-            }
-            return sTargetContext;
-        }
     }
 
     private static String truncate(String s, int max) {

@@ -23,7 +23,7 @@ import static org.junit.Assert.assertTrue;
  * HookState 领先 + 尾沿节流调度决策的纯 JVM 单测（评审 concurrency-4 的修复钉子）。
  *
  * 旧实现是领先沿节流：2 秒窗口内的状态变化被直接丢弃且窗口推进先于队列 CAS，
- * 最后一次变化可能永不上报。新实现把决策抽成 {@link HookState.PublishThrottle}：
+ * 最后一次变化可能永不上报。新实现把决策抽成 {@link TargetProcessPublisher.PublishThrottle}：
  * 窗口首个变化立即发送（领先沿），窗口内后续变化只置 pending，
  * 窗口关闭时必发一次尾沿（携带最新状态）；flush() 最终快照语义保留。
  *
@@ -38,36 +38,36 @@ public class HookStatePublishScheduleTest {
     private MutableClock mClock;
     private RecordingExecutor mExecutor;
     private ScheduledExecutorService mOrigExecutor;
-    private HookState.PublishThrottle mOrigThrottle;
+    private TargetProcessPublisher.PublishThrottle mOrigThrottle;
 
     @Before
     public void setUp() {
         mClock = new MutableClock();
         mExecutor = new RecordingExecutor();
-        mOrigExecutor = HookState.sExecutor;
+        mOrigExecutor = TargetProcessPublisher.sExecutor;
         mOrigThrottle = HookState.sThrottle;
-        HookState.sExecutor = mExecutor;
-        HookState.sThrottle = new HookState.PublishThrottle(mClock);
+        TargetProcessPublisher.sExecutor = mExecutor;
+        HookState.sThrottle = new TargetProcessPublisher.PublishThrottle(mClock);
         HookState.init(MODULE_PKG, "main");
     }
 
     @After
     public void tearDown() {
-        HookState.sExecutor = mOrigExecutor;
+        TargetProcessPublisher.sExecutor = mOrigExecutor;
         HookState.sThrottle = mOrigThrottle;
     }
 
     /** 窗口内两次变化 -> 恰一次领先沿 + 一次尾沿，尾沿只在窗口关闭时发。 */
     @Test
     public void twoChangesInWindow_exactlyOneLeadingAndOneTrailing() {
-        HookState.PublishThrottle throttle = new HookState.PublishThrottle(mClock);
+        TargetProcessPublisher.PublishThrottle throttle = new TargetProcessPublisher.PublishThrottle(mClock);
         mClock.set(0L);
-        HookState.PublishThrottle.Decision first = throttle.decide();
+        TargetProcessPublisher.PublishThrottle.Decision first = throttle.decide();
         assertTrue("窗口首个变化应立即发送（领先沿）", first.sendNow);
         assertFalse("领先沿无需再排尾沿", first.hasTrailing());
 
         mClock.advance(500L);
-        HookState.PublishThrottle.Decision second = throttle.decide();
+        TargetProcessPublisher.PublishThrottle.Decision second = throttle.decide();
         assertFalse("窗口内后续变化不应立即发送", second.sendNow);
         assertTrue("窗口内变化应合并为尾沿", second.hasTrailing());
         assertEquals("尾沿应排在窗口关闭时刻（领先沿后 2 秒）",
@@ -81,7 +81,7 @@ public class HookStatePublishScheduleTest {
     /** 窗口内第三次变化不重复排尾沿、不触发新的领先沿。 */
     @Test
     public void thirdChangeInWindow_noDuplicateTrailing() {
-        HookState.PublishThrottle throttle = new HookState.PublishThrottle(mClock);
+        TargetProcessPublisher.PublishThrottle throttle = new TargetProcessPublisher.PublishThrottle(mClock);
         mClock.set(0L);
         assertTrue(throttle.decide().sendNow);
 
@@ -89,7 +89,7 @@ public class HookStatePublishScheduleTest {
         assertTrue(throttle.decide().hasTrailing());
 
         mClock.advance(300L); // t=800 第三次变化
-        HookState.PublishThrottle.Decision third = throttle.decide();
+        TargetProcessPublisher.PublishThrottle.Decision third = throttle.decide();
         assertFalse(third.sendNow);
         assertFalse("尾沿检查任务只排队一次", third.hasTrailing());
 
@@ -101,9 +101,9 @@ public class HookStatePublishScheduleTest {
     /** 领先沿后 2 秒无事件 -> 无多余发送；窗口过期后的新变化重新走领先沿而非丢弃。 */
     @Test
     public void noEventAfterLeading_noExtraSends() {
-        HookState.PublishThrottle throttle = new HookState.PublishThrottle(mClock);
+        TargetProcessPublisher.PublishThrottle throttle = new TargetProcessPublisher.PublishThrottle(mClock);
         mClock.set(0L);
-        HookState.PublishThrottle.Decision first = throttle.decide();
+        TargetProcessPublisher.PublishThrottle.Decision first = throttle.decide();
         assertTrue(first.sendNow);
         assertFalse("领先沿后无事件：不应排尾沿", first.hasTrailing());
 
@@ -111,7 +111,7 @@ public class HookStatePublishScheduleTest {
         assertFalse("无 pending：窗口关闭不发送", throttle.onWindowClose());
 
         mClock.advance(1000L); // t=3000 新变化
-        HookState.PublishThrottle.Decision next = throttle.decide();
+        TargetProcessPublisher.PublishThrottle.Decision next = throttle.decide();
         assertTrue("窗口过期后的变化应开新窗立即发送", next.sendNow);
         assertFalse(next.hasTrailing());
     }
@@ -182,7 +182,7 @@ public class HookStatePublishScheduleTest {
     }
 
     /** 假时钟：测试手动推进，不依赖真实时间。 */
-    private static final class MutableClock implements HookState.PublishThrottle.Clock {
+    private static final class MutableClock implements TargetProcessPublisher.PublishThrottle.Clock {
         private long mNow;
 
         @Override

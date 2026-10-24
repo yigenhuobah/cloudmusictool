@@ -61,21 +61,24 @@ public final class VersionGate {
         return -1L;
     }
 
-    /** 反射 ActivityThread 取当前应用/系统 Context，失败返回 null。 */
+    /**
+     * 反射 ActivityThread 取当前应用/系统 Context，失败返回 null。
+     * 应用 Context 经共享缓存助手 {@link TargetProcessPublisher#targetContext()} 解析
+     * （原为每次直反射，现成功一次后缓存）；不可用时回退系统 Context（原失败语义保持）。
+     */
     private static Context targetContext() {
+        Context app = TargetProcessPublisher.targetContext();
+        if (app != null) {
+            return app;
+        }
         try {
             Class<?> at = Class.forName("android.app.ActivityThread");
             Object currentAt = at.getMethod("currentActivityThread").invoke(null);
-            if (currentAt == null) {
-                return null;
-            }
-            Object app = at.getMethod("getApplication").invoke(currentAt);
-            if (app instanceof Context) {
-                return (Context) app;
-            }
-            Object systemCtx = at.getMethod("getSystemContext").invoke(currentAt);
-            if (systemCtx instanceof Context) {
-                return (Context) systemCtx;
+            if (currentAt != null) {
+                Object systemCtx = at.getMethod("getSystemContext").invoke(currentAt);
+                if (systemCtx instanceof Context) {
+                    return (Context) systemCtx;
+                }
             }
         } catch (Throwable ignored) {
         }
@@ -127,7 +130,8 @@ public final class VersionGate {
 
     /**
      * 读取目标网易云音乐版本名。
-     * 1. 优先从 ActivityThread.currentActivityThread().getApplication() 获取 Context 并查询 PackageManager。
+     * 1. 优先从 ActivityThread.currentActivityThread().getApplication() 获取 Context 并查询 PackageManager
+     *    （应用 Context 反射收敛到 {@link TargetProcessPublisher#targetContext()} 共享缓存助手）。
      * 2. 失败后从 ActivityThread.currentActivityThread().getSystemContext() 的 PackageManager 查询。
      */
     public static String resolveVersionName(PackageReadyParam param) {
@@ -136,15 +140,11 @@ public final class VersionGate {
         }
         // 1. 优先从 ActivityThread.currentActivityThread().getApplication() 取 PackageManager
         try {
-            Class<?> at = Class.forName("android.app.ActivityThread");
-            Object currentAt = at.getMethod("currentActivityThread").invoke(null);
-            if (currentAt != null) {
-                Object app = at.getMethod("getApplication").invoke(currentAt);
-                if (app instanceof Context) {
-                    PackageInfo pi = ((Context) app).getPackageManager().getPackageInfo(param.getPackageName(), 0);
-                    if (pi != null && pi.versionName != null) {
-                        return pi.versionName;
-                    }
+            Context app = TargetProcessPublisher.targetContext();
+            if (app != null) {
+                PackageInfo pi = app.getPackageManager().getPackageInfo(param.getPackageName(), 0);
+                if (pi != null && pi.versionName != null) {
+                    return pi.versionName;
                 }
             }
         } catch (Throwable ignored) {

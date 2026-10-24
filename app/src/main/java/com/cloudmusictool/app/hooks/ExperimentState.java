@@ -1,10 +1,7 @@
 package com.cloudmusictool.app.hooks;
 
-import android.content.Context;
-import android.os.Bundle;
-import android.util.Log;
-
 import com.cloudmusictool.app.StatusProvider;
+import com.cloudmusictool.app.TargetProcessPublisher;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -15,10 +12,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -27,32 +20,54 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 记录 key -> {group, source, count, lastAt}，最多跟踪 {@link #MAX_TRACKED_KEYS} 个 key，
  * 序列化时按 count 取前 {@link #MAX_KEYS} 个，并保证 JSON 不超过 64KB。
  *
- * 写入策略与 HookState 一致：记录时 2 秒节流（尾沿发送，避免丢掉最后一批），
- * 安装结束时由 CloudMusicToolModule 调 flush() 强制发送一次。
+ * 写入策略波次2起与 HookState 统一：「领先 + 尾沿」节流——窗口首事件立即发送，
+ * 窗口内后续事件合并，窗口关闭时必发一次尾沿（避免丢掉最后一批）；
+ * 原实现为纯尾沿（首事件也要等 2 秒）。安装结束时由 CloudMusicToolModule 调 flush()
+ * 强制发送一次。调度与发送统一走共享回传管线 {@link TargetProcessPublisher}；
  * remote prefs 在宿主进程只读，因此通过模块 App 的 StatusProvider 回写（type=experiments）。
  */
 public final class ExperimentState {
 
-    private static final String TAG = "CloudMusicTool";
-    private static final long PUBLISH_INTERVAL_MS = 2000L;
     private static final int MAX_TRACKED_KEYS = 500;
     private static final int MAX_KEYS = 200;
     private static final int MAX_JSON_CHARS = 64 * 1024;
 
     private static final Map<String, Item> sItems = new ConcurrentHashMap<>();
 
-    private static final ScheduledExecutorService sExecutor =
-            Executors.newSingleThreadScheduledExecutor(r -> {
-                Thread t = new Thread(r, "CloudMusicTool-ExperimentState");
-                t.setDaemon(true);
-                return t;
-            });
-    private static final AtomicBoolean sScheduled = new AtomicBoolean(false);
+    // 「领先 + 尾沿」节流器：与 HookState 同语义（每通道一个实例，窗口互不干扰）。
+    private static final TargetProcessPublisher.PublishThrottle sThrottle =
+            new TargetProcessPublisher.PublishThrottle(System::currentTimeMillis);
 
     private static volatile String sModulePackage;
-    private static volatile Context sTargetContext;
-    private static volatile boolean sContextWarningLogged;
-    private static volatile boolean sPublishFailureLogged;
+
+    /** experiments 通道描述：内容与告警文案固定，调度与发送由共享管线执行。 */
+    private static final TargetProcessPublisher.Channel sChannel = new TargetProcessPublisher.Channel() {
+        @Override
+        public String modulePackage() {
+            return sModulePackage;
+        }
+
+        @Override
+        public String type() {
+            return StatusProvider.TYPE_EXPERIMENTS;
+        }
+
+        @Override
+        public String buildJson() {
+            // 与原 doPublish 的空数据短路一致：无记录不发送，避免空快照覆盖。
+            return sItems.isEmpty() ? null : ExperimentState.buildJson();
+        }
+
+        @Override
+        public String contextUnavailableWarning() {
+            return "experiments not published: target Context unavailable";
+        }
+
+        @Override
+        public String publishFailureWarning(Throwable t) {
+            return "experiments publish failed: " + t.getMessage();
+        }
+    };
 
     private ExperimentState() {
     }
@@ -107,26 +122,20 @@ public final class ExperimentState {
             return;
         }
         try {
-            sExecutor.execute(ExperimentState::doPublish);
+            TargetProcessPublisher.flush(sChannel);
         } catch (Throwable ignored) {
         }
     }
 
+    /**
+     * 节流提交：「领先 + 尾沿」——窗口首事件立即发送（原为纯尾沿：首事件也要等 2 秒），
+     * 窗口内后续事件合并，窗口关闭时必发一次尾沿；决策与发送在共享管线执行。
+     */
     private static void schedulePublish() {
         if (sModulePackage == null || sModulePackage.isEmpty()) {
             return;
         }
-        if (!sScheduled.compareAndSet(false, true)) {
-            return;
-        }
-        try {
-            sExecutor.schedule(() -> {
-                sScheduled.set(false);
-                doPublish();
-            }, PUBLISH_INTERVAL_MS, TimeUnit.MILLISECONDS);
-        } catch (Throwable t) {
-            sScheduled.set(false);
-        }
+        TargetProcessPublisher.publish(sThrottle, sChannel);
     }
 
     private static String buildJson() {
@@ -164,65 +173,6 @@ public final class ExperimentState {
             return json;
         } catch (Throwable t) {
             return null;
-        }
-    }
-
-    private static void doPublish() {
-        String pkg = sModulePackage;
-        if (pkg == null || pkg.isEmpty() || sItems.isEmpty()) {
-            return;
-        }
-        String json = buildJson();
-        if (json == null) {
-            return;
-        }
-        try {
-            Context ctx = targetContext();
-            if (ctx == null) {
-                if (!sContextWarningLogged) {
-                    sContextWarningLogged = true;
-                    Log.w(TAG, "experiments not published: target Context unavailable");
-                }
-                return;
-            }
-            Bundle extras = new Bundle();
-            extras.putString(StatusProvider.KEY_TYPE, StatusProvider.TYPE_EXPERIMENTS);
-            extras.putString(StatusProvider.KEY_JSON, json);
-            ctx.getContentResolver().call(
-                    android.net.Uri.parse("content://" + pkg + ".status"),
-                    "report", null, extras);
-        } catch (Throwable t) {
-            if (!sPublishFailureLogged) {
-                sPublishFailureLogged = true;
-                Log.w(TAG, "experiments publish failed: " + t.getMessage());
-            }
-        }
-    }
-
-    /** 反射 ActivityThread.currentApplication()，成功一次后缓存（同 HookState）。 */
-    private static Context targetContext() {
-        Context cached = sTargetContext;
-        if (cached != null) {
-            return cached;
-        }
-        synchronized (ExperimentState.class) {
-            if (sTargetContext != null) {
-                return sTargetContext;
-            }
-            try {
-                Class<?> at = Class.forName("android.app.ActivityThread");
-                Object thread = at.getMethod("currentActivityThread").invoke(null);
-                if (thread == null) {
-                    return null;
-                }
-                Object app = at.getMethod("getApplication").invoke(thread);
-                if (app instanceof Context) {
-                    sTargetContext = (Context) app;
-                }
-            } catch (Throwable t) {
-                return null;
-            }
-            return sTargetContext;
         }
     }
 }

@@ -3,6 +3,8 @@ package com.cloudmusictool.app.dexkit;
 import android.os.Build;
 import android.util.Log;
 
+import com.cloudmusictool.app.TargetProcessPublisher;
+
 import org.luckypray.dexkit.DexKitBridge;
 import org.luckypray.dexkit.query.FindClass;
 import org.luckypray.dexkit.query.FindMethod;
@@ -151,12 +153,12 @@ public final class DexKitLocator {
             sLoadFailure = "module apk missing: " + apkPath;
             return false;
         }
-        Object app = currentApplication();
-        if (!(app instanceof android.content.Context)) {
+        // 目标 Context 经共享缓存助手解析（原为无缓存直反射，现成功一次后缓存）。
+        android.content.Context context = TargetProcessPublisher.targetContext();
+        if (context == null) {
             sLoadFailure = "target context unavailable for so extraction";
             return false;
         }
-        android.content.Context context = (android.content.Context) app;
         for (String abi : supportedAbis()) {
             ZipFile zip = null;
             InputStream in = null;
@@ -212,20 +214,6 @@ public final class DexKitLocator {
                 ((java.io.Closeable) closeable).close();
             }
         } catch (Throwable ignored) {
-        }
-    }
-
-    /** 反射 ActivityThread.currentApplication()，失败返回 null。 */
-    private static Object currentApplication() {
-        try {
-            Class<?> at = Class.forName("android.app.ActivityThread");
-            Object thread = at.getMethod("currentActivityThread").invoke(null);
-            if (thread == null) {
-                return null;
-            }
-            return at.getMethod("getApplication").invoke(thread);
-        } catch (Throwable t) {
-            return null;
         }
     }
 
