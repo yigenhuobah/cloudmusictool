@@ -13,8 +13,8 @@ import static org.junit.Assert.assertEquals;
  * SampleSize.calculateInSampleSize（模块 App 侧标准实现）的逐点等价性。
  *
  * 两处循环体写法不同（(a/2)/s vs a/(2s)），数学上 floor(floor(a/2)/s) ==
- * floor(a/(2s))，但等价性只靠注释承诺（MineBackgroundStore.java:253 起同型
- * 注释）。同仓库两份实现、一份有测试一份没有——这里对边界输入逐点断言两份
+ * floor(a/(2s)），但等价性只靠注释承诺。同仓库两份实现、仅标准实现有测试——
+ * 这里对边界输入逐点断言两份
  * 实现永远相等，防止单侧被单独改动后行为漂移。MineBackgroundHooks.sampleSize
  * 为包私有 static，反射调用，不为测试放宽可见性。绝对值锚点（2 倍 -> 2 等）
  * 已由 SampleSizeTest 钉住，本测试只钉等价性。

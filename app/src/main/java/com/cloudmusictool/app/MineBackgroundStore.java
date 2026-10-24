@@ -30,6 +30,8 @@ public final class MineBackgroundStore {
     private static final String TAG = "CloudMusicTool";
     private static final String FILE_NAME = "mine_background.jpg";
     private static final String TMP_NAME = "mine_background.tmp";
+    /** 共享副本写入用同目录临时文件后缀：先写 {@code <最终名>.tmp} 再 rename 原子替换。 */
+    private static final String TMP_SUFFIX = ".tmp";
     /** 存储上限：宽度 1440、高度 2560，等比缩放，不拉伸。 */
     private static final int MAX_WIDTH = 1440;
     private static final int MAX_HEIGHT = 2560;
@@ -81,8 +83,22 @@ public final class MineBackgroundStore {
         return null;
     }
 
-    /** 把已有内部图片补一份到共享目录；模块 App 打开定制页时调用。 */
+    /**
+     * 把已有内部图片补一份到共享目录；模块 App 打开定制页时调用。
+     *
+     * <p>投递到与导入/清除共用的单线程队列执行，本方法投递后立即返回：
+     * 与在途导入/清除按 FIFO 串行，不会交错出半写或被覆盖的终态。
+     */
     public static void syncExternal(Context context) {
+        if (context == null) {
+            return;
+        }
+        Context app = context.getApplicationContext();
+        final Context ctx = app != null ? app : context;
+        sExecutor.execute(() -> syncExternalSync(ctx));
+    }
+
+    private static void syncExternalSync(Context context) {
         try {
             File internal = file(context);
             File external = externalFile(context);
@@ -100,6 +116,11 @@ public final class MineBackgroundStore {
 
     private static File tmpFile(Context context) {
         return new File(context.getFilesDir(), TMP_NAME);
+    }
+
+    /** 共享副本 dst 同目录的临时文件：与 dst 同分区，保证 rename 原子。 */
+    private static File tmpOf(File dst) {
+        return new File(dst.getParentFile(), dst.getName() + TMP_SUFFIX);
     }
 
     public static boolean hasImage(Context context) {
@@ -210,11 +231,24 @@ public final class MineBackgroundStore {
         }
     }
 
-    /** 删除已保存的背景与残留临时文件。 */
+    /**
+     * 删除已保存的背景与残留临时文件。
+     *
+     * <p>删除被投递到与导入共用的单线程队列执行，本方法投递后立即返回：
+     * 清除必然排在在途导入之后出队（FIFO），不会再被其无声撤销。调用方的
+     * toast/刷新等即时反馈不变，仅文件删除延后到队列出队——清除后紧接着的
+     * {@link #hasImage} 可能仍读到旧文件，待队列排空后的刷新才反映新状态。
+     */
     public static void clear(Context context) {
         if (context == null) {
             return;
         }
+        Context app = context.getApplicationContext();
+        final Context ctx = app != null ? app : context;
+        sExecutor.execute(() -> clearSync(ctx));
+    }
+
+    private static void clearSync(Context context) {
         try {
             File file = file(context);
             if (file.exists() && !file.delete()) {
@@ -225,15 +259,41 @@ public final class MineBackgroundStore {
                 Log.w(TAG, "delete mine background tmp failed");
             }
             File external = externalFile(context);
-            if (external != null && external.exists() && !external.delete()) {
-                Log.w(TAG, "delete external mine background failed");
+            if (external != null) {
+                File externalTmp = tmpOf(external);
+                if (externalTmp.exists() && !externalTmp.delete()) {
+                    Log.w(TAG, "delete external mine background tmp failed");
+                }
+                if (external.exists() && !external.delete()) {
+                    Log.w(TAG, "delete external mine background failed");
+                }
             }
         } catch (Throwable t) {
             Log.w(TAG, "clear mine background failed", t);
         }
     }
 
+    /**
+     * 复制到共享目录：先写同目录临时文件再 rename 原子替换，与 internal 路径
+     * 的 tmp+rename 同构，目标进程直读只会看到旧文件或完整新文件，不会读到
+     * 半写的 JPEG；rename 失败时降级直写并告警，不因原子替换不可用而失败。
+     */
     private static boolean copy(File src, File dst) {
+        File tmp = tmpOf(dst);
+        if (!copyTo(src, tmp)) {
+            return false;
+        }
+        if (tmp.renameTo(dst)) {
+            return true;
+        }
+        Log.w(TAG, "rename mine background external failed, fallback to direct copy");
+        if (tmp.exists() && !tmp.delete()) {
+            Log.w(TAG, "delete mine background external tmp failed");
+        }
+        return copyTo(src, dst);
+    }
+
+    private static boolean copyTo(File src, File dst) {
         try (InputStream in = new FileInputStream(src);
              OutputStream out = new FileOutputStream(dst)) {
             byte[] buffer = new byte[8192];
@@ -247,11 +307,6 @@ public final class MineBackgroundStore {
             Log.w(TAG, "copy mine background failed", t);
             return false;
         }
-    }
-
-    /** 与 {@link SampleSize#calculateInSampleSize} 等价，保留同类入口方便调用。 */
-    public static int calculateInSampleSize(int outW, int outH, int reqW, int reqH) {
-        return SampleSize.calculateInSampleSize(outW, outH, reqW, reqH);
     }
 
     private static Bitmap decode(Context context, Uri uri) {
