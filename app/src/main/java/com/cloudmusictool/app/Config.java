@@ -3,13 +3,9 @@ package com.cloudmusictool.app;
 import android.content.SharedPreferences;
 import android.util.Log;
 
-import org.json.JSONObject;
-
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -87,27 +83,9 @@ public final class Config {
     }
 
     static void loadSet(SharedPreferences sp, String key, Map<String, Set<String>> out) {
-        try {
-            Set<String> set = sp.getStringSet(key, null);
-            if (set != null) {
-                out.put(key, new HashSet<>(set));
-                return;
-            }
-        } catch (Throwable ignored) {
-        }
-        try {
-            String raw = sp.getString(key, null);
-            if (raw != null && !raw.isEmpty()) {
-                Set<String> parsed = new HashSet<>();
-                for (String item : raw.split(",")) {
-                    String trimmed = item.trim();
-                    if (!trimmed.isEmpty()) {
-                        parsed.add(trimmed);
-                    }
-                }
-                out.put(key, parsed);
-            }
-        } catch (Throwable ignored) {
+        Set<String> parsed = PrefsSetCodec.read(sp, key);
+        if (parsed != null) {
+            out.put(key, parsed);
         }
     }
 
@@ -124,48 +102,20 @@ public final class Config {
     }
 
     static Map<String, String> parseForceMap(String raw) {
-        if (raw == null || raw.trim().isEmpty()) {
+        Map<String, String> candidates = ForceMapCodec.parse(raw);
+        if (candidates.isEmpty()) {
             return Collections.emptyMap();
         }
-        try {
-            JSONObject obj = new JSONObject(raw);
-            Map<String, String> candidates = new LinkedHashMap<>();
-            Iterator<String> keys = obj.keys();
-            while (keys.hasNext()) {
-                String key = keys.next();
-                if (key == null || key.isEmpty()) {
-                    continue;
-                }
-                String group = obj.optString(key, null);
-                if (group == null || group.isEmpty()) {
-                    continue;
-                }
-                candidates.put(key, group);
-            }
-            if (candidates.isEmpty()) {
-                return Collections.emptyMap();
-            }
-            Set<String> promoted = new HashSet<>(candidates.keySet());
-            promoted.removeAll(AbTestPolicy.CURATED);
-            Map<String, String> filtered = new LinkedHashMap<>();
-            for (Map.Entry<String, String> e : candidates.entrySet()) {
-                String key = e.getKey();
-                String group = e.getValue();
-                if (!AbTestPolicy.isAllowed(key, promoted)) {
-                    continue;
-                }
-                if (!AbTestPolicy.isValidGroup(group)) {
-                    continue;
-                }
-                filtered.put(key, group);
-            }
-            if (filtered.isEmpty()) {
-                return Collections.emptyMap();
-            }
-            return Collections.unmodifiableMap(filtered);
-        } catch (Throwable t) {
+        // promoted = 表内 key - curated；需基于全部候选计算后再逐条校验。
+        Set<String> promoted = new HashSet<>(candidates.keySet());
+        promoted.removeAll(AbTestPolicy.CURATED);
+        Map<String, String> filtered = ForceMapCodec.applyFilter(candidates,
+                (key, group) -> AbTestPolicy.isAllowed(key, promoted)
+                        && AbTestPolicy.isValidGroup(group));
+        if (filtered.isEmpty()) {
             return Collections.emptyMap();
         }
+        return Collections.unmodifiableMap(filtered);
     }
 
     public boolean anyEnabled() {

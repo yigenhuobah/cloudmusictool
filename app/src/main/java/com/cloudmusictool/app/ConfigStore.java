@@ -5,7 +5,6 @@ import android.content.SharedPreferences;
 import android.util.Log;
 
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -105,30 +104,8 @@ final class ConfigStore {
     }
 
     Set<String> getStringSet(String key, Set<String> def) {
-        SharedPreferences sp = mRemote != null ? mRemote : mLocal;
-        try {
-            Set<String> set = sp.getStringSet(key, null);
-            if (set != null) {
-                return new HashSet<>(set);
-            }
-        } catch (Throwable ignored) {
-        }
-        try {
-            String raw = sp.getString(key, null);
-            // 与 Config.loadSet 一致：空串视为未设置，回退默认值，避免返回空集吞掉默认。
-            if (raw != null && !raw.isEmpty()) {
-                Set<String> parsed = new HashSet<>();
-                for (String part : raw.split(",")) {
-                    String trimmed = part.trim();
-                    if (!trimmed.isEmpty()) {
-                        parsed.add(trimmed);
-                    }
-                }
-                return parsed;
-            }
-        } catch (Throwable ignored) {
-        }
-        return def != null ? def : Collections.emptySet();
+        Set<String> parsed = PrefsSetCodec.read(mRemote != null ? mRemote : mLocal, key);
+        return parsed != null ? parsed : (def != null ? def : Collections.emptySet());
     }
 
     void putStringSet(String key, Set<String> value) {
@@ -139,14 +116,7 @@ final class ConfigStore {
                 try {
                     editor.putStringSet(key, value);
                 } catch (Throwable t) {
-                    StringBuilder sb = new StringBuilder();
-                    for (String s : value) {
-                        if (sb.length() > 0) {
-                            sb.append(",");
-                        }
-                        sb.append(s);
-                    }
-                    editor.putString(key, sb.toString());
+                    editor.putString(key, PrefsSetCodec.toCsv(value));
                 }
             } else {
                 editor.remove(key);

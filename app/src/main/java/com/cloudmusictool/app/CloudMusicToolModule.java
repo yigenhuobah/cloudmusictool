@@ -20,7 +20,6 @@ import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam;
 public class CloudMusicToolModule extends XposedModule {
 
     static final String TAG = "CloudMusicTool";
-    static final String TARGET_PACKAGE = "com.netease.cloudmusic";
 
     private String mProcessName;
 
@@ -54,7 +53,7 @@ public class CloudMusicToolModule extends XposedModule {
 
     @Override
     public void onPackageReady(PackageReadyParam param) {
-        if (!TARGET_PACKAGE.equals(param.getPackageName())) {
+        if (!Config.TARGET_PACKAGE.equals(param.getPackageName())) {
             detach();
             return;
         }

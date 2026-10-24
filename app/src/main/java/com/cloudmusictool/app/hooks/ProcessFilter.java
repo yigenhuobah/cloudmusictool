@@ -1,13 +1,13 @@
 package com.cloudmusictool.app.hooks;
 
+import com.cloudmusictool.app.Config;
+
 /**
  * 进程过滤器。
  * 跳过 :patch、:safemode、:heap_analysis、:leakcanary 等辅助进程。
  * :play 进程只安装音频贴片（AD-09）相关 hook，其余功能仅主进程。
  */
 public final class ProcessFilter {
-
-    public static final String TARGET_PKG = "com.netease.cloudmusic";
 
     private ProcessFilter() {
     }
@@ -30,7 +30,7 @@ public final class ProcessFilter {
                 || name.endsWith(":play")) {
             return false;
         }
-        return TARGET_PKG.equals(name);
+        return Config.TARGET_PACKAGE.equals(name);
     }
 
     /** mProcessName 为空时回退到 Application.getProcessName()（API 28+）。 */

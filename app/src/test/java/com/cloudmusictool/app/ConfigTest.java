@@ -4,6 +4,8 @@ import android.content.SharedPreferences;
 
 import org.junit.Test;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -11,6 +13,7 @@ import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class ConfigTest {
@@ -54,6 +57,124 @@ public class ConfigTest {
     public void dexKitSelfTest_defaultsOff() {
         assertFalse(Config.DEFAULT_DEXKIT_SELFTEST);
         assertTrue(Config.KEY_DEXKIT_SELFTEST.contains("dexkit"));
+    }
+
+    // ------------------------------------------------------------ PrefsSetCodec
+
+    @Test
+    public void prefsSetCodec_readStringSet() {
+        FakePrefs prefs = new FakePrefs();
+        prefs.values.put("k", new HashSet<>(java.util.Arrays.asList("a", "b")));
+        assertEquals(new HashSet<>(java.util.Arrays.asList("a", "b")),
+                PrefsSetCodec.read(prefs, "k"));
+    }
+
+    @Test
+    public void prefsSetCodec_missingKeyReturnsNull() {
+        FakePrefs prefs = new FakePrefs();
+        assertNull(PrefsSetCodec.read(prefs, "k"));
+    }
+
+    @Test
+    public void prefsSetCodec_emptyStringReturnsNull() {
+        // 空串=未设置：返回 null，由调用方回退默认值。
+        FakePrefs prefs = new FakePrefs();
+        prefs.values.put("k", "");
+        assertNull(PrefsSetCodec.read(prefs, "k"));
+    }
+
+    @Test
+    public void prefsSetCodec_explicitEmptySetIsAValue() {
+        // 显式空 Set 是有效值（覆盖默认值），与空串不同。
+        FakePrefs prefs = new FakePrefs();
+        prefs.values.put("k", new HashSet<String>());
+        assertEquals(Collections.emptySet(), PrefsSetCodec.read(prefs, "k"));
+    }
+
+    @Test
+    public void prefsSetCodec_csvTrimsAndSkipsBlanks() {
+        FakePrefs prefs = new FakePrefs();
+        prefs.values.put("k", " a , b ,, c ");
+        assertEquals(new HashSet<>(java.util.Arrays.asList("a", "b", "c")),
+                PrefsSetCodec.read(prefs, "k"));
+    }
+
+    @Test
+    public void prefsSetCodec_csvDedupesRepeatedItems() {
+        FakePrefs prefs = new FakePrefs();
+        prefs.values.put("k", "a,a,b,a");
+        assertEquals(new HashSet<>(java.util.Arrays.asList("a", "b")),
+                PrefsSetCodec.read(prefs, "k"));
+    }
+
+    @Test
+    public void prefsSetCodec_nonEmptyCsvOfBlankItemsYieldsEmptySet() {
+        // 非空串即使逐项皆空也算“已设置”：返回空集而非 null（既有两侧语义）。
+        FakePrefs prefs = new FakePrefs();
+        prefs.values.put("k", " , , ");
+        assertEquals(Collections.emptySet(), PrefsSetCodec.read(prefs, "k"));
+    }
+
+    @Test
+    public void prefsSetCodec_toCsvEmptySetIsEmptyString() {
+        assertEquals("", PrefsSetCodec.toCsv(new HashSet<String>()));
+    }
+
+    @Test
+    public void prefsSetCodec_toCsvRoundTripsThroughRead() {
+        FakePrefs prefs = new FakePrefs();
+        prefs.values.put("k",
+                PrefsSetCodec.toCsv(new HashSet<>(java.util.Arrays.asList("a", "b"))));
+        assertEquals(new HashSet<>(java.util.Arrays.asList("a", "b")),
+                PrefsSetCodec.read(prefs, "k"));
+    }
+
+    // ------------------------------------------------------------ ForceMapCodec
+
+    @Test
+    public void forceMapCodec_parseKeepsCandidates() {
+        Map<String, String> out = ForceMapCodec.parse("{\"b\":\"t1\",\"a\":\"t2\"}");
+        assertEquals(new HashSet<>(java.util.Arrays.asList("b", "a")), out.keySet());
+        assertEquals("t1", out.get("b"));
+        assertEquals("t2", out.get("a"));
+    }
+
+    @Test
+    public void forceMapCodec_parseDropsEmptyKeyOrEmptyGroup() {
+        assertTrue(ForceMapCodec.parse("{\"\":\"t1\"}").isEmpty());
+        assertTrue(ForceMapCodec.parse("{\"k\":\"\"}").isEmpty());
+    }
+
+    @Test
+    public void forceMapCodec_blankOrInvalidJsonReturnsEmpty() {
+        assertTrue(ForceMapCodec.parse(null).isEmpty());
+        assertTrue(ForceMapCodec.parse("").isEmpty());
+        assertTrue(ForceMapCodec.parse("   ").isEmpty());
+        assertTrue(ForceMapCodec.parse("{}").isEmpty());
+        assertTrue(ForceMapCodec.parse("{oops").isEmpty());
+        assertTrue(ForceMapCodec.parse("[1,2]").isEmpty());
+    }
+
+    @Test
+    public void forceMapCodec_parseResultIsMutable() {
+        // 实验页 readForceMap 之后还要 remove/put，候选表必须可变。
+        Map<String, String> out = ForceMapCodec.parse("{\"k\":\"t1\"}");
+        out.remove("k");
+        assertTrue(out.isEmpty());
+    }
+
+    @Test
+    public void forceMapCodec_applyFilterUsesPredicateAndKeepsOrder() {
+        Map<String, String> candidates =
+                ForceMapCodec.parse("{\"a\":\"t1\",\"b\":\"t2\",\"c\":\"t3\"}");
+        Map<String, String> out = ForceMapCodec.applyFilter(candidates,
+                (key, group) -> !"b".equals(key));
+        assertEquals(2, out.size());
+        java.util.List<String> expected = new ArrayList<>(candidates.keySet());
+        expected.remove("b");
+        assertEquals(expected, new ArrayList<>(out.keySet()));
+        assertEquals("t1", out.get("a"));
+        assertEquals("t3", out.get("c"));
     }
 
     /** 只实现 loadSet 用到的两个方法，其余返回默认值。 */

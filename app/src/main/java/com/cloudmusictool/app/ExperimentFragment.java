@@ -15,7 +15,6 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -321,25 +320,11 @@ public class ExperimentFragment extends PreferenceFragmentCompat {
     }
 
     private Map<String, String> readForceMap() {
-        LinkedHashMap<String, String> out = new LinkedHashMap<>();
         String raw = mStore.getString(Config.KEY_ABTEST_FORCE_MAP, null);
-        if (raw == null || raw.isEmpty()) {
-            return out;
-        }
-        try {
-            JSONObject obj = new JSONObject(raw);
-            Iterator<String> keys = obj.keys();
-            while (keys.hasNext()) {
-                String key = keys.next();
-                String group = obj.optString(key, null);
-                if (key != null && !key.isEmpty() && AbTestPolicy.isValidGroup(group)) {
-                    out.put(key, group);
-                }
-            }
-        } catch (Throwable ignored) {
-            // 损坏的 JSON 按空配置处理
-        }
-        return out;
+        // 实验页只校验分组名、不做白名单/黑名单过滤（需展示全部已强开项）；
+        // 公共 JSON 解析收敛在 ForceMapCodec。
+        return ForceMapCodec.applyFilter(ForceMapCodec.parse(raw),
+                (key, group) -> AbTestPolicy.isValidGroup(group));
     }
 
     /** @return true 表示已写入 remote prefs；false 表示框架未连接或提交失败。 */
