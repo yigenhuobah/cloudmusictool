@@ -73,37 +73,4 @@ public final class DexKitAnchors {
     public static final String[] DR_H = {
             "RecommendTwoFlowAdapter"
     };
-
-    /** 按逻辑名取 anchor；未知逻辑名返回 null。 */
-    public static String[] of(String logicalName) {
-        if (logicalName == null) {
-            return null;
-        }
-        switch (logicalName) {
-            case "LoadingAdManager":
-                return LOADING_AD_MANAGER;
-            case "q60.w0":
-                return Q60_W0;
-            case "th0.h":
-                return TH0_H;
-            case "rh0.c":
-                return RH0_C;
-            case "tt0.d":
-                return TT0_D;
-            case "vt0.r":
-                return VT0_R;
-            case "lv0.j":
-                return LV0_J;
-            case "fw0.e":
-                return FW0_E;
-            case "appupdate.d":
-                return APPUPDATE_D;
-            case "dr.h":
-                return DR_H;
-            case "jn":
-                return JN;
-            default:
-                return null;
-        }
-    }
 }

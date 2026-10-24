@@ -38,8 +38,4 @@ public final class ProfileRegistry {
     public static TargetProfile active() {
         return sActive;
     }
-
-    public static void clearActive() {
-        sActive = null;
-    }
 }

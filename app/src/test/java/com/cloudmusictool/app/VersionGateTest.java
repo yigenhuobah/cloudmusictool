@@ -14,19 +14,4 @@ public class VersionGateTest {
         assertFalse(VersionGate.isSupportedVersion("9.6.09"));
         assertFalse(VersionGate.isSupportedVersion(null));
     }
-
-    @Test
-    public void shouldProceed_unknownVersionIsBestEffort() {
-        assertTrue(VersionGate.shouldProceed(null));
-    }
-
-    @Test
-    public void shouldProceed_supportedVersion() {
-        assertTrue(VersionGate.shouldProceed("9.6.13"));
-    }
-
-    @Test
-    public void shouldProceed_unsupportedVersionIsFailOpen() {
-        assertTrue(VersionGate.shouldProceed("9.6.09"));
-    }
 }

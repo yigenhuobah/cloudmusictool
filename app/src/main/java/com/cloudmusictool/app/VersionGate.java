@@ -187,9 +187,4 @@ public final class VersionGate {
     public static boolean isSupportedVersion(String versionName) {
         return SUPPORTED_VERSION.equals(versionName) || LEGACY_VERSION.equals(versionName);
     }
-
-    /** 纯函数版本门禁：与 QuietBox 一致，任何版本都 fail-open。 */
-    public static boolean shouldProceed(String versionName) {
-        return true;
-    }
 }
