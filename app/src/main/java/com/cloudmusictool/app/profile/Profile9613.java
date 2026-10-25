@@ -190,6 +190,22 @@ public final class Profile9613 {
                                 "Lcom/netease/cloudmusic/meta/LyricDialogData;"
                         }));
 
+        // EN-01 fullScreen 注入入口：pc2 包整体改名 nb2（方法名/签名不变，
+        // dexsql method_strings 'my_music_sp'/'user/page/pretend' 定位核对）。
+        out.put("EN-01/BgInfoParser#B",
+                MountSpec.method("EN-01", "BgInfoParser#B", false,
+                        new String[]{"nb2.e$a", "pc2.e$a"},
+                        "B", "Lkotlin/Pair;",
+                        new String[]{"Lorg/json/JSONObject;"}));
+        out.put("EN-01/BgStore#g",
+                MountSpec.method("EN-01", "BgStore#g", false,
+                        new String[]{"nb2.f", "pc2.f"},
+                        "g", "Ljava/lang/String;", new String[]{"J"}));
+        out.put("EN-01/BgStore#s",
+                MountSpec.method("EN-01", "BgStore#s", false,
+                        new String[]{"nb2.f", "pc2.f"},
+                        "s", "Z", new String[]{"J", "Ljava/lang/String;"}));
+
         return out;
     }
 

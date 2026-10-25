@@ -81,6 +81,35 @@ public class HookKitKeepFilterTest {
         }
     }
 
+    /**
+     * 模拟 9.6.13 的 DiscoveryTabInfo：getTitle/getCode 声明在父类
+     * DiscoveryBaseTabInfo，子类本身没有这两个 getter。ArkFragmentV2 的
+     * getTabDataList()/getTabData() 返回的就是这种对象。
+     */
+    public static class BaseTabPojo {
+        private final String title;
+        private final String code;
+
+        BaseTabPojo(String title, String code) {
+            this.title = title;
+            this.code = code;
+        }
+
+        public String getTitle() {
+            return title;
+        }
+
+        public String getCode() {
+            return code;
+        }
+    }
+
+    public static final class InheritedTabPojo extends BaseTabPojo {
+        InheritedTabPojo(String title, String code) {
+            super(title, code);
+        }
+    }
+
     /** shouldKeepTab 的 getter 顺序：getTitle -> getTabName -> getName -> getCode -> getTabTitle -> getTabCode。 */
     public static final class TabPojo {
         private final String title;
@@ -158,6 +187,15 @@ public class HookKitKeepFilterTest {
         assertFalse(shouldKeepItem(null, keep("推荐")));
         assertFalse(shouldKeepItem(pojo, null));
         assertFalse(shouldKeepItem(pojo, Collections.<String>emptySet()));
+    }
+
+    @Test
+    public void item_inheritedGetters_match() throws Exception {
+        // ArkFragmentV2 的 DiscoveryTabInfo 把 getTitle/getCode 放在父类
+        // DiscoveryBaseTabInfo；shouldKeepItem 必须能沿继承链找到。
+        assertTrue(shouldKeepItem(new InheritedTabPojo("心动", "heartbeat"), keep("心动")));
+        assertTrue(shouldKeepItem(new InheritedTabPojo("播客", "podcast"), keep("podcast")));
+        assertFalse(shouldKeepItem(new InheritedTabPojo("听书", "audiobook"), keep("心动", "推荐")));
     }
 
     @Test

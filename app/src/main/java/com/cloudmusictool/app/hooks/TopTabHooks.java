@@ -44,13 +44,53 @@ public final class TopTabHooks {
             Collections.synchronizedSet(new HashSet<>());
     private static final AtomicBoolean sEmptyConfigLogged = new AtomicBoolean();
     private static final AtomicBoolean sNoMatchLogged = new AtomicBoolean();
+    private static final AtomicBoolean sRuntimeHooksInstalled = new AtomicBoolean();
 
     private TopTabHooks() {
     }
 
     public static void install(XposedModule module, ClassLoader cl, Config config) {
-        Feature f = Feature.TOP_CHANNELS;
+        installBootstrap(module, cl, config);
+    }
 
+    /**
+     * UI-04 的类钩子不能直接挂在启动时的 ClassLoader 上：网易云 9.6.13
+     * 运行时使用 Tinker 的 DelegateLastClassLoader 加载热修 dex（
+     * /data/user/0/&lt;pkg&gt;/tinker/patch-xxx/dex/tinker_classN.apk），启动阶段
+     * 拿到的 cl 是 base 副本，直接挂会全部 registered 但零命中。
+     *
+     * 改为在第一个 Activity#onCreate 时用该 Activity 的运行时 ClassLoader
+     * 安装；Tinker 设备命中热修类，非 Tinker 设备命中原类，两边一致。
+     */
+    private static void installBootstrap(XposedModule module, ClassLoader cl, Config config) {
+        try {
+            Class<?> activityCls = HookKit.findClass(module, null, cl, "android.app.Activity");
+            if (activityCls == null) {
+                return;
+            }
+            Method onCreate = HookKit.findMethodQuiet(activityCls, "onCreate", android.os.Bundle.class);
+            if (onCreate == null) {
+                return;
+            }
+            HookKit.install(module, null, "UI-04/bootstrap", onCreate, chain -> {
+                try {
+                    Object self = chain.getThisObject();
+                    ClassLoader runtimeCl = self != null ? self.getClass().getClassLoader() : cl;
+                    if (runtimeCl != null && sRuntimeHooksInstalled.compareAndSet(false, true)) {
+                        HookKit.info(module, "UI-04 runtime loader " + runtimeCl);
+                        installFeatureHooks(module, runtimeCl, Feature.TOP_CHANNELS, config);
+                    }
+                } catch (Throwable t) {
+                    HookKit.error(module, "UI-04 bootstrap failed", t);
+                }
+                return chain.proceed();
+            });
+        } catch (Throwable t) {
+            HookKit.error(module, "UI-04 bootstrap install failed", t);
+        }
+    }
+
+    private static void installFeatureHooks(XposedModule module, ClassLoader cl, Feature f, Config config) {
         // 1. HomeTopTabInfo 解锁删除与拖拽（频道管理页）
         try {
             Class<?> tabInfoCls = HookKit.findClass(module, f, cl,
@@ -77,6 +117,8 @@ public final class TopTabHooks {
         // 3. 真实数据/渲染链路
         installAdapterDataFilter(module, cl, f, config);
         installTabDataList(module, cl, f, config);
+        installV2TabDataList(module, cl, f, config);
+        installArkViewDataFilter(module, cl, f, config);
         installTabAddGuard(module, cl, f, config);
     }
 
@@ -236,6 +278,92 @@ public final class TopTabHooks {
             }
         } catch (Throwable t) {
             HookKit.error(module, f.id + " BaseArkV3Fragment hook failed", t);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 9.6.13 旧框架首页：ArkFragmentV2 + DiscoveryTabInfo
+    // ------------------------------------------------------------------
+
+    /**
+     * 9.6.13 还存在 ArkFragmentV2 + DiscoveryTabInfo 的旧框架链路
+     * （AB 或其他构建可能使用）。本机真机首页实际走 V3，但 V2 的
+     * getTabDataList()/getTabData() 返回 List&lt;DiscoveryTabInfo&gt;，
+     * 元素继承 DiscoveryBaseTabInfo 的 getTitle/getCode，可直接复用
+     * filterList，作为并行覆盖保留。
+     */
+    private static void installV2TabDataList(XposedModule module, ClassLoader cl, Feature f, Config config) {
+        try {
+            Class<?> fragCls = HookKit.findClass(module, f, cl,
+                    "com.netease.cloudmusic.discovery.view.newframework.ArkFragmentV2");
+            if (fragCls == null) {
+                return;
+            }
+            String[] methods = {"getTabDataList", "getTabData"};
+            for (String methodName : methods) {
+                Method m = HookKit.findMethodQuiet(fragCls, methodName);
+                if (m == null) {
+                    continue;
+                }
+                final String label = "ArkFragmentV2#" + methodName;
+                HookKit.install(module, f, label, m, chain -> {
+                    Object res = chain.proceed();
+                    try {
+                        if (res instanceof List) {
+                            List<Object> out = filterList(module, f, config, (List<?>) res, label);
+                            if (out != null) {
+                                return out;
+                            }
+                        }
+                    } catch (Throwable t) {
+                        HookKit.error(module, f.id + " intercept error " + label, t);
+                    }
+                    return res;
+                });
+            }
+        } catch (Throwable t) {
+            HookKit.error(module, f.id + " ArkFragmentV2 hook failed", t);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 9.6 首页真实渲染链路：arkview.ArkFragment + HomeTopTabInfo
+    // ------------------------------------------------------------------
+
+    /**
+     * arkview.ArkFragment 是另一套可选首页容器：
+     * refreshData/refreshCGroupData 先把 HomeTopTabGetResult 里的
+     * nowChannelItems 过滤成 List&lt;HomeTopTabInfo&gt;，再统一交给
+     * refreshAdapterData(List) 建 ViewPager2 与 tab。
+     *
+     * 本机 9.6.13 真机首页走 ArkFragmentV3WithQuickListen/BaseArkV3Fragment，
+     * 未命中这条链路；保留覆盖，防止 AB 或其他构建切换容器。
+     */
+    private static void installArkViewDataFilter(XposedModule module, ClassLoader cl, Feature f, Config config) {
+        try {
+            Class<?> fragCls = HookKit.findClass(module, f, cl,
+                    "com.netease.cloudmusic.discovery.view.arkview.ArkFragment");
+            if (fragCls == null) {
+                return;
+            }
+            Method refresh = HookKit.findMethodQuiet(fragCls, "refreshAdapterData", List.class);
+            if (refresh == null) {
+                return;
+            }
+            HookKit.install(module, f, "arkview.ArkFragment#refreshAdapterData", refresh, chain -> {
+                try {
+                    Object[] newArgs = filterFirstListArg(module, f, config, chain.getArgs(),
+                            "arkview.ArkFragment#refreshAdapterData");
+                    if (newArgs != null) {
+                        return chain.proceed(newArgs);
+                    }
+                } catch (Throwable t) {
+                    HookKit.error(module, f.id + " intercept error arkview.refreshAdapterData", t);
+                }
+                return chain.proceed();
+            });
+        } catch (Throwable t) {
+            HookKit.error(module, f.id + " arkview.ArkFragment hook failed", t);
         }
     }
 

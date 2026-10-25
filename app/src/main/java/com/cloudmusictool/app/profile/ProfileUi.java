@@ -94,6 +94,18 @@ public final class ProfileUi {
         out.add(m("UI-04", "hometoptab.v2.UserSettingDTO#getCurrentRes", false,
                 "com.netease.cloudmusic.discovery.view.module.hometoptab.v2.UserSettingDTO",
                 "getCurrentRes", "Ljava/util/List;", NONE));
+        // 9.6.13 首页的旧框架链路（ArkFragmentV2 + DiscoveryTabInfo），与 V3 并存。
+        out.add(m("UI-04", "ArkFragmentV2#getTabDataList", true,
+                "com.netease.cloudmusic.discovery.view.newframework.ArkFragmentV2",
+                "getTabDataList", "Ljava/util/List;", NONE));
+        out.add(m("UI-04", "ArkFragmentV2#getTabData", false,
+                "com.netease.cloudmusic.discovery.view.newframework.ArkFragmentV2",
+                "getTabData", "Ljava/util/List;", NONE));
+        // 9.6 首页真实渲染链路：arkview.ArkFragment 把 HomeTopTabInfo 列表
+        // 交给 refreshAdapterData(List) 建 ViewPager2 与顶部 tab。
+        out.add(m("UI-04", "arkview.ArkFragment#refreshAdapterData", true,
+                "com.netease.cloudmusic.discovery.view.arkview.ArkFragment",
+                "refreshAdapterData", "V", new String[]{"Ljava/util/List;"}));
         out.add(m("UI-04", "BaseArkV3Fragment#getTabDataList", true,
                 "com.netease.cloudmusic.discovery.view.newframework.BaseArkV3Fragment",
                 "getTabDataList", "Ljava/util/List;", NONE));
@@ -320,6 +332,18 @@ public final class ProfileUi {
         out.add(m("EN-01", "MyMusicProfileHeaderBgViewHolderManager#onResume", false,
                 "com.netease.cloudmusic.vh.MyMusicProfileHeaderBgViewHolderManager",
                 "onResume", "V", NONE));
+        // fullScreen(validType=4) 注入的三个数据入口，9.6.13 起整包改名
+        // pc2.* -> nb2.*（方法签名不变，坐标覆盖见 Profile9613）。
+        out.add(m("EN-01", "BgInfoParser#B", false,
+                "pc2.e$a",
+                "B", "Lkotlin/Pair;",
+                new String[]{"Lorg/json/JSONObject;"}));
+        out.add(m("EN-01", "BgStore#g", false,
+                "pc2.f",
+                "g", "Ljava/lang/String;", new String[]{"J"}));
+        out.add(m("EN-01", "BgStore#s", false,
+                "pc2.f",
+                "s", "Z", new String[]{"J", "Ljava/lang/String;"}));
 
         // ------------------------------------------------------------------
         // UI-15 云村 / 直播推广
