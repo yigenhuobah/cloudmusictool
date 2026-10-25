@@ -30,6 +30,7 @@ import com.google.android.material.color.DynamicColors;
 public class MainActivity extends AppCompatActivity {
 
     private static final String STATE_TAB = "state_tab";
+
     private static final String TAG_SETTINGS = "tab_settings";
     private static final String TAG_EXPERIMENTS = "tab_experiments";
     private static final String TAG_DIAGNOSTICS = "tab_diagnostics";
