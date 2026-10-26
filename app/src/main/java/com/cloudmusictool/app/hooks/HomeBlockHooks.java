@@ -2,41 +2,78 @@ package com.cloudmusictool.app.hooks;
 
 import com.cloudmusictool.app.Config;
 import com.cloudmusictool.app.Feature;
+import com.cloudmusictool.app.HookState;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ConcurrentHashMap;
 
 import io.github.libxposed.api.XposedModule;
 
 /**
  * UI-03 首页模块净化。
  *
- * 9.6.08 的“推荐”页走 DSL / MixContainer 链路，模块顺序由
- * MixContainerData.getBlockCodeOrderList() 返回的 JSON 数组决定；
- * 旧的 DiscoveryBlockData.getBlockList() 仅覆盖经典发现页。
- * 两个数据源都做过滤，并按 key 前缀兜底处理 MMKV 中的旧缓存。
+ * 9.6.13 推荐页走 DSL / MixContainer 链路：MixContainerData.getResources() 返回
+ * List&lt;com.netease.luna.cm.container.Block&gt;，模块身份在 Block.getPositionCode()；
+ * getBlockCodeOrderList() 只是分页请求参数，过滤它不会移除当前已渲染模块。
+ * 因此主链路是 getResources()，并同步从 blockCodeOrderList 中剔除已删 code。
+ *
+ * 9.6.13 运行时使用 Tinker DelegateLastClassLoader，启动阶段拿到的 ClassLoader
+ * 与运行时不同，安装统一交给 {@link RuntimeHookBootstrap}，在首个 Activity#onCreate
+ * 用运行时 ClassLoader 执行。
  */
 public final class HomeBlockHooks {
 
     private static final int MAX_JSON_CHARS = 16 * 1024 * 1024;
-    private static final AtomicInteger sScanLogs = new AtomicInteger();
+    /** 同一 Feature 的扫描日志（无命中）最短间隔，避免宿主高频调用刷屏。 */
+    private static final long SCAN_LOG_INTERVAL_MS = 10_000L;
+
+    /** 已从 getResources() 删除的 block code，供 getBlockCodeOrderList() 同步剔除。 */
+    private static final Set<String> sRemovedCodes = ConcurrentHashMap.newKeySet();
+    /** 运行时 ClassLoader，仅用于扫描日志诊断 Tinker loader 身份。 */
+    private static volatile ClassLoader sRuntimeLoader;
+    /** 限流键 = Feature + 日志点，各日志点独立 10 秒一次，避免互相饿死。 */
+    private static final java.util.Map<String, Long> sScanLogAt = new ConcurrentHashMap<>();
 
     private HomeBlockHooks() {
     }
 
+    /**
+     * 只登记 installer 并确保 Activity#onCreate 引导钩子存在；真正的类/方法 hook
+     * 在运行时 ClassLoader 下执行（9.6.13 Tinker 设备必需）。
+     */
     public static void install(XposedModule module, ClassLoader cl, Config config) {
+        RuntimeHookBootstrap.register(Feature.HOME_BLOCKS,
+                HomeBlockHooks::installRuntimeHooks, config);
+        RuntimeHookBootstrap.ensureInstalled(module, cl);
+    }
+
+    private static void installRuntimeHooks(XposedModule module, ClassLoader cl, Config config) {
+        sRuntimeLoader = cl;
         Feature f = Feature.HOME_BLOCKS;
 
         hookMixContainer(module, cl, f, config);
         hookDiscoveryBlockList(module, cl, f, config);
         hookMmkv(module, cl, f, config);
+        HookState.finish(f);
+    }
+
+    private static boolean shouldLogScan(Feature f, String site) {
+        String key = f.id + "|" + site;
+        long now = System.currentTimeMillis();
+        Long prev = sScanLogAt.get(key);
+        if (prev == null) {
+            return sScanLogAt.putIfAbsent(key, now) == null;
+        }
+        if (now - prev < SCAN_LOG_INTERVAL_MS) {
+            return false;
+        }
+        return sScanLogAt.replace(key, prev, now);
     }
 
     // ------------------------------------------------------------------
@@ -54,6 +91,7 @@ public final class HomeBlockHooks {
             Method order = HookKit.findMethodQuiet(dataCls, "getBlockCodeOrderList");
             if (order != null) {
                 HookKit.install(module, f, "MixContainerData#getBlockCodeOrderList", order, chain -> {
+                    HookState.entry(f);
                     Object res = chain.proceed();
                     try {
                         if (res instanceof String) {
@@ -69,6 +107,7 @@ public final class HomeBlockHooks {
             Method resources = HookKit.findMethodQuiet(dataCls, "getResources");
             if (resources != null) {
                 HookKit.install(module, f, "MixContainerData#getResources", resources, chain -> {
+                    HookState.entry(f);
                     Object res = chain.proceed();
                     try {
                         if (res instanceof List) {
@@ -88,17 +127,21 @@ public final class HomeBlockHooks {
     /** blockCodeOrderList 是形如 ["PAGE_RECOMMEND_X", ...] 的 JSON 数组字符串。 */
     private static String filterCodeListString(XposedModule module, Feature f, Config config, String json) {
         Set<String> hideSet = config.getFilterSet(Config.KEY_HOME_BLOCKS_FILTER);
-        if (hideSet == null || hideSet.isEmpty() || json == null || json.isEmpty()) {
+        if ((hideSet == null || hideSet.isEmpty()) && sRemovedCodes.isEmpty()) {
+            return json;
+        }
+        if (json == null || json.isEmpty()) {
             return json;
         }
         int[] removed = new int[]{0};
-        String out = JsonFilter.filterCodeListString(json, hideSet, removed);
+        String out = JsonFilter.filterCodeListString(json, hideSet, sRemovedCodes, removed);
         if (removed[0] > 0) {
             HookKit.hit(module, f, "blockCodeOrderList filtered " + removed[0] + "/" + countJsonArray(json));
             return out;
         }
-        if (sScanLogs.getAndIncrement() < 8) {
-            HookKit.info(module, f.id + " blockCodeOrderList scan len=" + countJsonArray(json) + " no-match");
+        if (shouldLogScan(f, "order")) {
+            HookKit.info(module, f.id + " blockCodeOrderList scan len=" + countJsonArray(json)
+                    + " loader=" + loaderId(sRuntimeLoader) + " no-match");
         }
         return json;
     }
@@ -111,17 +154,31 @@ public final class HomeBlockHooks {
         }
     }
 
-    /** resources 列表的元素可能是 JSONObject 或带 getBlockCode/getCode 的对象。 */
+    /**
+     * getResources() 的元素是 com.netease.luna.cm.container.Block（DslBlock /
+     * NativeBlock / RnBlock / 普通 Block）。主匹配用 Block.getPositionCode()，
+     * DslBlock 再用 originData 正则补充，NativeBlock 用 nativeData/originServerData
+     * 兜底。removed=0 时也按 10 秒限流打印一次扫描日志，便于真机核对 block 类型与 code。
+     */
     private static Object filterResourceList(XposedModule module, Feature f, Config config, List<?> list) {
         Set<String> hideSet = config.getFilterSet(Config.KEY_HOME_BLOCKS_FILTER);
-        if (hideSet == null || hideSet.isEmpty() || list.isEmpty()) {
+        if (list.isEmpty()) {
+            return list;
+        }
+        if (hideSet == null || hideSet.isEmpty()) {
+            logResourceScan(module, f, list);
             return list;
         }
         List<Object> out = new ArrayList<>(list.size());
         int removed = 0;
         for (Object item : list) {
-            if (matchesHide(item, hideSet)) {
+            Set<String> tokens = collectTokens(item);
+            if (matchesTokens(tokens, hideSet)) {
                 removed++;
+                String code = firstToken(tokens);
+                if (code != null && !code.isEmpty()) {
+                    sRemovedCodes.add(code);
+                }
                 continue;
             }
             out.add(item);
@@ -130,12 +187,68 @@ public final class HomeBlockHooks {
             HookKit.hit(module, f, "resources filtered " + removed + "/" + list.size());
             return out;
         }
+        logResourceScan(module, f, list);
         return list;
     }
 
-    private static boolean matchesHide(Object item, Set<String> hideSet) {
-        java.util.Set<String> tokens = collectCodes(item);
+    private static void logResourceScan(XposedModule module, Feature f, List<?> list) {
+        if (!shouldLogScan(f, "resources")) {
+            return;
+        }
+        StringBuilder sb = new StringBuilder(192);
+        sb.append(f.id).append(" resources scan loader=").append(loaderId(sRuntimeLoader))
+                .append(" size=").append(list.size()).append(" no-match");
+        int count = Math.min(5, list.size());
+        for (int i = 0; i < count; i++) {
+            Object item = list.get(i);
+            sb.append("; [").append(i).append("]=");
+            if (item == null) {
+                sb.append("null");
+                continue;
+            }
+            sb.append(item.getClass().getName())
+                    .append(" code=").append(positionCodeOf(item));
+        }
+        HookKit.info(module, sb.toString());
+    }
+
+    private static String loaderId(ClassLoader cl) {
+        if (cl == null) {
+            return "null";
+        }
+        String s = String.valueOf(cl);
+        return s.length() <= 200 ? s : s.substring(0, 200) + "…";
+    }
+
+    private static String positionCodeOf(Object item) {
+        return asString(HookKit.invokeNoArg(item, "getPositionCode"));
+    }
+
+    private static String firstToken(Set<String> tokens) {
+        for (String t : tokens) {
+            return t;
+        }
+        return null;
+    }
+
+    private static Set<String> collectTokens(Object item) {
+        Set<String> tokens = collectCodes(item);
         collectModuleKeys(item, tokens);
+        return tokens;
+    }
+
+    /** 纯函数：item 是否命中 hideSet。包私有便于 JVM 单测。 */
+    static boolean matchesHide(Object item, Set<String> hideSet) {
+        if (item == null || hideSet == null || hideSet.isEmpty()) {
+            return false;
+        }
+        return matchesTokens(collectTokens(item), hideSet);
+    }
+
+    private static boolean matchesTokens(Set<String> tokens, Set<String> hideSet) {
+        if (tokens.isEmpty()) {
+            return false;
+        }
         for (String code : hideSet) {
             if (tokens.contains(code)) {
                 return true;
@@ -156,8 +269,9 @@ public final class HomeBlockHooks {
     }
 
     /**
-     * 9.6.08 推荐页部分模块没有 PAGE_ 代码，身份在 DSL 模块 key（home_*_module_*）里。
-     * 这里只登记真机逐块核对过的映射，未验证的一律不动。
+     * 9.6.08/9.6.13 推荐页部分模块没有 PAGE_ 代码，身份在 DSL 模块 key
+     * （home_*_module_*）或旧 code 里。这里只登记核对过的映射；
+     * 9.6.13 疑似改名项用别名并存，不删除旧项。
      */
     private static final java.util.Map<String, String[]> ALIASES = new java.util.HashMap<>();
 
@@ -168,6 +282,12 @@ public final class HomeBlockHooks {
         ALIASES.put("PAGE_RECOMMEND_RADAR", new String[]{"home_radar_playlist_module"});
         // 排行榜
         ALIASES.put("PAGE_RECOMMEND_RANK", new String[]{"PAGE_BLOCK_TOPLIST"});
+        // 9.6.13 疑似改名：BANNER_1 / BANNER_6 -> BANNER_0
+        ALIASES.put("PAGE_RECOMMEND_BANNER_1", new String[]{"PAGE_RECOMMEND_BANNER_0"});
+        ALIASES.put("PAGE_RECOMMEND_BANNER_6", new String[]{"PAGE_RECOMMEND_BANNER_0"});
+        // 9.6.13 播客模块疑似改名：SUB_UPDATE -> NARROW_SCENE
+        ALIASES.put("PAGE_RECOMMEND_PODCAST_SUB_UPDATE",
+                new String[]{"PAGE_RECOMMEND_PODCAST_NARROW_SCENE"});
     }
 
     private static void collectModuleKeys(Object item, java.util.Set<String> out) {
@@ -186,8 +306,11 @@ public final class HomeBlockHooks {
             java.util.regex.Pattern.compile("home_[a-z0-9_]{6,}");
 
     /**
-     * DslBlock -> getDslWrapperModel() 的 originData 里能找到 PAGE_* 代码
-     * （blockCode / s_cid / 目录项），优先取这些；找不到时退化到模板 id。
+     * 9.6.13 的 Block（DslBlock / NativeBlock / RnBlock / 普通 Block）统一带
+     * getPositionCode()，这是 PAGE_RECOMMEND_* code 的主载体。
+     * DslBlock 额外从 getDslWrapperModel() 的 originData/extData/dslContent
+     * 提取 blockCode / PAGE_* 正则作为补充；NativeBlock 在 positionCode 缺失时
+     * 用 nativeData / originServerData 的 positionCode/blockCode 兜底。
      */
     private static java.util.Set<String> collectCodes(Object item) {
         java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
@@ -196,11 +319,16 @@ public final class HomeBlockHooks {
         }
         if (item instanceof JSONObject) {
             JSONObject obj = (JSONObject) item;
+            addIfPresent(out, obj.optString("positionCode", null));
             addIfPresent(out, obj.optString("blockCode", null));
             addIfPresent(out, obj.optString("block_code", null));
             return out;
         }
 
+        // 1) 主匹配：Block.getPositionCode()（9.6.13 推荐页 NativeBlock 也适用）。
+        addIfPresent(out, positionCodeOf(item));
+
+        // 2) DslBlock 补充：originData/extData/dslContent 中的 code。
         Object model = HookKit.invokeNoArg(item, "getDslWrapperModel");
         if (model != null) {
             Object origin = HookKit.invokeNoArg(model, "getOriginData");
@@ -211,17 +339,19 @@ public final class HomeBlockHooks {
             collectPageCodes(out, ext, 8);
             Object dsl = HookKit.invokeNoArg(model, "getDslContent");
             collectPageCodes(out, dsl, 8);
+            return out;
         }
 
+        // 3) NativeBlock 兜底：positionCode 缺失时从原生数据里取。
         if (out.isEmpty()) {
-            String[] getters = {"getBlockCode", "getCode", "getBlockCodeStr"};
-            for (String name : getters) {
-                String v = asString(HookKit.invokeNoArg(item, name));
-                if (v != null && !v.isEmpty()) {
-                    addIfPresent(out, v);
-                    break;
-                }
-            }
+            Object nativeData = HookKit.invokeNoArg(item, "getNativeData");
+            addIfPresent(out, jsonString(nativeData, "positionCode"));
+            addIfPresent(out, jsonString(nativeData, "blockCode"));
+            addIfPresent(out, jsonString(nativeData, "block_code"));
+            Object originServer = HookKit.invokeNoArg(item, "getOriginServerData");
+            addIfPresent(out, jsonString(originServer, "positionCode"));
+            addIfPresent(out, jsonString(originServer, "blockCode"));
+            addIfPresent(out, jsonString(originServer, "block_code"));
         }
         return out;
     }
@@ -288,6 +418,7 @@ public final class HomeBlockHooks {
             }
             Method getBlockList = HookKit.findMethod(module, f, blockDataCls, "getBlockList");
             HookKit.install(module, f, "DiscoveryBlockData#getBlockList", getBlockList, chain -> {
+                HookState.entry(f);
                 Object res = chain.proceed();
                 try {
                     if (!(res instanceof List)) {
@@ -316,7 +447,7 @@ public final class HomeBlockHooks {
                         HookKit.hit(module, f, "getBlockList filtered " + removed + " blocks");
                         return out;
                     }
-                    if (sScanLogs.getAndIncrement() < 8) {
+                    if (shouldLogScan(f, "blockList")) {
                         HookKit.info(module, f.id + " getBlockList scan size=" + list.size()
                                 + " first=" + firstCls + " no-match");
                     }
@@ -476,7 +607,7 @@ public final class HomeBlockHooks {
                         + shortName(store) + "/" + shortName(key) + ")");
                 return filtered.toString();
             }
-            if (sScanLogs.getAndIncrement() < 8) {
+            if (shouldLogScan(f, "cache")) {
                 HookKit.info(module, f.id + " cache scan " + shortName(store) + "/" + shortName(key)
                         + " len=" + str.length() + " no-match");
             }

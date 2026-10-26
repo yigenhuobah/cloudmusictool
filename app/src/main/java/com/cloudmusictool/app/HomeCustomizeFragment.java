@@ -24,12 +24,18 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
 
     private ConfigStore mStore;
 
+    // 9.6.13 新增 6 项（BANNER_0 / GREETING / NOTE / PODCAST_NARROW_SCENE /
+    // SEARCH_TOP_BANNER / SECONDARY_TAB）与旧 30 项并存；疑似改名项保留旧 code，
+    // 另列新 code（PAGE_BLOCK_TOPLIST / BANNER_0 / PODCAST_NARROW_SCENE）。
     private static final String[] BLOCK_KEYS = {
             "PAGE_RECOMMEND_PRIVATE_RCMD_SONG",
             "PAGE_RECOMMEND_RANK",
+            "PAGE_BLOCK_TOPLIST",
             "PAGE_RECOMMEND_SHORTCUT",
             "PAGE_RECOMMEND_RADAR",
             "PAGE_RECOMMEND_DAILY_RECOMMEND",
+            "PAGE_RECOMMEND_GREETING",
+            "PAGE_RECOMMEND_NOTE",
             "PAGE_RECOMMEND_NEW_SONG_AND_ALBUM",
             "PAGE_RECOMMEND_SPECIAL_CLOUD_VILLAGE_PLAYLIST",
             "PAGE_RECOMMEND_RED_SIMILAR_SONG",
@@ -42,9 +48,13 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
             "PAGE_RECOMMEND_VIP_SMALL_CARD",
             "PAGE_RECOMMEND_BANNER_1",
             "PAGE_RECOMMEND_BANNER_6",
+            "PAGE_RECOMMEND_BANNER_0",
+            "PAGE_RECOMMEND_SEARCH_TOP_BANNER",
+            "PAGE_RECOMMEND_SECONDARY_TAB",
             "PAGE_RECOMMEND_PODCAST_RADIO_PROGRAM",
             "PAGE_RECOMMEND_PODCAST_MUSIC_RADIO",
             "PAGE_RECOMMEND_PODCAST_SUB_UPDATE",
+            "PAGE_RECOMMEND_PODCAST_NARROW_SCENE",
             "PAGE_RECOMMEND_PODCAST_RELATE_PROGRAM",
             "PAGE_RECOMMEND_ARTIST_TREND",
             "PAGE_RECOMMEND_ARTIST_FM_LIST",

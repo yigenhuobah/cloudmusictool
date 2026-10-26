@@ -235,9 +235,12 @@
     <string-array name="home_block_titles">
         <item>猜你喜欢</item>
         <item>排行榜</item>
+        <item>排行榜（备用 code）</item>
         <item>快捷入口（每日推荐/心动模式等）</item>
         <item>雷达歌单</item>
         <item>每日推荐</item>
+        <item>首页问候语</item>
+        <item>笔记卡片</item>
         <item>新歌新碟</item>
         <item>云村精选歌单</item>
         <item>红心相似推荐</item>
@@ -250,9 +253,13 @@
         <item>VIP 小卡片</item>
         <item>运营 Banner 1</item>
         <item>运营 Banner 6</item>
+        <item>运营 Banner 0</item>
+        <item>搜索顶部 Banner</item>
+        <item>首页二级 Tab</item>
         <item>播客电台</item>
         <item>播客音乐电台</item>
         <item>播客订阅更新</item>
+        <item>播客窄场景</item>
         <item>播客关联节目</item>
         <item>艺人动态</item>
         <item>艺人 FM</item>
