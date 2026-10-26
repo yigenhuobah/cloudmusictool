@@ -24,12 +24,18 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
 
     private ConfigStore mStore;
 
+    // 9.6.13 新增 6 项（BANNER_0 / GREETING / NOTE / PODCAST_NARROW_SCENE /
+    // SEARCH_TOP_BANNER / SECONDARY_TAB）与旧 30 项并存；疑似改名项保留旧 code，
+    // 另列新 code（PAGE_BLOCK_TOPLIST / BANNER_0 / PODCAST_NARROW_SCENE）。
     private static final String[] BLOCK_KEYS = {
             "PAGE_RECOMMEND_PRIVATE_RCMD_SONG",
             "PAGE_RECOMMEND_RANK",
+            "PAGE_BLOCK_TOPLIST",
             "PAGE_RECOMMEND_SHORTCUT",
             "PAGE_RECOMMEND_RADAR",
             "PAGE_RECOMMEND_DAILY_RECOMMEND",
+            "PAGE_RECOMMEND_GREETING",
+            "PAGE_RECOMMEND_NOTE",
             "PAGE_RECOMMEND_NEW_SONG_AND_ALBUM",
             "PAGE_RECOMMEND_SPECIAL_CLOUD_VILLAGE_PLAYLIST",
             "PAGE_RECOMMEND_RED_SIMILAR_SONG",
@@ -42,9 +48,13 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
             "PAGE_RECOMMEND_VIP_SMALL_CARD",
             "PAGE_RECOMMEND_BANNER_1",
             "PAGE_RECOMMEND_BANNER_6",
+            "PAGE_RECOMMEND_BANNER_0",
+            "PAGE_RECOMMEND_SEARCH_TOP_BANNER",
+            "PAGE_RECOMMEND_SECONDARY_TAB",
             "PAGE_RECOMMEND_PODCAST_RADIO_PROGRAM",
             "PAGE_RECOMMEND_PODCAST_MUSIC_RADIO",
             "PAGE_RECOMMEND_PODCAST_SUB_UPDATE",
+            "PAGE_RECOMMEND_PODCAST_NARROW_SCENE",
             "PAGE_RECOMMEND_PODCAST_RELATE_PROGRAM",
             "PAGE_RECOMMEND_ARTIST_TREND",
             "PAGE_RECOMMEND_ARTIST_FM_LIST",
@@ -62,9 +72,11 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
             "心动", "推荐", "音乐", "播客", "听书", "AI写歌"
     };
 
-    // 底部导航（与 9.6.08 实测 tab 对齐：getTabTitle/getTabCode）
+    // 底部导航：前 4 项是 9.6.08 实测 tab 标题；后 2 项是 9.6.13 新增 tab 的
+    // tabCode（social=云村、publish=发布）。匹配逻辑是「标题或 code 任一命中」，
+    // 因此旧标题保留，同时新增 code 保证 9.6.13 新 tab 可单独保留。
     private static final String[] BOTTOM_NAV_KEYS = {
-            "首页", "搜索", "关注", "我的"
+            "首页", "搜索", "关注", "我的", "social", "publish"
     };
 
     @Override

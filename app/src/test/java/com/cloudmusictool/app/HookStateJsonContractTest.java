@@ -82,6 +82,45 @@ public class HookStateJsonContractTest {
     }
 
     @Test
+    public void installedClearsUnavailableAndEntryIsIndependentFromHit() throws Exception {
+        HookState.init("com.example.module", "main");
+        Feature f = Feature.MINE_BACKGROUND;
+        HookState.enable(f);
+        HookState.markNotFound(f, "class:runtime-missing", false);
+        HookState.finish(f); // installed == 0 -> unavailable
+
+        JSONObject before = featureJson(f);
+        assertTrue("启动阶段无挂载点时应为 unavailable", before.getBoolean("unavailable"));
+
+        HookState.installed(f, "runtime:m1");
+        JSONObject afterInstall = featureJson(f);
+        assertFalse("installed>0 必须立即清除 unavailable",
+                afterInstall.getBoolean("unavailable"));
+
+        HookState.entry(f);
+        HookState.entry(f);
+        JSONObject afterEntry = featureJson(f);
+        assertEquals("entry 独立计数", 2, afterEntry.getInt("entryCount"));
+        assertEquals("entry 不计入 hitCount", 0, afterEntry.getInt("hitCount"));
+        assertFalse("entry 不应置位 hit", afterEntry.getBoolean("hit"));
+
+        HookState.hit(f);
+        JSONObject afterHit = featureJson(f);
+        assertEquals("hit 不影响 entryCount", 2, afterHit.getInt("entryCount"));
+        assertEquals(1, afterHit.getInt("hitCount"));
+        assertTrue(afterHit.getBoolean("hit"));
+
+        // 运行时安装结束后重新 finish 不能把已安装的 Feature 写回 unavailable。
+        HookState.finish(f);
+        assertFalse(featureJson(f).getBoolean("unavailable"));
+    }
+
+    private static JSONObject featureJson(Feature f) throws Exception {
+        return new JSONObject(buildJson())
+                .getJSONObject("features").getJSONObject(f.name());
+    }
+
+    @Test
     public void rootSummaryKeys_present() throws Exception {
         HookState.init("com.example.module", null);
         Feature f = Feature.PENDANT;

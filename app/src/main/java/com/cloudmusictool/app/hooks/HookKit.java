@@ -89,6 +89,12 @@ final class HookKit {
             }
         }
         if (anchors != null && anchors.length > 0) {
+            if (!selftest) {
+                // 精确类名与活动 Profile 都未命中才走 DexKit：耗时明显更高，
+                // 单独标记便于真机定位挂载点漂移。
+                warn(module, logPrefix(f) + " slow path: class " + name
+                        + " via DexKit (exact/profile miss)");
+            }
             try {
                 long start = System.currentTimeMillis();
                 Class<?> fallback = DexKitLocator.findClass(cl, name, anchors);
@@ -548,16 +554,35 @@ final class HookKit {
         if (m == null) {
             return false;
         }
-        return install(module, f, label, (Executable) m, hooker);
+        return install(module, f, label, (Executable) m, hooker, true);
+    }
+
+    /**
+     * 只读探针安装：与 {@link #install} 相同的 hook 机制，但不计入
+     * HookState.installed/failed，也不参与 unavailable 计算。
+     * 探针只用于真机观测，不能把「主 hook 全失败」伪装成可用。
+     */
+    static boolean installProbe(XposedModule module, Feature f, String label, Method m,
+                                XposedInterface.Hooker hooker) {
+        if (m == null) {
+            return false;
+        }
+        return install(module, f, label, (Executable) m, hooker, false);
     }
 
     static boolean install(XposedModule module, Feature f, String label,
                            Executable m,
                            XposedInterface.Hooker hooker) {
+        return install(module, f, label, m, hooker, true);
+    }
+
+    private static boolean install(XposedModule module, Feature f, String label,
+                                   Executable m, XposedInterface.Hooker hooker,
+                                   boolean countState) {
         if (m == null) {
             return false;
         }
-        if (!validateReturnType(module, f, label, m, hooker)) {
+        if (!validateReturnType(module, f, label, m, hooker, countState)) {
             return false;
         }
         try {
@@ -565,14 +590,14 @@ final class HookKit {
                     .setId(logPrefix(f) + "#" + label)
                     .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
                     .intercept(hooker);
-            if (f != null) {
+            if (countState && f != null) {
                 HookState.installed(f, label);
             }
             info(module, logPrefix(f) + " registered " + label);
             return true;
         } catch (Throwable t) {
             error(module, logPrefix(f) + " hook failed " + label, t);
-            if (f != null) {
+            if (countState && f != null) {
                 HookState.markNotFound(f, "hook:" + label, isCriticalExecutable(m));
                 HookState.note(f, "hook 失败 " + label);
             }
@@ -585,7 +610,8 @@ final class HookKit {
      * 不匹配时拒绝安装并 WARN，避免“hook 静默不生效”或返回 null 导致宿主 NPE。
      */
     private static boolean validateReturnType(XposedModule module, Feature f, String label,
-                                              Executable m, XposedInterface.Hooker hooker) {
+                                              Executable m, XposedInterface.Hooker hooker,
+                                              boolean countState) {
         if (!(m instanceof Method)) {
             return true;
         }
@@ -594,7 +620,7 @@ final class HookKit {
             if (rt != boolean.class && rt != Boolean.class) {
                 warn(module, logPrefix(f) + " return type mismatch: " + label + " -> "
                         + rt.getName() + " (constBool requires boolean); not installed");
-                if (f != null) {
+                if (countState && f != null) {
                     HookState.markNotFound(f, "rettype:" + label, isCriticalExecutable(m));
                     HookState.note(f, "返回类型不匹配 " + label);
                 }
@@ -604,7 +630,7 @@ final class HookKit {
             if (rt != void.class) {
                 warn(module, logPrefix(f) + " return type mismatch: " + label + " -> "
                         + rt.getName() + " (skipVoid requires void); not installed");
-                if (f != null) {
+                if (countState && f != null) {
                     HookState.markNotFound(f, "rettype:" + label, isCriticalExecutable(m));
                     HookState.note(f, "返回类型不匹配 " + label);
                 }

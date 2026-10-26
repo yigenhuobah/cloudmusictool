@@ -31,6 +31,7 @@ public class ReportProtocolTest {
             o.put("installed", 2);
             o.put("failed", 1);
             o.put("criticalFailed", 1);
+            o.put("entryCount", 20);
             o.put("hit", true);
             o.put("hitCount", 12);
             o.put("degraded", false);
@@ -88,6 +89,16 @@ public class ReportProtocolTest {
                 feature().put("lastFailure", repeat('x', ReportProtocol.MAX_VALUE_CHARS)));
 
         assertNull(ReportProtocol.validateMountsPayload(root));
+    }
+
+    @Test
+    public void mountsPayloadAcceptsEntryCountField() throws Exception {
+        JSONObject root = mountsRoot();
+        root.getJSONObject("features").put("SPLASH_AD",
+                feature().put("entryCount", 7).put("hitCount", 2));
+
+        assertNull("entryCount 是 HookState 新增的合法字段",
+                ReportProtocol.validateMountsPayload(root));
     }
 
     @Test

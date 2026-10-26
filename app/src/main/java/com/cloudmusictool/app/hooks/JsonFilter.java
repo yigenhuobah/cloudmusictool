@@ -18,7 +18,8 @@ final class JsonFilter {
 
     /**
      * blockCodeOrderList 是形如 ["PAGE_RECOMMEND_X", ...] 的 JSON 数组字符串。
-     * 返回过滤后的字符串；removedOut[0] 写入删除数量。
+     * 只按当前 hideSet 过滤（不跨请求保留状态）；返回过滤后的字符串，
+     * removedOut[0] 写入删除数量。hideSet 为空时原样返回；解析失败 fail-open。
      */
     static String filterCodeListString(String json, Set<String> hideSet, int[] removedOut) {
         if (hideSet == null || hideSet.isEmpty() || json == null || json.isEmpty()) {

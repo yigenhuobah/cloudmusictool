@@ -15,9 +15,11 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -127,5 +129,52 @@ public class Profile9613OverrideCoverageTest {
         assertDrift("UI-08/tt0.d#a", "tt0.d", "a", "ur0.d", "a");
         assertDrift("UI-08/tt0.d#d", "tt0.d", "d", "ur0.d", "d");
         assertDrift("UI-08/vt0.r#j", "vt0.r", "j", "wr0.r", "j");
+    }
+
+    /**
+     * UI-05 的 9.6.13 专属 tab 列表构建点：只能追加在 Profile9613.build()，
+     * 不能出现在共享 ProfileUi / 9.6.08 基表（9.6.08 没有 tf0.o$a）。
+     */
+    @Test
+    public void ui05TabListBuildMount_is9613Only() {
+        MountSpec spec = specIn(Profile9613.PROFILE, "UI-05/tf0.o$a#y");
+        assertNotNull("PROFILE 缺少 UI-05/tf0.o$a#y", spec);
+        assertEquals("tf0.o$a", spec.primaryClass());
+        assertEquals(1, spec.classCandidates.length);
+        assertEquals("y", spec.methodName);
+        assertEquals("V", spec.returnType);
+        assertArrayEquals(new String[]{"Ljava/util/List;", "Z"}, spec.paramTypes);
+        assertFalse("tf0.o$a#y 不是 critical（9.6.08 没有该类）", spec.critical);
+        assertNull("9.6.08 不应有 tf0.o$a#y",
+                specIn(Profile9608.PROFILE, "UI-05/tf0.o$a#y"));
+    }
+
+    /**
+     * EN-01 9.6.13 专属第二层调度点：9.6.08 的 oc()Z 改名 kc()Z；sg.s 只做
+     * 只读探针。两者都不能进共享 ProfileUi（9.6.08 没有 kc，且 sg 的坐标未在
+     * 9.6.08 核对）。
+     */
+    @Test
+    public void en01ProxyDispatchMounts_are9613Only() {
+        MountSpec kc = specIn(Profile9613.PROFILE, "EN-01/MyMusicProxyFragment#kc");
+        assertNotNull("PROFILE 缺少 EN-01/MyMusicProxyFragment#kc", kc);
+        assertEquals("com.netease.cloudmusic.fragment.MyMusicProxyFragment",
+                kc.primaryClass());
+        assertEquals("kc", kc.methodName);
+        assertEquals("Z", kc.returnType);
+        assertArrayEquals(new String[0], kc.paramTypes);
+        assertTrue("kc()Z 是 EN-01 第二层调度点，应为 critical", kc.critical);
+        assertNull("9.6.08 的 kc 签名不同，不能共享该坐标",
+                specIn(Profile9608.PROFILE, "EN-01/MyMusicProxyFragment#kc"));
+
+        MountSpec sg = specIn(Profile9613.PROFILE, "EN-01/sg#s");
+        assertNotNull("PROFILE 缺少 EN-01/sg#s", sg);
+        assertEquals("com.netease.cloudmusic.utils.sg", sg.primaryClass());
+        assertEquals("s", sg.methodName);
+        assertEquals("Z", sg.returnType);
+        assertArrayEquals(new String[]{"Lorg/json/JSONObject;"}, sg.paramTypes);
+        assertFalse("sg.s 只做只读探针，不是 critical", sg.critical);
+        assertNull("9.6.08 不共享 sg.s 坐标",
+                specIn(Profile9608.PROFILE, "EN-01/sg#s"));
     }
 }

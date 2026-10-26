@@ -1,5 +1,72 @@
 # Changelog
 
+## 2.4.4 - 2026-10-27
+
+网易云 9.6.13 三项适配（UI-03 / UI-05 / EN-01 第二层）。三项均已在真机
+25102RKBEC / Android 17 / LSPosed 2.2.1 / 网易云 9.6.13 验证。
+
+### 修复
+
+- **9.6.13 UI-03 首页模块净化**：`MixContainerData.getResources()` 的元素是
+  `com.netease.luna.cm.container.Block`，旧逻辑只认 `DslBlock#getDslWrapperModel`，
+  对 9.6.13 首页混排的 `NativeBlock` / `RnBlock` 完全不命中。现主匹配改为
+  `Block.getPositionCode()`，`DslBlock` 保留 originData 正则兜底，`NativeBlock`
+  补充 `nativeData` / `originServerData` 兜底；隐藏清单新增 9.6.13 的 6 个
+  block code（`PAGE_RECOMMEND_BANNER_0` / `GREETING` / `NOTE` /
+  `PODCAST_NARROW_SCENE` / `SEARCH_TOP_BANNER` / `SECONDARY_TAB`）。
+  `getBlockCodeOrderList()` 同步按隐藏清单过滤（只影响下一次分页请求）。
+  真机验证：配置的旧 30 项 code 命中时首页顶部对应卡片消失
+  （`resources filtered 9/9`）。
+- **9.6.13 UI-05 底部导航精简**：9.6.13 底栏列表构建点是
+  `tf0.o$a#y(List<BottomTabInfoVO>, Z)`；旧的 `rh0.c.c` 返回的是
+  `List<Drawable>`（drawable 工厂），过滤它只会让图标错位、不能删 tab。
+  现改挂 `tf0.o$a#y` 过滤入参，state 与 drawable 同源缩短；`tf0.o$a` 为
+  9.6.13 专属挂载点，按 Profile 门控（9.6.08 不查找，避免诊断误报）。
+  **首页 Tab 始终保留**：网易云主页面以首页为初始 tab，把首页从底栏删掉会让
+  导航初始化卡住、启动页一直不消失（真机复现并修复）。保留清单不再包含首页时
+  结果为「首页 + 保留清单」。
+  真机验证：保留 `{搜索, 关注}` 时底栏为「首页 / 搜索 / 关注」
+  （`filtered from 4 to 3 tabs`），正常进入首页。
+- **9.6.13 EN-01 我的页自定义背景（第二层调度点）**：`MyMusicProxyFragment`
+  类并未消失——9.6.08 的 `oc()Z`（RN 门禁）在 9.6.13 改名为 `kc()Z`，
+  而同名的 `oc()V` 只负责启动协程，旧 hook 对它返回 false 完全无效。
+  现改为 hook `kc()Z` 返回 false 强制原生页（9.6.08 仍回退 `oc()Z`），
+  并新增只读探针记录 `sg.s()` 结果与 `hc()` 最终创建的 Fragment。
+  修复 9.6.13 已失配的反射（`pe()` → `pe(Activity)`；删除 9.6.13 不存在的
+  `W1(boolean)` / `kd(String)` 分支，9.6.08 保留原路径）。
+  真机验证：`kc=false` 强制原生页、`sg.s=true`、
+  `hc fragment=MyMusicFragmentV4`、本地背景贴图与内容区 scrim 全部生效。
+- **共享基础设施（三项共用）**：9.6.13 运行时使用 Tinker
+  `DelegateLastClassLoader`（`tinker_classN.apk`），模块启动时的 ClassLoader
+  与运行时不同。现提供 `RuntimeHookBootstrap` 在首个 `Activity#onCreate`
+  用运行时 ClassLoader 统一安装 UI-03 / UI-05 / EN-01（UI-04 已在 2.4.3
+  使用同机制）；`MountResolver` 缓存按 ClassLoader 隔离；`HookState` 新增
+  entry（入口调用）计数并区分 hit（过滤生效）计数，运行时安装后重算
+  `unavailable`。
+- **诊断**：`getBlockCodeOrderList` / `getResources` / `getBlockList` /
+  底栏列表构建入口均记录 entry；`getResources` 无命中时按 10 秒限流打印
+  block 运行时类型与 positionCode 样本，便于后续版本适配。
+
+### 已知限制
+
+- 底栏保留清单**无法去掉「首页」Tab**（9.6.13 主页面初始化依赖首页，
+  强行删除会导致启动卡死）；首页定制页新增的「云村 (social)」「发布
+  (publish)」按 tabCode 匹配 9.6.13 新增 tab。
+- UI-03 的隐藏清单基于 9.6.08 的 30 个 block code；9.6.13 首页出现了
+  `PAGE_RECOMMEND_SEARCH_TOP_BANNER` / `SEARCH_CHANNEL_ENTRY` /
+  `MORE_RCMD` 等新 code，需要在新版首页定制里勾选对应项才会隐藏。
+- 「我的页背景」清除后宿主侧 `validType=4` 注入不会回滚（与 2.4.2 一致），
+  清除后如仍显示背景可重启网易云。
+
+### 验证
+
+- `:app:testDebugUnitTest`：199 个用例通过（新增 MountResolver ClassLoader
+  隔离、HookState entry/unavailable、UI-03 block 匹配、UI-05 过滤与
+  Profile 门控、EN-01 调度点选择）；`:app:lintDebug` 通过。
+- 9.6.13 挂载体检 145/145 OK；9.6.08 挂载体检 142/142 OK。
+- 真机 25102RKBEC：冷启动 `runtime hooks installed: 4/4`，UI-03 / UI-05 /
+  EN-01 hook 链路全部命中，无 FATAL / ANR / hook failed。
+
 ## 2.4.3 - 2026-10-25
 
 ### 修复
@@ -13,15 +80,16 @@
   `pc2.*` → `nb2.*`，新增 `BgInfoParser` / `BgStore` 覆盖，避免 9.6.13 上
   EN-01 类定位失败。9.6.08 不受影响。
 
-### 已知问题（本次未修复）
+### 待验证 / 已知问题
 
-- 9.6.13 上 **UI-03 发现页推荐卡片隐藏**仍不生效，首页卡片未按配置过滤。
-- 9.6.13 上 **UI-05 底部导航保留**仍不生效，底栏 tab 未按配置裁剪。
-- 9.6.13 上 **EN-01 我的页自定义背景**仍不显示：`MyMusicProxyFragment`
-  类已消失（只剩 MyMusicFragmentV3/V4），页面架构变化，第二层调度点待
-  重新逆向；9.6.08 不受影响。
-- 以上三项已记录，下一版继续处理；如急需可在 Issue 中补充诊断页截图和
-  网易云版本号。
+- 9.6.13 上 **UI-03 发现页推荐卡片隐藏**已实现（按 `Block.positionCode`
+  过滤 `MixContainerData.getResources()`），待真机验证。
+- 9.6.13 上 **UI-05 底部导航保留**已实现（过滤 `tf0.o$a#y(List, Z)` 入参，
+  9.6.13 专属挂载点按 Profile 门控，9.6.08 不执行该查找），待真机验证。
+- 9.6.13 上 **EN-01 我的页自定义背景**：`MyMusicProxyFragment` 类仍在，
+  9.6.13 的 `oc()Z` 改名为 `kc()Z`，`oc()V` 是协程启动方法；第二层调度点
+  已在后续分支修复，V4/V3 选择仍待真机日志确认；9.6.08 不受影响。
+- 以上三项如需继续排查，可在 Issue 中补充诊断页截图和网易云版本号。
 
 ### 验证
 

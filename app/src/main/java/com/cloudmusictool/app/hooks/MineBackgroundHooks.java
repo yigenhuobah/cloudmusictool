@@ -20,6 +20,9 @@ import com.cloudmusictool.app.Config;
 import com.cloudmusictool.app.Feature;
 import com.cloudmusictool.app.HookState;
 import com.cloudmusictool.app.SampleSize;
+import com.cloudmusictool.app.profile.Profile9613;
+import com.cloudmusictool.app.profile.ProfileRegistry;
+import com.cloudmusictool.app.profile.TargetProfile;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -27,6 +30,8 @@ import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.github.libxposed.api.XposedModule;
@@ -55,6 +60,17 @@ public final class MineBackgroundHooks {
             "com.netease.cloudmusic.meta.virtual.UserBackgroundInfo";
     private static final String MINE_FRAGMENT =
             "com.netease.cloudmusic.fragment.MyMusicFragmentV4";
+    /**
+     * 非本人页 V4 与本人页 V4 继承同一个 MyMusicFragmentV4Base，也持有同一个
+     * MyMusicProfileHeaderBgViewHolderManager。当前只匹配本人页 V4，未改变
+     * 非本人页行为（见 findMineFragment 的 TODO）。
+     */
+    private static final String MINE_GUEST_FRAGMENT =
+            "com.netease.cloudmusic.fragment.MyMusicGuestFragmentV4";
+    private static final String MINE_PROXY =
+            "com.netease.cloudmusic.fragment.MyMusicProxyFragment";
+    private static final String SG =
+            "com.netease.cloudmusic.utils.sg";
 
     private static final int FL_HEADER_IMAGE_FALLBACK = 0x7f09136e;
 
@@ -82,19 +98,42 @@ public final class MineBackgroundHooks {
     private static volatile Bitmap sCachedBitmap;
     /** sCachedBitmap 对应 external 源文件的 {lastModified, length} 指纹;null 表示缓存经 provider 兜底读取,无源文件可 stat。 */
     private static volatile long[] sCachedFingerprint;
+    /** 9.6.08：模块是否已通过 W1(true) 强制宿主全屏；9.6.13 不使用。 */
     private static volatile boolean sForcedFullScreen;
+    /**
+     * 9.6.13：已调用过 pe(Activity) 的 Fragment。WeakHashMap 不阻止 Fragment 回收；
+     * 读写都在 synchronized 内，保证同一 Fragment 最多初始化一次（避免视图重排/闪烁）。
+     */
+    private static final Map<Object, Boolean> sPeApplied = new WeakHashMap<>();
     private static volatile int sFlHeaderImageId;
     private static volatile int sContentMaskId;
+    private static final AtomicBoolean sSgProbeHcLogged = new AtomicBoolean();
+    private static final AtomicBoolean sSgProbeOtherLogged = new AtomicBoolean();
+    private static final AtomicBoolean sHcProbeLogged = new AtomicBoolean();
+    private static final AtomicBoolean sGuestFragmentLogged = new AtomicBoolean();
 
     private MineBackgroundHooks() {
     }
 
-    public static void install(XposedModule module, ClassLoader cl, Feature f) {
+    /**
+     * 9.6.13 运行时使用 Tinker DelegateLastClassLoader，启动阶段拿到的 ClassLoader
+     * 与运行时不同。EN-01 的全部类钩子统一交给 {@link RuntimeHookBootstrap}，
+     * 在首个 Activity#onCreate 用运行时 ClassLoader 安装。
+     */
+    public static void install(XposedModule module, ClassLoader cl, Config config) {
+        RuntimeHookBootstrap.register(Feature.MINE_BACKGROUND,
+                MineBackgroundHooks::installRuntimeHooks, config);
+        RuntimeHookBootstrap.ensureInstalled(module, cl);
+    }
+
+    private static void installRuntimeHooks(XposedModule module, ClassLoader cl, Config config) {
+        Feature f = Feature.MINE_BACKGROUND;
         installNativeManagerHooks(module, cl, f);
         installFullScreenInjection(module, f, cl);
         installProxyHook(module, f, cl);
         installProfileModelHooks(module, f, cl);
         installContentMaskHooks(module, cl, f);
+        HookState.finish(f);
     }
 
     // ---------------------------------------------------------------- native
@@ -140,23 +179,163 @@ public final class MineBackgroundHooks {
 
     /**
      * 启用 EN-01 时强制「我的」页走原生 V4（AB mine-rn-android=false）。
-     * 只在 EN-01 开启时安装，关闭后宿主恢复原 RN 分支。
+     *
+     * 9.6.13 的分支方法是 {@code kc()Z}（与 9.6.08 的 {@code oc()Z} opcode 完全
+     * 一致）；9.6.13 的 {@code oc()V} 只启动协程，hook 它返回 false 没有意义，
+     * 因此只接受「零参 + boolean 返回」的候选，绝不会误挂 {@code oc()V}。
+     * 找不到 kc 时回退 9.6.08 的 oc()Z。
      */
     private static void installProxyHook(XposedModule module, Feature f, ClassLoader cl) {
-        Class<?> proxy = HookKit.findClass(module, f, cl,
-                "com.netease.cloudmusic.fragment.MyMusicProxyFragment");
+        Class<?> proxy = HookKit.findClass(module, f, cl, MINE_PROXY);
         if (proxy == null) {
             return;
         }
-        try {
-            Method oc = proxy.getDeclaredMethod("oc");
-            HookKit.install(module, f, "MyMusicProxyFragment#oc", oc, chain -> {
-                HookKit.hit(module, f, "forced native Mine page");
-                return false;
-            });
-        } catch (Throwable t) {
-            HookKit.warn(module, f.id + " MyMusicProxyFragment#oc hook failed: " + t.getMessage());
+        Method kc = selectProxyBranchMethod(proxy,
+                HookKit.mappedMethodName(proxy, "kc"),
+                HookKit.mappedMethodName(proxy, "oc"));
+        if (kc == null) {
+            HookKit.warn(module, f.id + " skip: " + MINE_PROXY
+                    + "#kc()Z/oc()Z not found (oc()V is a coroutine starter, not hooked)");
+            HookState.markNotFound(f, "method:" + MINE_PROXY + "#kc", true);
+            HookState.note(f, "kc()Z/oc()Z 未找到");
+            return;
         }
+        boolean isKc = "kc".equals(kc.getName());
+        String label = isKc ? "MyMusicProxyFragment#kc" : "MyMusicProxyFragment#oc";
+        HookKit.install(module, f, label, kc, chain -> {
+            HookKit.hit(module, f, isKc ? "proxy kc=false" : "proxy oc=false",
+                    isKc ? "proxy kc=false (forced native Mine page)"
+                            : "proxy oc=false (9.6.08 fallback, forced native Mine page)");
+            return false;
+        });
+        if (isKc) {
+            installProxyProbes(module, f, cl, proxy);
+        }
+    }
+
+    /**
+     * 纯函数（不依赖 Android/Xposed）：按优先级挑一个「零参 + boolean 返回」的
+     * 分支方法。9.6.13 的 oc()V 返回 void，会被这里拒绝；同时存在多个同名
+     * 候选时放弃，避免误挂重载。
+     */
+    static Method selectProxyBranchMethod(Class<?> proxy, String... names) {
+        if (proxy == null || names == null) {
+            return null;
+        }
+        for (String name : names) {
+            if (name == null || name.isEmpty()) {
+                continue;
+            }
+            Method found = null;
+            for (Method m : proxy.getDeclaredMethods()) {
+                if (!name.equals(m.getName()) || m.getParameterTypes().length != 0
+                        || m.getReturnType() != boolean.class) {
+                    continue;
+                }
+                if (found != null) {
+                    found = null;
+                    break;
+                }
+                found = m;
+            }
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 只读探针：不改变宿主行为，仅用于真机判断 hc 最终走 V4 还是 V3。
+     *
+     * - sg.s(JSONObject) 的返回值决定 hc 的 V4/V3 分支（true -> V4，false -> V3）；
+     * - hc(Continuation) 的返回值就是最终创建的 Fragment（挂起时首次返回
+     *   COROUTINE_SUSPENDED，恢复后会再次进入并返回 Fragment）。
+     *
+     * 保守策略：本版不全局强制 sg.s=true。sg.o(Z) 也调用 sg.s，强制 true 可能
+     * 让无效缓存被当成有效；先看日志确认是否真的落到 V3，再决定是否做
+     * 只针对 hc 调用路径的条件 hook。
+     */
+    private static void installProxyProbes(XposedModule module, Feature f, ClassLoader cl,
+                                           Class<?> proxy) {
+        try {
+            Class<?> sg = HookKit.findClass(module, f, cl, SG);
+            if (sg != null) {
+                Method s = HookKit.findMethodQuiet(sg, "s", org.json.JSONObject.class);
+                if (s != null && s.getReturnType() == boolean.class
+                        && s.getParameterTypes().length == 1
+                        && "org.json.JSONObject".equals(s.getParameterTypes()[0].getName())) {
+                    HookKit.installProbe(module, f, "sg#s(probe)", s, chain -> {
+                        Object result = chain.proceed();
+                        logSgProbe(module, result);
+                        return result;
+                    });
+                }
+            }
+        } catch (Throwable t) {
+            HookKit.warn(module, f.id + " sg.s probe failed: " + t.getMessage());
+        }
+
+        try {
+            Method hc = HookKit.findByNameAndArity(proxy, "hc", 1);
+            if (hc != null && hc.getReturnType() == Object.class
+                    && "kotlin.coroutines.Continuation"
+                    .equals(hc.getParameterTypes()[0].getName())) {
+                HookKit.installProbe(module, f, "MyMusicProxyFragment#hc(probe)", hc, chain -> {
+                    Object result = chain.proceed();
+                    logHcProbe(module, result);
+                    return result;
+                });
+            }
+        } catch (Throwable t) {
+            HookKit.warn(module, f.id + " hc probe failed: " + t.getMessage());
+        }
+    }
+
+    private static void logSgProbe(XposedModule module, Object result) {
+        // 两个 once 标志都已写过时直接返回，不再抓栈（sg.s 调用极高频）。
+        if (sSgProbeHcLogged.get() && sSgProbeOtherLogged.get()) {
+            return;
+        }
+        String caller = probeCaller();
+        if (caller.startsWith("MyMusicProxyFragment#hc")) {
+            if (sSgProbeHcLogged.compareAndSet(false, true)) {
+                HookKit.info(module, "EN-01 probe sg.s=" + result + " caller=" + caller
+                        + (Boolean.TRUE.equals(result) ? " (expected V4)" : " (expected V3)"));
+            }
+        } else if (sSgProbeOtherLogged.compareAndSet(false, true)) {
+            HookKit.info(module, "EN-01 probe sg.s=" + result + " caller=" + caller);
+        }
+    }
+
+    private static void logHcProbe(XposedModule module, Object result) {
+        if (result == null) {
+            return;
+        }
+        String name = result.getClass().getName();
+        if (name.startsWith("com.netease.cloudmusic.fragment.MyMusicFragment")
+                && sHcProbeLogged.compareAndSet(false, true)) {
+            HookKit.info(module, "EN-01 probe hc fragment=" + name);
+        }
+    }
+
+    /** 返回 sg.s 的首个业务调用方（hc 或 sg.o），用于区分 V4/V3 判定路径。 */
+    private static String probeCaller() {
+        try {
+            StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+            for (StackTraceElement e : stack) {
+                if (MINE_PROXY.equals(e.getClassName())) {
+                    return "MyMusicProxyFragment#" + e.getMethodName();
+                }
+            }
+            for (StackTraceElement e : stack) {
+                if (SG.equals(e.getClassName())) {
+                    return "sg#" + e.getMethodName();
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return "unknown";
     }
 
     // ------------------------------------------------------- fullscreen data
@@ -589,7 +768,10 @@ public final class MineBackgroundHooks {
 
             int type = managerType(manager);
             boolean hostFullScreen = type == 4;
-            if (sForcedFullScreen && !hostFullScreen) {
+            // 9.6.08 用 W1(false) 回滚模块强制的全屏状态；9.6.13 没有 W1(boolean)，
+            // 只调用过 pe(Activity)，无需（也不能）回滚。
+            if (!use9613FullScreen(ProfileRegistry.active())
+                    && sForcedFullScreen && !hostFullScreen) {
                 Activity activity = findActivity(container.getContext());
                 Object fragment = findMineFragment(activity);
                 Object vm = fragment == null ? null : HookKit.invokeNoArg(fragment, "pe");
@@ -618,26 +800,71 @@ public final class MineBackgroundHooks {
         }
     }
 
+    /**
+     * 宿主全屏状态按版本分流（9.6.08 dexsql 已核对）：
+     *
+     * 9.6.08：
+     * - {@code MyMusicFragmentV4#pe()} 返回 ViewModel（{@code bi2.b}）；
+     * - {@code bi2.b#D1()Z} 为 false 时用 {@code W1(boolean)} 开启全屏；
+     * - {@code MyMusicFragmentV4#kd(String)} 传入 "custom_bg" 切换背景页。
+     *
+     * 9.6.13：
+     * - 只有 {@code pe(Activity)}（初始化 StatePopView，返回 void）；
+     * - 没有 W1(boolean)/kd(String)，宿主全屏状态不再由模块强制；
+     * - pe(Activity) 每个 Fragment 最多调用一次，避免重复初始化导致视图
+     *   重排/闪烁。
+     */
     private static void applyFullScreen(XposedModule module, Feature f,
                                         Object manager, ViewGroup container) {
         try {
             Activity activity = findActivity(container.getContext());
+            if (activity == null) {
+                return;
+            }
             Object fragment = findMineFragment(activity);
             if (fragment == null) {
                 return;
             }
-            Object vm = HookKit.invokeNoArg(fragment, "pe");
-            if (vm != null) {
-                Object was = HookKit.invokeNoArg(vm, "D1");
-                if (Boolean.FALSE.equals(was)) {
-                    invoke(vm, "W1", new Class<?>[]{boolean.class}, true);
-                    sForcedFullScreen = true;
-                }
+            if (use9613FullScreen(ProfileRegistry.active())) {
+                applyPeActivityOnce(fragment, activity);
+            } else {
+                applyLegacyFullScreen(fragment);
             }
-            invoke(fragment, "kd", new Class<?>[]{String.class}, "custom_bg");
         } catch (Throwable t) {
             HookKit.warn(module, f.id + " full-screen state failed: " + t.getMessage());
         }
+    }
+
+    /** 9.6.13：只初始化 StatePopView，且同一 Fragment 只做一次。 */
+    private static void applyPeActivityOnce(Object fragment, Activity activity) {
+        if (findMethod(fragment.getClass(), "pe", new Class<?>[]{Activity.class}) == null) {
+            return;
+        }
+        synchronized (sPeApplied) {
+            if (sPeApplied.containsKey(fragment)) {
+                return;
+            }
+            sPeApplied.put(fragment, Boolean.TRUE);
+        }
+        invoke(fragment, "pe", new Class<?>[]{Activity.class}, activity);
+    }
+
+    /** 9.6.08：pe()/D1()/W1(true)/kd("custom_bg") 完整宿主全屏链路。 */
+    private static void applyLegacyFullScreen(Object fragment) {
+        Object vm = HookKit.invokeNoArg(fragment, "pe");
+        if (vm != null) {
+            Object was = HookKit.invokeNoArg(vm, "D1");
+            if (Boolean.FALSE.equals(was)) {
+                invoke(vm, "W1", new Class<?>[]{boolean.class}, true);
+                sForcedFullScreen = true;
+            }
+        }
+        invoke(fragment, "kd", new Class<?>[]{String.class}, "custom_bg");
+    }
+
+    /** 当前活动 Profile 是否为 9.6.13（9.6.08/未知版本走 legacy 链路）。 */
+    static boolean use9613FullScreen(TargetProfile profile) {
+        return profile != null && profile.versionCode == Profile9613.VERSION_CODE;
     }
 
     // ------------------------------------------------------------ content mask
@@ -830,8 +1057,20 @@ public final class MineBackgroundHooks {
                 return null;
             }
             for (Object fragment : (List<?>) value) {
-                if (fragment != null && MINE_FRAGMENT.equals(fragment.getClass().getName())) {
+                if (fragment == null) {
+                    continue;
+                }
+                String name = fragment.getClass().getName();
+                if (MINE_FRAGMENT.equals(name)) {
                     return fragment;
+                }
+                // TODO(EN-01): MyMusicGuestFragmentV4 继承 MyMusicFragmentV4Base，
+                // 也持有同一个 MyMusicProfileHeaderBgViewHolderManager。非本人页
+                // 是否应该显示模块背景尚未确认，本版只记录一次日志、不改变行为。
+                if (MINE_GUEST_FRAGMENT.equals(name)
+                        && sGuestFragmentLogged.compareAndSet(false, true)) {
+                    Log.i(TAG, "EN-01 note: MyMusicGuestFragmentV4 shares the header-bg"
+                            + " manager; non-self page behavior unchanged");
                 }
             }
         } catch (Throwable ignored) {

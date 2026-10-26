@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * 目标进程内的 Hook 健康度状态。
  *
- * 记录每个 Feature 的 expected / installed / failed / hit 与最近失败原因；
+ * 记录每个 Feature 的 expected / installed / failed / entry / hit 与最近失败原因；
  * 通过模块 App 的 StatusProvider 回写（remote prefs 在宿主进程只读，不能反向写）。
  *
  * 写入策略：
@@ -86,6 +86,8 @@ public final class HookState {
         final AtomicInteger failed = new AtomicInteger();
         /** 失败的挂载点中，Profile 标记为 critical 的数量（按 label 去重）。 */
         final AtomicInteger criticalFailed = new AtomicInteger();
+        /** 入口调用次数：hook 链路进入次数，与 hit（过滤/改写实际生效）独立。 */
+        final AtomicInteger entryCount = new AtomicInteger();
         final AtomicInteger hitCount = new AtomicInteger();
         final Set<String> failedKeys = ConcurrentHashMap.newKeySet();
         final Set<String> criticalFailedKeys = ConcurrentHashMap.newKeySet();
@@ -148,6 +150,11 @@ public final class HookState {
         }
         State s = state(f);
         s.installed.incrementAndGet();
+        // 启动阶段可能已 finish 过（installed=0 -> unavailable=true）；运行时
+        // ClassLoader 安装成功后必须立即清除，不能等下一次 finish。
+        if (s.installed.get() > 0) {
+            s.unavailable = false;
+        }
         s.attempted();
         publish();
     }
@@ -237,6 +244,18 @@ public final class HookState {
         publish();
     }
 
+    /**
+     * 记录 Feature 入口调用次数。与 {@link #hit(Feature)} 区分：
+     * entry 只表示 hook 入口被调用，hit 表示过滤/改写真正生效。
+     */
+    public static void entry(Feature f) {
+        if (f == null) {
+            return;
+        }
+        state(f).entryCount.incrementAndGet();
+        publish();
+    }
+
     public static void hit(Feature f) {
         if (f == null) {
             return;
@@ -286,6 +305,7 @@ public final class HookState {
                 o.put("installed", s.installed.get());
                 o.put("failed", s.failed.get());
                 o.put("criticalFailed", s.criticalFailed.get());
+                o.put("entryCount", s.entryCount.get());
                 o.put("hit", s.hit);
                 o.put("hitCount", s.hitCount.get());
                 o.put("degraded", s.degraded);

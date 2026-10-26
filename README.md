@@ -2,7 +2,7 @@
 
 网易云音乐 Android 客户端的 LSPosed 体验优化模块：去广告、精简界面、收敛弹窗、隐私加固。
 
-> 当前版本 **2.4.3**（versionCode 13）。适配网易云音乐 **9.6.08 / 9.6.13**（versionCode 9006008 / 9006013）。
+> 当前版本 **2.4.4**（versionCode 14）。适配网易云音乐 **9.6.08 / 9.6.13**（versionCode 9006008 / 9006013）。
 > 与网易官方无任何关联，仅供学习研究和个人设备使用。
 
 **仓库**：<https://github.com/yigenhuobah/cloudmusictool> ｜ **下载**：[Releases](https://github.com/yigenhuobah/cloudmusictool/releases)
@@ -153,9 +153,13 @@ gradlew.bat :app:assembleRelease
 - **适配版本：9.6.08 / 9.6.13**。其他版本默认 best-effort 继续挂载（与 QuietBox 语义一致），功能可能失效，状态卡/横幅会提示未适配。
 - 广告由服务端下发，模块只能阻止展示/上报，不能阻止接口请求。
 - 宿主存在 Tinker 风格热补丁，补丁可能替换被 hook 的实现。
-- **9.6.13 已知问题**：UI-03 发现页推荐卡片隐藏、UI-05 底部导航保留仍不生效；
-  EN-01 我的页自定义背景因页面架构变化（`MyMusicProxyFragment` 消失）仍未适配，
-  待下一版处理。
+- **9.6.13 适配状态（2.4.4 已真机验证）**：UI-03 按 `Block.positionCode`
+  过滤 `MixContainerData.getResources()`（含 `NativeBlock` / `RnBlock` 兜底）；
+  UI-05 过滤 `tf0.o$a#y` 入参（9.6.13 专属挂载点，Profile 门控），**首页 Tab
+  始终保留**（主页面初始化依赖首页，删除会导致启动卡死）；EN-01 hook
+  `MyMusicProxyFragment#kc()Z` 强制原生页（9.6.08 回退 `oc()Z`），真机确认
+  `sg.s=true`、`hc` 创建 `MyMusicFragmentV4`、本地背景与内容遮罩生效。
+  三项均已挂运行时 ClassLoader bootstrap（Tinker 兼容）。
 - UI-06 侧栏抽屉无可靠挂载点，保持 blocked，设置页置灰。
 - 部分 UI 挂载点没有 DexKit 锚点，只能精确类名匹配；宿主改名时对应子项报告缺失。
 - DexKit 兜底依赖 release 的 legacy JNI 打包；旧版本/改版仍可能定位失败。

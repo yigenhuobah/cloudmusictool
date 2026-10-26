@@ -80,7 +80,7 @@
     <string name="f_ui_02_title">顶部频道管理</string>
     <string name="f_ui_02_summary">按保留清单删除顶部频道与对应页面，至少保留 1 个；留空显示全部</string>
     <string name="f_ui_03_title">底部导航精简</string>
-    <string name="f_ui_03_summary">按保留清单精简底部导航，至少保留 1 个入口</string>
+    <string name="f_ui_03_summary">按保留清单精简底部导航；首页 Tab 始终保留，避免主页面无法初始化</string>
     <string name="f_ui_04_title">侧栏抽屉精简</string>
     <string name="f_ui_04_summary">暂不支持：9.6.08 未找到可靠的抽屉数据挂载点</string>
     <string name="f_ui_06_title">引导与气泡屏蔽</string>
@@ -235,9 +235,12 @@
     <string-array name="home_block_titles">
         <item>猜你喜欢</item>
         <item>排行榜</item>
+        <item>排行榜（备用 code）</item>
         <item>快捷入口（每日推荐/心动模式等）</item>
         <item>雷达歌单</item>
         <item>每日推荐</item>
+        <item>首页问候语</item>
+        <item>笔记卡片</item>
         <item>新歌新碟</item>
         <item>云村精选歌单</item>
         <item>红心相似推荐</item>
@@ -250,9 +253,13 @@
         <item>VIP 小卡片</item>
         <item>运营 Banner 1</item>
         <item>运营 Banner 6</item>
+        <item>运营 Banner 0</item>
+        <item>搜索顶部 Banner</item>
+        <item>首页二级 Tab</item>
         <item>播客电台</item>
         <item>播客音乐电台</item>
         <item>播客订阅更新</item>
+        <item>播客窄场景</item>
         <item>播客关联节目</item>
         <item>艺人动态</item>
         <item>艺人 FM</item>
@@ -279,6 +286,8 @@
         <item>搜索</item>
         <item>关注</item>
         <item>我的</item>
+        <item>云村 (social)</item>
+        <item>发布 (publish)</item>
     </string-array>
 
     <!-- ABTest 可强开实验的中文名与说明（顺序必须与 AbTestPolicy.CURATED_KEYS 一致） -->

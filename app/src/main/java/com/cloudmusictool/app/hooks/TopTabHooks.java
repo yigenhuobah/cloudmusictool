@@ -6,6 +6,7 @@ import android.view.ViewParent;
 
 import com.cloudmusictool.app.Config;
 import com.cloudmusictool.app.Feature;
+import com.cloudmusictool.app.HookState;
 import com.cloudmusictool.app.dexkit.DexKitAnchors;
 
 import java.lang.reflect.Field;
@@ -44,50 +45,24 @@ public final class TopTabHooks {
             Collections.synchronizedSet(new HashSet<>());
     private static final AtomicBoolean sEmptyConfigLogged = new AtomicBoolean();
     private static final AtomicBoolean sNoMatchLogged = new AtomicBoolean();
-    private static final AtomicBoolean sRuntimeHooksInstalled = new AtomicBoolean();
 
     private TopTabHooks() {
     }
 
+    /**
+     * UI-04 的类钩子不能直接挂在启动时的 ClassLoader 上（Tinker 运行时
+     * ClassLoader 与启动阶段不同），统一交给 {@link RuntimeHookBootstrap}：
+     * 这里只登记 installer 并确保 Activity#onCreate 引导钩子存在。
+     */
     public static void install(XposedModule module, ClassLoader cl, Config config) {
-        installBootstrap(module, cl, config);
+        RuntimeHookBootstrap.register(Feature.TOP_CHANNELS,
+                TopTabHooks::installRuntimeHooks, config);
+        RuntimeHookBootstrap.ensureInstalled(module, cl);
     }
 
-    /**
-     * UI-04 的类钩子不能直接挂在启动时的 ClassLoader 上：网易云 9.6.13
-     * 运行时使用 Tinker 的 DelegateLastClassLoader 加载热修 dex（
-     * /data/user/0/&lt;pkg&gt;/tinker/patch-xxx/dex/tinker_classN.apk），启动阶段
-     * 拿到的 cl 是 base 副本，直接挂会全部 registered 但零命中。
-     *
-     * 改为在第一个 Activity#onCreate 时用该 Activity 的运行时 ClassLoader
-     * 安装；Tinker 设备命中热修类，非 Tinker 设备命中原类，两边一致。
-     */
-    private static void installBootstrap(XposedModule module, ClassLoader cl, Config config) {
-        try {
-            Class<?> activityCls = HookKit.findClass(module, null, cl, "android.app.Activity");
-            if (activityCls == null) {
-                return;
-            }
-            Method onCreate = HookKit.findMethodQuiet(activityCls, "onCreate", android.os.Bundle.class);
-            if (onCreate == null) {
-                return;
-            }
-            HookKit.install(module, null, "UI-04/bootstrap", onCreate, chain -> {
-                try {
-                    Object self = chain.getThisObject();
-                    ClassLoader runtimeCl = self != null ? self.getClass().getClassLoader() : cl;
-                    if (runtimeCl != null && sRuntimeHooksInstalled.compareAndSet(false, true)) {
-                        HookKit.info(module, "UI-04 runtime loader " + runtimeCl);
-                        installFeatureHooks(module, runtimeCl, Feature.TOP_CHANNELS, config);
-                    }
-                } catch (Throwable t) {
-                    HookKit.error(module, "UI-04 bootstrap failed", t);
-                }
-                return chain.proceed();
-            });
-        } catch (Throwable t) {
-            HookKit.error(module, "UI-04 bootstrap install failed", t);
-        }
+    private static void installRuntimeHooks(XposedModule module, ClassLoader cl, Config config) {
+        installFeatureHooks(module, cl, Feature.TOP_CHANNELS, config);
+        HookState.finish(Feature.TOP_CHANNELS);
     }
 
     private static void installFeatureHooks(XposedModule module, ClassLoader cl, Feature f, Config config) {
