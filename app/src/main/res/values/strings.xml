@@ -286,6 +286,8 @@
         <item>搜索</item>
         <item>关注</item>
         <item>我的</item>
+        <item>云村 (social)</item>
+        <item>发布 (publish)</item>
     </string-array>
 
     <!-- ABTest 可强开实验的中文名与说明（顺序必须与 AbTestPolicy.CURATED_KEYS 一致） -->

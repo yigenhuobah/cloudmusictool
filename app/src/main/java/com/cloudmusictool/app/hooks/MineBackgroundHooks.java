@@ -20,6 +20,9 @@ import com.cloudmusictool.app.Config;
 import com.cloudmusictool.app.Feature;
 import com.cloudmusictool.app.HookState;
 import com.cloudmusictool.app.SampleSize;
+import com.cloudmusictool.app.profile.Profile9613;
+import com.cloudmusictool.app.profile.ProfileRegistry;
+import com.cloudmusictool.app.profile.TargetProfile;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -27,6 +30,8 @@ import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.github.libxposed.api.XposedModule;
@@ -93,6 +98,13 @@ public final class MineBackgroundHooks {
     private static volatile Bitmap sCachedBitmap;
     /** sCachedBitmap 对应 external 源文件的 {lastModified, length} 指纹;null 表示缓存经 provider 兜底读取,无源文件可 stat。 */
     private static volatile long[] sCachedFingerprint;
+    /** 9.6.08：模块是否已通过 W1(true) 强制宿主全屏；9.6.13 不使用。 */
+    private static volatile boolean sForcedFullScreen;
+    /**
+     * 9.6.13：已调用过 pe(Activity) 的 Fragment。WeakHashMap 不阻止 Fragment 回收；
+     * 读写都在 synchronized 内，保证同一 Fragment 最多初始化一次（避免视图重排/闪烁）。
+     */
+    private static final Map<Object, Boolean> sPeApplied = new WeakHashMap<>();
     private static volatile int sFlHeaderImageId;
     private static volatile int sContentMaskId;
     private static final AtomicBoolean sSgProbeHcLogged = new AtomicBoolean();
@@ -253,7 +265,7 @@ public final class MineBackgroundHooks {
                 if (s != null && s.getReturnType() == boolean.class
                         && s.getParameterTypes().length == 1
                         && "org.json.JSONObject".equals(s.getParameterTypes()[0].getName())) {
-                    HookKit.install(module, f, "sg#s(probe)", s, chain -> {
+                    HookKit.installProbe(module, f, "sg#s(probe)", s, chain -> {
                         Object result = chain.proceed();
                         logSgProbe(module, result);
                         return result;
@@ -269,7 +281,7 @@ public final class MineBackgroundHooks {
             if (hc != null && hc.getReturnType() == Object.class
                     && "kotlin.coroutines.Continuation"
                     .equals(hc.getParameterTypes()[0].getName())) {
-                HookKit.install(module, f, "MyMusicProxyFragment#hc(probe)", hc, chain -> {
+                HookKit.installProbe(module, f, "MyMusicProxyFragment#hc(probe)", hc, chain -> {
                     Object result = chain.proceed();
                     logHcProbe(module, result);
                     return result;
@@ -281,6 +293,10 @@ public final class MineBackgroundHooks {
     }
 
     private static void logSgProbe(XposedModule module, Object result) {
+        // 两个 once 标志都已写过时直接返回，不再抓栈（sg.s 调用极高频）。
+        if (sSgProbeHcLogged.get() && sSgProbeOtherLogged.get()) {
+            return;
+        }
         String caller = probeCaller();
         if (caller.startsWith("MyMusicProxyFragment#hc")) {
             if (sSgProbeHcLogged.compareAndSet(false, true)) {
@@ -752,6 +768,18 @@ public final class MineBackgroundHooks {
 
             int type = managerType(manager);
             boolean hostFullScreen = type == 4;
+            // 9.6.08 用 W1(false) 回滚模块强制的全屏状态；9.6.13 没有 W1(boolean)，
+            // 只调用过 pe(Activity)，无需（也不能）回滚。
+            if (!use9613FullScreen(ProfileRegistry.active())
+                    && sForcedFullScreen && !hostFullScreen) {
+                Activity activity = findActivity(container.getContext());
+                Object fragment = findMineFragment(activity);
+                Object vm = fragment == null ? null : HookKit.invokeNoArg(fragment, "pe");
+                if (vm != null) {
+                    invoke(vm, "W1", new Class<?>[]{boolean.class}, false);
+                    sForcedFullScreen = false;
+                }
+            }
 
             View fl = findFlHeaderImage(container);
             if (fl != null && !hostFullScreen) {
@@ -773,16 +801,18 @@ public final class MineBackgroundHooks {
     }
 
     /**
-     * 9.6.13 的反射降级：
-     * - {@code pe()} 已变为 {@code pe(Activity)}（初始化 StatePopView，不返回
-     *   ViewModel）；传入当前 Activity，拿不到就跳过；
-     * - 旧 ViewModel 的 {@code W1(boolean)} 在 9.6.13 变成 {@code W1(String)}
-     *   （设置 mPageRefer），语义与全屏无关，分支删除；
-     * - {@code kd(String)} 在 MyMusicFragmentV4 不存在（V4Base 的 kd 接收
-     *   CustomThemeTabLayout2），分支删除。
+     * 宿主全屏状态按版本分流（9.6.08 dexsql 已核对）：
      *
-     * 宿主全屏状态不再由模块强制，统一以本地 ImageView + forceContentMask()
-     * 为准；gd(String) 的 after-hook 仍保留。
+     * 9.6.08：
+     * - {@code MyMusicFragmentV4#pe()} 返回 ViewModel（{@code bi2.b}）；
+     * - {@code bi2.b#D1()Z} 为 false 时用 {@code W1(boolean)} 开启全屏；
+     * - {@code MyMusicFragmentV4#kd(String)} 传入 "custom_bg" 切换背景页。
+     *
+     * 9.6.13：
+     * - 只有 {@code pe(Activity)}（初始化 StatePopView，返回 void）；
+     * - 没有 W1(boolean)/kd(String)，宿主全屏状态不再由模块强制；
+     * - pe(Activity) 每个 Fragment 最多调用一次，避免重复初始化导致视图
+     *   重排/闪烁。
      */
     private static void applyFullScreen(XposedModule module, Feature f,
                                         Object manager, ViewGroup container) {
@@ -795,10 +825,46 @@ public final class MineBackgroundHooks {
             if (fragment == null) {
                 return;
             }
-            invoke(fragment, "pe", new Class<?>[]{Activity.class}, activity);
+            if (use9613FullScreen(ProfileRegistry.active())) {
+                applyPeActivityOnce(fragment, activity);
+            } else {
+                applyLegacyFullScreen(fragment);
+            }
         } catch (Throwable t) {
             HookKit.warn(module, f.id + " full-screen state failed: " + t.getMessage());
         }
+    }
+
+    /** 9.6.13：只初始化 StatePopView，且同一 Fragment 只做一次。 */
+    private static void applyPeActivityOnce(Object fragment, Activity activity) {
+        if (findMethod(fragment.getClass(), "pe", new Class<?>[]{Activity.class}) == null) {
+            return;
+        }
+        synchronized (sPeApplied) {
+            if (sPeApplied.containsKey(fragment)) {
+                return;
+            }
+            sPeApplied.put(fragment, Boolean.TRUE);
+        }
+        invoke(fragment, "pe", new Class<?>[]{Activity.class}, activity);
+    }
+
+    /** 9.6.08：pe()/D1()/W1(true)/kd("custom_bg") 完整宿主全屏链路。 */
+    private static void applyLegacyFullScreen(Object fragment) {
+        Object vm = HookKit.invokeNoArg(fragment, "pe");
+        if (vm != null) {
+            Object was = HookKit.invokeNoArg(vm, "D1");
+            if (Boolean.FALSE.equals(was)) {
+                invoke(vm, "W1", new Class<?>[]{boolean.class}, true);
+                sForcedFullScreen = true;
+            }
+        }
+        invoke(fragment, "kd", new Class<?>[]{String.class}, "custom_bg");
+    }
+
+    /** 当前活动 Profile 是否为 9.6.13（9.6.08/未知版本走 legacy 链路）。 */
+    static boolean use9613FullScreen(TargetProfile profile) {
+        return profile != null && profile.versionCode == Profile9613.VERSION_CODE;
     }
 
     // ------------------------------------------------------------ content mask

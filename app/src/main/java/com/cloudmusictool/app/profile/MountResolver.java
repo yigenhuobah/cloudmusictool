@@ -130,11 +130,14 @@ public final class MountResolver {
         if (spec == null || cls == null || spec.methodName == null) {
             return null;
         }
-        // 方法归属由声明类决定：Class 的 ClassLoader 是缓存隔离的唯一依据，
+        // 方法归属由声明类决定：Class 的 ClassLoader 是缓存隔离的第一依据，
         // 传入的 cl 只在声明类由 bootstrap loader 加载时作为兜底。
+        // 同一 ClassLoader 下不同 Class 可能有同名同签名方法（如两个 Block 子类），
+        // 缓存键必须带类名，否则后一个 Class 会命中前一个 Class 的 Method。
         Object key = cls.getClassLoader() != null
                 ? cls.getClassLoader() : loaderKey(cl);
-        Method cached = cacheGet(METHOD_CACHE, key, spec.id);
+        String cacheKey = spec.id + "@" + cls.getName();
+        Method cached = cacheGet(METHOD_CACHE, key, cacheKey);
         if (cached != null) {
             return cached;
         }
@@ -176,7 +179,7 @@ public final class MountResolver {
                     return null;
                 }
             }
-            cachePut(METHOD_CACHE, key, spec.id, found);
+            cachePut(METHOD_CACHE, key, cacheKey, found);
         } else {
             Log.w(TAG, "profile method unresolved " + spec.id);
         }

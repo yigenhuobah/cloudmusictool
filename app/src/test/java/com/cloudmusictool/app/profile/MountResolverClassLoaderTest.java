@@ -60,4 +60,29 @@ public class MountResolverClassLoaderTest {
         // 也不能把 c2 的解析结果串到 c1 的缓存里。
         assertSame(m2, MountResolver.resolveMethod(spec, c2, cl1));
     }
+
+    /**
+     * 同一 ClassLoader 下不同 Class 的同名同签名方法不能共享缓存：
+     * 方法缓存键必须包含类名，否则后解析的 Class 会拿到前一个 Class 的 Method。
+     */
+    @Test
+    public void sameLoaderDifferentClass_methodsAreNotShared() throws Exception {
+        MountSpec spec = MountSpec.method("TEST_SAME_LOADER_DIFF_CLASS", "fixture", false,
+                FIXTURE, "ping", "Ljava/lang/String;", new String[0]);
+        ClassLoader cl = newIsolatedLoader();
+        Class<?> first = MountResolver.resolveClass(spec, cl);
+        Class<?> other = Class.forName(FIXTURE + "$Other", false, cl);
+        assertNotNull(first);
+        assertNotNull(other);
+
+        Method m1 = MountResolver.resolveMethod(spec, first, cl);
+        Method m2 = MountResolver.resolveMethod(spec, other, cl);
+        assertNotNull(m1);
+        assertNotNull(m2);
+        assertSame(first, m1.getDeclaringClass());
+        assertSame(other, m2.getDeclaringClass());
+        assertNotSame("同 loader 不同 Class 不能共享 Method", m1, m2);
+        assertSame(m1, MountResolver.resolveMethod(spec, first, cl));
+        assertSame(m2, MountResolver.resolveMethod(spec, other, cl));
+    }
 }

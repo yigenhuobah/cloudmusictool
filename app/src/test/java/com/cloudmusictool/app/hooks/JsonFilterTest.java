@@ -56,35 +56,6 @@ public class JsonFilterTest {
     }
 
     @Test
-    public void filterCodeListString_removesExtraRemovedCodes() throws Exception {
-        String json = "[\"PAGE_A\",\"PAGE_B\",\"PAGE_C\"]";
-        int[] removed = new int[]{0};
-        String out = JsonFilter.filterCodeListString(json, set("PAGE_A"), set("PAGE_B"), removed);
-        assertEquals(2, removed[0]);
-        JSONArray arr = new JSONArray(out);
-        assertEquals(1, arr.length());
-        assertEquals("PAGE_C", arr.optString(0));
-    }
-
-    @Test
-    public void filterCodeListString_extraCodesApplyWhenHideSetEmpty() throws Exception {
-        String json = "[\"PAGE_A\",\"PAGE_B\"]";
-        int[] removed = new int[]{0};
-        String out = JsonFilter.filterCodeListString(json, Collections.emptySet(), set("PAGE_B"), removed);
-        assertEquals(1, removed[0]);
-        JSONArray arr = new JSONArray(out);
-        assertEquals(1, arr.length());
-        assertEquals("PAGE_A", arr.optString(0));
-    }
-
-    @Test
-    public void filterCodeListString_invalidJsonReturnsOriginalWithExtraCodes() throws Exception {
-        String json = "[\"PAGE_A\",";
-        String out = JsonFilter.filterCodeListString(json, set("PAGE_A"), set("PAGE_B"), new int[]{0});
-        assertSame(json, out);
-    }
-
-    @Test
     public void filterValue_removesObjectsByBlockCode() throws Exception {
         JSONArray root = new JSONArray();
         root.put(new JSONObject().put("blockCode", "PAGE_HIDE").put("x", 1));

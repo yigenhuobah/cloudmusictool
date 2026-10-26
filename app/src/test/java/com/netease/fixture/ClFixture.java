@@ -6,4 +6,12 @@ public final class ClFixture {
     public String ping() {
         return "pong";
     }
+
+    /** 与 ClFixture 同 ClassLoader、同名同签名方法，用于验证方法缓存键包含类名。 */
+    public static final class Other {
+
+        public String ping() {
+            return "pong-other";
+        }
+    }
 }

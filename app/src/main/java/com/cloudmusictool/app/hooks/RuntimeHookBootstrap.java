@@ -155,6 +155,7 @@ public final class RuntimeHookBootstrap {
 
         int installed = 0;
         int failed = 0;
+        long startedAt = System.currentTimeMillis();
         for (Registration registration : snapshot) {
             try {
                 registration.installer.install(module, runtimeCl, registration.config);
@@ -166,7 +167,9 @@ public final class RuntimeHookBootstrap {
                 HookState.finish(registration.feature);
             }
         }
-        HookKit.info(module, "runtime hooks installed: " + installed);
+        long elapsed = System.currentTimeMillis() - startedAt;
+        HookKit.info(module, "runtime hooks installed: " + installed
+                + "/" + snapshot.size() + " in " + elapsed + "ms");
         if (failed > 0) {
             HookKit.warn(module, "runtime hooks failed: " + failed);
         }

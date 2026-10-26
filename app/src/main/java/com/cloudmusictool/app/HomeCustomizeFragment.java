@@ -72,9 +72,11 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
             "心动", "推荐", "音乐", "播客", "听书", "AI写歌"
     };
 
-    // 底部导航（与 9.6.08 实测 tab 对齐：getTabTitle/getTabCode）
+    // 底部导航：前 4 项是 9.6.08 实测 tab 标题；后 2 项是 9.6.13 新增 tab 的
+    // tabCode（social=云村、publish=发布）。匹配逻辑是「标题或 code 任一命中」，
+    // 因此旧标题保留，同时新增 code 保证 9.6.13 新 tab 可单独保留。
     private static final String[] BOTTOM_NAV_KEYS = {
-            "首页", "搜索", "关注", "我的"
+            "首页", "搜索", "关注", "我的", "social", "publish"
     };
 
     @Override

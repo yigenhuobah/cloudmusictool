@@ -36,6 +36,14 @@ public class HomeBlockHooksTest {
     }
 
     @Test
+    public void matchesHide_nativeBlockMergesNativeDataEvenWithPositionCode() throws Exception {
+        // 外层容器 positionCode 与模块 code 不同：原生数据里的 code 也必须参与匹配。
+        JSONObject nativeData = new JSONObject().put("blockCode", "PAGE_RECOMMEND_NOTE");
+        FakeNativeBlock block = new FakeNativeBlock("PAGE_CONTAINER", nativeData, null);
+        assertTrue(HomeBlockHooks.matchesHide(block, set("PAGE_RECOMMEND_NOTE")));
+    }
+
+    @Test
     public void matchesHide_nativeBlockOriginServerDataFallback() throws Exception {
         JSONObject originServerData = new JSONObject().put("blockCode", "PAGE_RECOMMEND_GREETING");
         FakeNativeBlock block = new FakeNativeBlock(null, null, originServerData);

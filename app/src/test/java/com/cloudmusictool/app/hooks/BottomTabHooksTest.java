@@ -1,5 +1,8 @@
 package com.cloudmusictool.app.hooks;
 
+import com.cloudmusictool.app.profile.Profile9608;
+import com.cloudmusictool.app.profile.Profile9613;
+
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -10,6 +13,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
@@ -57,11 +61,19 @@ public class BottomTabHooksTest {
     }
 
     @Test
-    public void filter_allRemoved_keepsFirstTab() {
-        FakeTab first = new FakeTab("mine", "我的");
-        List<?> out = BottomTabHooks.filterBottomTabs(
-                Arrays.asList(first, new FakeTab("fm", "播客")), set("不存在"));
-        assertEquals(Collections.singletonList(first), out);
+    public void filter_allRemoved_failsOpenOriginalList() {
+        List<?> list = Arrays.asList(new FakeTab("mine", "我的"), new FakeTab("fm", "播客"));
+        assertSame("keep 集全不匹配时必须原样返回，不能只保留第一个 tab",
+                list, BottomTabHooks.filterBottomTabs(list, set("不存在")));
+    }
+
+    @Test
+    public void tabListBuildClass_gatedTo9613Profile() {
+        // 9.6.13 专属 tf0.o$a；9.6.08 不得返回查找名，避免 HookKit 登记
+        // 「类未找到 tf0.o$a」造成诊断误报。
+        assertEquals("tf0.o$a", BottomTabHooks.tabListBuildClass(Profile9613.PROFILE));
+        assertNull(BottomTabHooks.tabListBuildClass(Profile9608.PROFILE));
+        assertNull(BottomTabHooks.tabListBuildClass(null));
     }
 
     @Test

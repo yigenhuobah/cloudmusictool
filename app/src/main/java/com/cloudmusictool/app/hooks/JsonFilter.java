@@ -18,22 +18,11 @@ final class JsonFilter {
 
     /**
      * blockCodeOrderList 是形如 ["PAGE_RECOMMEND_X", ...] 的 JSON 数组字符串。
-     * 返回过滤后的字符串；removedOut[0] 写入删除数量。
+     * 只按当前 hideSet 过滤（不跨请求保留状态）；返回过滤后的字符串，
+     * removedOut[0] 写入删除数量。hideSet 为空时原样返回；解析失败 fail-open。
      */
     static String filterCodeListString(String json, Set<String> hideSet, int[] removedOut) {
-        return filterCodeListString(json, hideSet, null, removedOut);
-    }
-
-    /**
-     * 同上，额外剔除 extraCodes（getResources() 实际删掉的 block code），
-     * 避免下一次分页请求把已删模块带回来。hideSet / extraCodes 都为空时原样返回；
-     * 解析失败时 fail-open 返回原串。
-     */
-    static String filterCodeListString(String json, Set<String> hideSet, Set<String> extraCodes,
-                                       int[] removedOut) {
-        boolean hideEmpty = hideSet == null || hideSet.isEmpty();
-        boolean extraEmpty = extraCodes == null || extraCodes.isEmpty();
-        if ((hideEmpty && extraEmpty) || json == null || json.isEmpty()) {
+        if (hideSet == null || hideSet.isEmpty() || json == null || json.isEmpty()) {
             return json;
         }
         try {
@@ -42,9 +31,7 @@ final class JsonFilter {
             int removed = 0;
             for (int i = 0; i < arr.length(); i++) {
                 String code = arr.optString(i, "");
-                if (code != null
-                        && ((!hideEmpty && hideSet.contains(code))
-                        || (!extraEmpty && extraCodes.contains(code)))) {
+                if (code != null && hideSet.contains(code)) {
                     removed++;
                     continue;
                 }

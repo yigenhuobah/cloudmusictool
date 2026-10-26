@@ -4,11 +4,15 @@ import com.cloudmusictool.app.Config;
 import com.cloudmusictool.app.Feature;
 import com.cloudmusictool.app.HookState;
 import com.cloudmusictool.app.dexkit.DexKitAnchors;
+import com.cloudmusictool.app.profile.Profile9613;
+import com.cloudmusictool.app.profile.ProfileRegistry;
+import com.cloudmusictool.app.profile.TargetProfile;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.github.libxposed.api.XposedModule;
 
@@ -35,7 +39,20 @@ import io.github.libxposed.api.XposedModule;
  */
 public final class BottomTabHooks {
 
+    /** keep 集与全部 tab 都不匹配时只告警一次，避免每次数据更新刷屏。 */
+    private static final AtomicBoolean sNoMatchWarned = new AtomicBoolean(false);
+
     private BottomTabHooks() {
+    }
+
+    /**
+     * 9.6.13 专属 tab 列表构建点；9.6.08 / 未知版本返回 null，
+     * 调用方不得执行查找，避免 {@code 类未找到 tf0.o$a} 误报。
+     * 包私有便于 JVM 单测做版本门控断言。
+     */
+    static String tabListBuildClass(TargetProfile profile) {
+        return profile != null && profile.versionCode == Profile9613.VERSION_CODE
+                ? "tf0.o$a" : null;
     }
 
     /** 只登记 installer 并确保 Activity#onCreate 引导钩子存在。 */
@@ -73,37 +90,43 @@ public final class BottomTabHooks {
 
         // 2. 9.6.13 唯一的 tab 列表构建点：tf0.o$a.y(List<BottomTabInfoVO>, Z)。
         //    首次数据更新（U）与主题刷新（z）都经过这里；在 proceed 前过滤入参，
-        //    state 和 drawable 列表一起变短。9.6.08 没有这个类，查找失败只记日志。
-        try {
-            Class<?> oaCls = HookKit.findClass(module, f, cl, "tf0.o$a");
-            if (oaCls != null) {
-                Method my = HookKit.findMethod(module, f, oaCls, "y", void.class,
-                        new Class<?>[]{List.class, boolean.class});
-                if (my != null) {
-                    HookKit.install(module, f, "tf0.o$a#y", my, chain -> {
-                        HookState.entry(f);
-                        try {
-                            List<Object> args = chain.getArgs();
-                            if (args != null && !args.isEmpty()
-                                    && args.get(0) instanceof List) {
-                                List<?> original = (List<?>) args.get(0);
-                                List<?> filtered = applyBottomTabFilter(module, f, config,
-                                        original, "tf0.o$a#y");
-                                if (filtered != original) {
-                                    Object[] newArgs = args.toArray();
-                                    newArgs[0] = filtered;
-                                    return chain.proceed(newArgs);
+        //    state 和 drawable 列表一起变短。9.6.08 没有这个类，按 Profile 门控
+        //    直接跳过查找（连 findClass 都不调用），不会登记「类未找到」。
+        String tabListClass = tabListBuildClass(ProfileRegistry.active());
+        if (tabListClass != null) {
+            try {
+                Class<?> oaCls = HookKit.findClass(module, f, cl, tabListClass);
+                if (oaCls != null) {
+                    Method my = HookKit.findMethod(module, f, oaCls, "y", void.class,
+                            new Class<?>[]{List.class, boolean.class});
+                    if (my != null) {
+                        HookKit.install(module, f, "tf0.o$a#y", my, chain -> {
+                            HookState.entry(f);
+                            Object[] newArgs = null;
+                            try {
+                                List<Object> args = chain.getArgs();
+                                if (args != null && !args.isEmpty()
+                                        && args.get(0) instanceof List) {
+                                    List<?> original = (List<?>) args.get(0);
+                                    List<?> filtered = applyBottomTabFilter(module, f, config,
+                                            original, "tf0.o$a#y");
+                                    if (filtered != original) {
+                                        newArgs = args.toArray();
+                                        newArgs[0] = filtered;
+                                    }
                                 }
+                            } catch (Throwable t) {
+                                HookKit.error(module, f.id + " intercept error tf0.o$a#y", t);
                             }
-                        } catch (Throwable t) {
-                            HookKit.error(module, f.id + " intercept error tf0.o$a#y", t);
-                        }
-                        return chain.proceed();
-                    });
+                            // proceed 只调用一次：参数计算失败时原样放行；
+                            // proceed 自身抛错直接向上抛，绝不再补一次 proceed。
+                            return newArgs != null ? chain.proceed(newArgs) : chain.proceed();
+                        });
+                    }
                 }
+            } catch (Throwable t) {
+                HookKit.error(module, f.id + " tf0.o$a#y hook failed", t);
             }
-        } catch (Throwable t) {
-            HookKit.error(module, f.id + " tf0.o$a#y hook failed", t);
         }
 
         // 3. 预加载 / 缓存兜底：tf0.h.h() 返回 List<BottomTabInfoVO>
@@ -145,15 +168,28 @@ public final class BottomTabHooks {
         Set<String> keepSet = config.getFilterSet(Config.KEY_BOTTOM_NAV_KEEP);
         List<?> filtered = filterBottomTabs(list, keepSet);
         if (filtered == list) {
+            // keepSet 非空但一个都没命中：fail-open 保留原列表，只告警一次。
+            if (keepSet != null && !keepSet.isEmpty()
+                    && list != null && !list.isEmpty()
+                    && !anyTabMatches(list, keepSet)
+                    && sNoMatchWarned.compareAndSet(false, true)) {
+                HookKit.warn(module, f.id + " " + source
+                        + ": no tab matched bottom_nav_keep; fail-open, keeping original list");
+            }
             return list;
-        }
-        if (filtered.size() == 1 && !tabMatches(filtered.get(0), keepSet)) {
-            HookKit.warn(module, f.id + " " + source
-                    + ": no tab matched bottom_nav_keep; kept first tab to avoid empty bottom bar");
         }
         HookKit.hit(module, f, source + " filtered from " + list.size()
                 + " to " + filtered.size() + " tabs");
         return filtered;
+    }
+
+    private static boolean anyTabMatches(List<?> list, Set<String> keepSet) {
+        for (Object item : list) {
+            if (tabMatches(item, keepSet)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -161,7 +197,8 @@ public final class BottomTabHooks {
      *
      * - keepSet 为 null/空：不过滤，返回原列表（同一实例）；
      * - 没有任何元素被删除：返回原列表（同一实例）；
-     * - 全部被删除：保留原列表第一个非 null 元素，避免底栏消失。
+     * - 全部被删除：fail-open 返回原列表（同一实例），由调用方告警，
+     *   避免 keep 集配置错误时只留下第一个 tab。
      *
      * BottomTabInfoVO 用 getTabCode()/getTabTitle()；tf0.u（NavigationTabUiState）
      * 没有这两个 getter，回退到 g()=tabCode、i()=tabTitle。
@@ -179,19 +216,8 @@ public final class BottomTabHooks {
                 removed = true;
             }
         }
-        if (!removed) {
+        if (!removed || out.isEmpty()) {
             return list;
-        }
-        if (out.isEmpty()) {
-            for (Object item : list) {
-                if (item != null) {
-                    out.add(item);
-                    break;
-                }
-            }
-            if (out.isEmpty()) {
-                return list;
-            }
         }
         return out;
     }

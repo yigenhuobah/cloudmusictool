@@ -21,7 +21,8 @@ import io.github.libxposed.api.XposedModule;
  * 9.6.13 推荐页走 DSL / MixContainer 链路：MixContainerData.getResources() 返回
  * List&lt;com.netease.luna.cm.container.Block&gt;，模块身份在 Block.getPositionCode()；
  * getBlockCodeOrderList() 只是分页请求参数，过滤它不会移除当前已渲染模块。
- * 因此主链路是 getResources()，并同步从 blockCodeOrderList 中剔除已删 code。
+ * 因此主链路是 getResources()，getBlockCodeOrderList() 仅按当前 hideSet 过滤，
+ * 不再维护跨请求的「已删除 code」全局状态（多容器/分页会串数据）。
  *
  * 9.6.13 运行时使用 Tinker DelegateLastClassLoader，启动阶段拿到的 ClassLoader
  * 与运行时不同，安装统一交给 {@link RuntimeHookBootstrap}，在首个 Activity#onCreate
@@ -33,8 +34,6 @@ public final class HomeBlockHooks {
     /** 同一 Feature 的扫描日志（无命中）最短间隔，避免宿主高频调用刷屏。 */
     private static final long SCAN_LOG_INTERVAL_MS = 10_000L;
 
-    /** 已从 getResources() 删除的 block code，供 getBlockCodeOrderList() 同步剔除。 */
-    private static final Set<String> sRemovedCodes = ConcurrentHashMap.newKeySet();
     /** 运行时 ClassLoader，仅用于扫描日志诊断 Tinker loader 身份。 */
     private static volatile ClassLoader sRuntimeLoader;
     /** 限流键 = Feature + 日志点，各日志点独立 10 秒一次，避免互相饿死。 */
@@ -127,14 +126,14 @@ public final class HomeBlockHooks {
     /** blockCodeOrderList 是形如 ["PAGE_RECOMMEND_X", ...] 的 JSON 数组字符串。 */
     private static String filterCodeListString(XposedModule module, Feature f, Config config, String json) {
         Set<String> hideSet = config.getFilterSet(Config.KEY_HOME_BLOCKS_FILTER);
-        if ((hideSet == null || hideSet.isEmpty()) && sRemovedCodes.isEmpty()) {
+        if (hideSet == null || hideSet.isEmpty()) {
             return json;
         }
         if (json == null || json.isEmpty()) {
             return json;
         }
         int[] removed = new int[]{0};
-        String out = JsonFilter.filterCodeListString(json, hideSet, sRemovedCodes, removed);
+        String out = JsonFilter.filterCodeListString(json, hideSet, removed);
         if (removed[0] > 0) {
             HookKit.hit(module, f, "blockCodeOrderList filtered " + removed[0] + "/" + countJsonArray(json));
             return out;
@@ -175,10 +174,6 @@ public final class HomeBlockHooks {
             Set<String> tokens = collectTokens(item);
             if (matchesTokens(tokens, hideSet)) {
                 removed++;
-                String code = firstToken(tokens);
-                if (code != null && !code.isEmpty()) {
-                    sRemovedCodes.add(code);
-                }
                 continue;
             }
             out.add(item);
@@ -222,13 +217,6 @@ public final class HomeBlockHooks {
 
     private static String positionCodeOf(Object item) {
         return asString(HookKit.invokeNoArg(item, "getPositionCode"));
-    }
-
-    private static String firstToken(Set<String> tokens) {
-        for (String t : tokens) {
-            return t;
-        }
-        return null;
     }
 
     private static Set<String> collectTokens(Object item) {
@@ -309,8 +297,9 @@ public final class HomeBlockHooks {
      * 9.6.13 的 Block（DslBlock / NativeBlock / RnBlock / 普通 Block）统一带
      * getPositionCode()，这是 PAGE_RECOMMEND_* code 的主载体。
      * DslBlock 额外从 getDslWrapperModel() 的 originData/extData/dslContent
-     * 提取 blockCode / PAGE_* 正则作为补充；NativeBlock 在 positionCode 缺失时
-     * 用 nativeData / originServerData 的 positionCode/blockCode 兜底。
+     * 提取 blockCode / PAGE_* 正则作为补充；NativeBlock 始终合并
+     * nativeData / originServerData 的 positionCode/blockCode（positionCode
+     * 可能只对应外层容器，模块 code 仍藏在原生数据里）。
      */
     private static java.util.Set<String> collectCodes(Object item) {
         java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
@@ -342,17 +331,16 @@ public final class HomeBlockHooks {
             return out;
         }
 
-        // 3) NativeBlock 兜底：positionCode 缺失时从原生数据里取。
-        if (out.isEmpty()) {
-            Object nativeData = HookKit.invokeNoArg(item, "getNativeData");
-            addIfPresent(out, jsonString(nativeData, "positionCode"));
-            addIfPresent(out, jsonString(nativeData, "blockCode"));
-            addIfPresent(out, jsonString(nativeData, "block_code"));
-            Object originServer = HookKit.invokeNoArg(item, "getOriginServerData");
-            addIfPresent(out, jsonString(originServer, "positionCode"));
-            addIfPresent(out, jsonString(originServer, "blockCode"));
-            addIfPresent(out, jsonString(originServer, "block_code"));
-        }
+        // 3) NativeBlock 兜底：始终合并原生数据里的 code，positionCode 存在时
+        //    也照样检查（外层容器 code 与模块 code 可能不同）。
+        Object nativeData = HookKit.invokeNoArg(item, "getNativeData");
+        addIfPresent(out, jsonString(nativeData, "positionCode"));
+        addIfPresent(out, jsonString(nativeData, "blockCode"));
+        addIfPresent(out, jsonString(nativeData, "block_code"));
+        Object originServer = HookKit.invokeNoArg(item, "getOriginServerData");
+        addIfPresent(out, jsonString(originServer, "positionCode"));
+        addIfPresent(out, jsonString(originServer, "blockCode"));
+        addIfPresent(out, jsonString(originServer, "block_code"));
         return out;
     }
 
