@@ -15,9 +15,11 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -127,5 +129,23 @@ public class Profile9613OverrideCoverageTest {
         assertDrift("UI-08/tt0.d#a", "tt0.d", "a", "ur0.d", "a");
         assertDrift("UI-08/tt0.d#d", "tt0.d", "d", "ur0.d", "d");
         assertDrift("UI-08/vt0.r#j", "vt0.r", "j", "wr0.r", "j");
+    }
+
+    /**
+     * UI-05 的 9.6.13 专属 tab 列表构建点：只能追加在 Profile9613.build()，
+     * 不能出现在共享 ProfileUi / 9.6.08 基表（9.6.08 没有 tf0.o$a）。
+     */
+    @Test
+    public void ui05TabListBuildMount_is9613Only() {
+        MountSpec spec = specIn(Profile9613.PROFILE, "UI-05/tf0.o$a#y");
+        assertNotNull("PROFILE 缺少 UI-05/tf0.o$a#y", spec);
+        assertEquals("tf0.o$a", spec.primaryClass());
+        assertEquals(1, spec.classCandidates.length);
+        assertEquals("y", spec.methodName);
+        assertEquals("V", spec.returnType);
+        assertArrayEquals(new String[]{"Ljava/util/List;", "Z"}, spec.paramTypes);
+        assertFalse("tf0.o$a#y 不是 critical（9.6.08 没有该类）", spec.critical);
+        assertNull("9.6.08 不应有 tf0.o$a#y",
+                specIn(Profile9608.PROFILE, "UI-05/tf0.o$a#y"));
     }
 }

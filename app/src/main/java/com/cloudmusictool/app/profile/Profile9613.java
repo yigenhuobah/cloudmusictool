@@ -138,7 +138,10 @@ public final class Profile9613 {
                         new String[]{"tf0.h", "th0.h"}, "h", "Ljava/util/List;", NONE,
                         DexKitAnchors.TH0_H));
 
-        // UI-05 底栏列表构造：rh0.c -> rf0.c（anchor "tabCodeList" 仍在），c 签名不变。
+        // UI-05 底栏 drawable 工厂：rh0.c -> rf0.c（anchor "tabCodeList" 仍在），c 签名不变。
+        // 注意 rf0.c.c 返回 List<Drawable>，不是 tab 列表；映射保留供坐标体检/诊断，
+        // hook 不再用它过滤（过滤会导致图标按 state 下标错位）。真正的 tab 隐藏点是
+        // build() 里追加的 tf0.o$a#y。
         out.put("UI-05/rh0.c#c",
                 MountSpec.method("UI-05", "rh0.c#c", false,
                         new String[]{"rf0.c", "rh0.c"}, "c", "Ljava/util/List;",
@@ -214,6 +217,12 @@ public final class Profile9613 {
         all.addAll(ProfileAdPv.mounts());
         all.addAll(ProfileUi.mounts(true));
         applyOverrides(all, overrides());
+        // UI-05 9.6.13 专属：tf0.o$a.y(List<BottomTabInfoVO>, Z) 是底栏 state 列表的
+        // 唯一构建点（首次数据更新 U 与主题刷新 z 都经过它）。9.6.08 没有该类/方法，
+        // 因此不能放进共享 ProfileUi，只能在这里追加。
+        all.add(MountSpec.method("UI-05", "tf0.o$a#y", false,
+                "tf0.o$a", "y", "V",
+                new String[]{"Ljava/util/List;", "Z"}));
         return new TargetProfile(VERSION_CODE, VERSION_NAME, all);
     }
 
