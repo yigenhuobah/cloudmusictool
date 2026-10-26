@@ -80,7 +80,7 @@
     <string name="f_ui_02_title">顶部频道管理</string>
     <string name="f_ui_02_summary">按保留清单删除顶部频道与对应页面，至少保留 1 个；留空显示全部</string>
     <string name="f_ui_03_title">底部导航精简</string>
-    <string name="f_ui_03_summary">按保留清单精简底部导航，至少保留 1 个入口</string>
+    <string name="f_ui_03_summary">按保留清单精简底部导航；首页 Tab 始终保留，避免主页面无法初始化</string>
     <string name="f_ui_04_title">侧栏抽屉精简</string>
     <string name="f_ui_04_summary">暂不支持：9.6.08 未找到可靠的抽屉数据挂载点</string>
     <string name="f_ui_06_title">引导与气泡屏蔽</string>

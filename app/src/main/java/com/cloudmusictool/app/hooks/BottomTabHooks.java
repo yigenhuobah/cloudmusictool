@@ -196,9 +196,10 @@ public final class BottomTabHooks {
      * 纯过滤函数：保留 tabCode 或 tabTitle 命中 keepSet 的元素。
      *
      * - keepSet 为 null/空：不过滤，返回原列表（同一实例）；
-     * - 没有任何元素被删除：返回原列表（同一实例）；
-     * - 全部被删除：fail-open 返回原列表（同一实例），由调用方告警，
-     *   避免 keep 集配置错误时只留下第一个 tab。
+     * - 没有任何元素命中 keepSet：fail-open 返回原列表（同一实例），由调用方告警；
+     * - 第一个非 null tab 始终保留：9.6.13 主页面以首页为初始 tab，删除首页会让
+     *   导航初始化卡住、启动页不消失（真机实测）；keep 集只能精简其余 tab。
+     * - 没有任何元素被删除：返回原列表（同一实例）。
      *
      * BottomTabInfoVO 用 getTabCode()/getTabTitle()；tf0.u（NavigationTabUiState）
      * 没有这两个 getter，回退到 g()=tabCode、i()=tabTitle。
@@ -207,16 +208,28 @@ public final class BottomTabHooks {
         if (list == null || keepSet == null || keepSet.isEmpty()) {
             return list;
         }
-        List<Object> out = new ArrayList<>(list.size());
-        boolean removed = false;
+        boolean anyMatch = false;
         for (Object item : list) {
             if (tabMatches(item, keepSet)) {
-                out.add(item);
-            } else {
-                removed = true;
+                anyMatch = true;
+                break;
             }
         }
-        if (!removed || out.isEmpty()) {
+        if (!anyMatch) {
+            return list;
+        }
+        List<Object> out = new ArrayList<>(list.size());
+        boolean firstKept = false;
+        for (Object item : list) {
+            if (item == null) {
+                continue;
+            }
+            if (!firstKept || tabMatches(item, keepSet)) {
+                out.add(item);
+                firstKept = true;
+            }
+        }
+        if (out.size() == list.size()) {
             return list;
         }
         return out;

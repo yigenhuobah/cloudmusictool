@@ -40,11 +40,23 @@ public class BottomTabHooksTest {
 
     @Test
     public void filter_byChineseTitle() {
+        FakeTab home = new FakeTab("home", "首页");
         FakeTab keep = new FakeTab("mine", "我的");
         FakeTab hide = new FakeTab("fm", "播客");
         List<?> out = BottomTabHooks.filterBottomTabs(
-                Arrays.asList(hide, keep), set("我的"));
-        assertEquals(Collections.singletonList(keep), out);
+                Arrays.asList(home, hide, keep), set("我的"));
+        assertEquals(Arrays.asList(home, keep), out);
+    }
+
+    @Test
+    public void filter_keepsFirstTabWhenNotInKeepSet() {
+        FakeTab home = new FakeTab("home", "首页");
+        FakeTab search = new FakeTab("search", "搜索");
+        FakeTab follow = new FakeTab("follow", "关注");
+        List<FakeTab> list = Arrays.asList(home, search, follow);
+        List<?> out = BottomTabHooks.filterBottomTabs(list, set("搜索"));
+        assertEquals(Arrays.asList(home, search), out);
+        assertTrue("首页必须始终保留，否则 9.6.13 启动页会卡住", out.contains(home));
     }
 
     @Test
@@ -64,8 +76,7 @@ public class BottomTabHooksTest {
     public void filter_allRemoved_failsOpenOriginalList() {
         List<?> list = Arrays.asList(new FakeTab("mine", "我的"), new FakeTab("fm", "播客"));
         assertSame("keep 集全不匹配时必须原样返回，不能只保留第一个 tab",
-                list, BottomTabHooks.filterBottomTabs(list, set("不存在")));
-    }
+                list, BottomTabHooks.filterBottomTabs(list, set("不存在")));    }
 
     @Test
     public void tabListBuildClass_gatedTo9613Profile() {
@@ -79,13 +90,14 @@ public class BottomTabHooksTest {
     @Test
     public void filter_tf0u_usesGAndIFallback() {
         // 模拟 tf0.u：没有 getTabCode/getTabTitle，只有 g()=tabCode、i()=tabTitle。
+        UiStatePojo home = new UiStatePojo("home", "首页");
         UiStatePojo mine = new UiStatePojo("mine", "我的");
         UiStatePojo fm = new UiStatePojo("fm", "播客");
 
-        assertEquals(Collections.singletonList(mine), BottomTabHooks.filterBottomTabs(
-                Arrays.asList(mine, fm), set("mine")));
-        assertEquals(Collections.singletonList(fm), BottomTabHooks.filterBottomTabs(
-                Arrays.asList(mine, fm), set("播客")));
+        assertEquals(Arrays.asList(home, mine), BottomTabHooks.filterBottomTabs(
+                Arrays.asList(home, mine, fm), set("mine")));
+        assertEquals(Arrays.asList(home, fm), BottomTabHooks.filterBottomTabs(
+                Arrays.asList(home, mine, fm), set("播客")));
     }
 
     @Test
