@@ -223,6 +223,17 @@ public final class Profile9613 {
         all.add(MountSpec.method("UI-05", "tf0.o$a#y", false,
                 "tf0.o$a", "y", "V",
                 new String[]{"Ljava/util/List;", "Z"}));
+        // EN-01 9.6.13 专属第二层调度点：MyMusicProxyFragment 类仍在，9.6.08 的
+        // oc()Z 在 9.6.13 改名为 kc()Z（41 条 opcode 完全一致）。9.6.13 的
+        // oc()V 只启动协程，不是分支方法；hook 侧按「零参 + boolean 返回」选择，
+        // 不会误挂 oc()V。9.6.08 没有 kc，因此不能放进共享 ProfileUi。
+        all.add(MountSpec.method("EN-01", "MyMusicProxyFragment#kc", true,
+                "com.netease.cloudmusic.fragment.MyMusicProxyFragment", "kc", "Z", NONE));
+        // 只读探针：hc(Continuation) 用 sg.s(JSONObject) 选择 V4(true)/V3(false)。
+        // sg.o(Z) 也调用 sg.s，本版不强制其返回值，只记录结果供真机判定。
+        all.add(MountSpec.method("EN-01", "sg#s", false,
+                "com.netease.cloudmusic.utils.sg", "s", "Z",
+                new String[]{"Lorg/json/JSONObject;"}));
         return new TargetProfile(VERSION_CODE, VERSION_NAME, all);
     }
 

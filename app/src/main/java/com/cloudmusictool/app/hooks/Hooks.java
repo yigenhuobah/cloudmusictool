@@ -80,7 +80,7 @@ public final class Hooks {
         map.put(Feature.COMMUNITY_LIVE,
                 (module, cl, config, f) -> CommunityLiveHooks.install(module, cl, f));
         map.put(Feature.MINE_BACKGROUND,
-                (module, cl, config, f) -> MineBackgroundHooks.install(module, cl, f));
+                (module, cl, config, f) -> MineBackgroundHooks.install(module, cl, config));
         map.put(Feature.BOTTOM_NAV,
                 (module, cl, config, f) -> BottomTabHooks.install(module, cl, config));
         map.put(Feature.HINTS,
