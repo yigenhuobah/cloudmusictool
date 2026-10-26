@@ -46,7 +46,7 @@ public final class ReportProtocol {
     /** 单个 feature 对象的字段白名单。 */
     private static final Set<String> FEATURE_KEYS = new HashSet<>(Arrays.asList(
             "id", "enabled", "expected", "installed", "failed", "criticalFailed",
-            "hit", "hitCount", "degraded", "unavailable", "lastFailure"));
+            "entryCount", "hit", "hitCount", "degraded", "unavailable", "lastFailure"));
 
     /** experiments 通道根键白名单（与 ExperimentState.buildJson 的字段面一致）。 */
     private static final Set<String> EXPERIMENTS_ROOT_KEYS = new HashSet<>(Arrays.asList(
