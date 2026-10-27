@@ -60,7 +60,7 @@
 
 ### 验证
 
-- `:app:testDebugUnitTest`：199 个用例通过（新增 MountResolver ClassLoader
+- `:app:testDebugUnitTest`：195 个用例通过（新增 MountResolver ClassLoader
   隔离、HookState entry/unavailable、UI-03 block 匹配、UI-05 过滤与
   Profile 门控、EN-01 调度点选择）；`:app:lintDebug` 通过。
 - 9.6.13 挂载体检 145/145 OK；9.6.08 挂载体检 142/142 OK。
