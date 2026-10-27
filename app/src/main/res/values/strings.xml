@@ -275,6 +275,8 @@
         <item>品牌歌单</item>
         <item>音乐播客图文</item>
         <item>声音/视频歌单推荐</item>
+        <item>搜索频道入口</item>
+        <item>为你专属推荐（更多推荐）</item>
     </string-array>
 
     <string-array name="home_channel_titles">

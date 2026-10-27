@@ -89,6 +89,25 @@ public class HomeBlockHooksTest {
                 set("PAGE_RECOMMEND_PODCAST_SUB_UPDATE")));
     }
 
+    /** 9.6.13 首页 scan 日志中的完整 positionCode（DslBlock#getPositionCode）。 */
+    @Test
+    public void matchesHide_9613SearchChannelEntryExactPositionCode() {
+        assertTrue(HomeBlockHooks.matchesHide(
+                new FakeBlock("PAGE_RECOMMEND_SEARCH_CHANNEL_ENTRY"),
+                set("PAGE_RECOMMEND_SEARCH_CHANNEL_ENTRY")));
+    }
+
+    /** MORE_RCMD 在 APK 缓存里同时是 positionCode 与 dslData.blockCode。 */
+    @Test
+    public void matchesHide_9613MoreRcmdPositionCodeAndDslBlockCode() throws Exception {
+        assertTrue(HomeBlockHooks.matchesHide(
+                new FakeBlock("PAGE_RECOMMEND_MORE_RCMD"),
+                set("PAGE_RECOMMEND_MORE_RCMD")));
+        JSONObject originData = new JSONObject().put("blockCode", "PAGE_RECOMMEND_MORE_RCMD");
+        FakeDslBlock block = new FakeDslBlock(new FakeDslModel(originData, null, null));
+        assertTrue(HomeBlockHooks.matchesHide(block, set("PAGE_RECOMMEND_MORE_RCMD")));
+    }
+
     @Test
     public void matchesHide_scansSerializableMapAndCollectionNodes() {
         Map<String, Object> map = new LinkedHashMap<>();

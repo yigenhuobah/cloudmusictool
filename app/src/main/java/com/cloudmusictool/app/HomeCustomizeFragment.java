@@ -35,7 +35,8 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
     // 9.6.13 新增 6 项（BANNER_0 / GREETING / NOTE / PODCAST_NARROW_SCENE /
     // SEARCH_TOP_BANNER / SECONDARY_TAB）与旧 30 项并存；疑似改名项保留旧 code，
     // 另列新 code（PAGE_BLOCK_TOPLIST / BANNER_0 / PODCAST_NARROW_SCENE）。
-    private static final String[] BLOCK_KEYS = {
+    // 包私有便于纯 JVM 单测锁定与 strings.xml home_block_titles 的长度/顺序。
+    static final String[] BLOCK_KEYS = {
             "PAGE_RECOMMEND_PRIVATE_RCMD_SONG",
             "PAGE_RECOMMEND_RANK",
             "PAGE_BLOCK_TOPLIST",
@@ -72,7 +73,13 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
             "PAGE_RECOMMEND_COMBINATION",
             "PAGE_RECOMMEND_FIRM_PLAYLIST",
             "PAGE_IMG_TEXT_MUSIC_PODCAST",
-            "PAGE_IMG_TEXT_VOICELIST_RCMD_HOT"
+            "PAGE_IMG_TEXT_VOICELIST_RCMD_HOT",
+            // 9.6.13 已核实的新 code（追加在末尾，避免旧项索引变化）：
+            // SEARCH_CHANNEL_ENTRY 来自真机 UI-03 scan 日志的 DslBlock#getPositionCode；
+            // MORE_RCMD 来自 base.apk assets/mix_search_first_cache.json 的
+            // positionCode / dslData.blockCode / bizCode。
+            "PAGE_RECOMMEND_SEARCH_CHANNEL_ENTRY",
+            "PAGE_RECOMMEND_MORE_RCMD"
     };
 
     // 顶部频道（与 9.6.08 实测 tab 对齐；key 是目标应用下发的频道代码）
