@@ -27,7 +27,8 @@ import java.util.concurrent.atomic.AtomicLong;
  *   DexKitLocator/VersionGate 四份 ActivityThread 反射副本收敛于此）；
  * - authority 解析复用 StatusProvider.authority(pkg)，删除各通道的字面量拼接；
  * - warning-once 的上下文不可用/发布失败日志（按通道各记一次，等价于原先各自的
- *   volatile 布尔）。
+ *   volatile 布尔）；
+ * - context 未就绪时按 1s/2s/4s 有界重试（每通道一条链），避免冷启动首报丢失。
  *
  * 发送内容经 {@link Channel} 参数化（模块包名、type 键、JSON 构建、告警文案），
  * 节流器由各通道持有并在调用时传入。类与入口是 public 仅因 hooks/dexkit 子包的
@@ -38,6 +39,9 @@ public final class TargetProcessPublisher {
     private static final String TAG = "CloudMusicTool";
     /** 节流窗口宽度；两条通道沿用原先各自的 2 秒。 */
     private static final long PUBLISH_INTERVAL_MS = 2000L;
+
+    /** context 未就绪时的重试间隔；耗尽后停止，等下一次状态变化再试。 */
+    private static final long[] RETRY_DELAYS_MS = {1000L, 2000L, 4000L};
 
     /** 回传通道描述：发送内容与告警文案参数化，mounts/experiments 各一个单例实现。 */
     public interface Channel {
@@ -67,8 +71,11 @@ public final class TargetProcessPublisher {
     // warning-once 标志：按通道实例（单例，恒等比较）各记一次，等价于原先各自的 volatile 布尔。
     private static final Set<Channel> sContextWarned = ConcurrentHashMap.newKeySet();
     private static final Set<Channel> sFailureWarned = ConcurrentHashMap.newKeySet();
+    // 重试链在途的通道：同一通道同时只保留一条链，避免安装期多次 publish 重复排任务。
+    private static final Set<Channel> sRetryPending = ConcurrentHashMap.newKeySet();
 
-    private static volatile Context sTargetContext;
+    // 包私有可整体替换：单测置空/注入（与 sExecutor 同）；生产只由 targetContext() 写入。
+    static volatile Context sTargetContext;
 
     private TargetProcessPublisher() {
     }
@@ -80,12 +87,12 @@ public final class TargetProcessPublisher {
     public static void publish(PublishThrottle throttle, Channel channel) {
         PublishThrottle.Decision d = throttle.decide();
         if (d.sendNow) {
-            sExecutor.execute(() -> doPublish(channel));
+            sExecutor.execute(() -> doPublish(channel, 0));
         }
         if (d.hasTrailing()) {
             sExecutor.schedule(() -> {
                 if (throttle.onWindowClose()) {
-                    doPublish(channel);
+                    doPublish(channel, 0);
                 }
             }, d.trailingDelayMs, TimeUnit.MILLISECONDS);
         }
@@ -93,26 +100,29 @@ public final class TargetProcessPublisher {
 
     /** 绕过节流立即提交一次最终快照（HookState/ExperimentState 的 flush 入口）。 */
     public static void flush(Channel channel) {
-        sExecutor.execute(() -> doPublish(channel));
+        sExecutor.execute(() -> doPublish(channel, 0));
     }
 
-    private static void doPublish(Channel channel) {
+    private static void doPublish(Channel channel, int attempt) {
         String pkg = channel.modulePackage();
         if (pkg == null || pkg.isEmpty()) {
+            sRetryPending.remove(channel);
             return;
         }
         String json = channel.buildJson();
         if (json == null) {
+            sRetryPending.remove(channel);
+            return;
+        }
+        Context ctx = targetContext();
+        if (ctx == null) {
+            if (sContextWarned.add(channel)) {
+                Log.w(TAG, channel.contextUnavailableWarning());
+            }
+            scheduleContextRetry(channel, attempt);
             return;
         }
         try {
-            Context ctx = targetContext();
-            if (ctx == null) {
-                if (sContextWarned.add(channel)) {
-                    Log.w(TAG, channel.contextUnavailableWarning());
-                }
-                return;
-            }
             Bundle extras = new Bundle();
             String type = channel.type();
             if (type != null) {
@@ -124,7 +134,36 @@ public final class TargetProcessPublisher {
             if (sFailureWarned.add(channel)) {
                 Log.w(TAG, channel.publishFailureWarning(t));
             }
+        } finally {
+            sRetryPending.remove(channel);
         }
+    }
+
+    /**
+     * context 未就绪时排下一次重试；同一通道同时只保留一条链。任务执行前先移除
+     * 在途标记，使下一次仍失败时能继续排后续重试。
+     */
+    private static void scheduleContextRetry(Channel channel, int attempt) {
+        if (attempt >= RETRY_DELAYS_MS.length) {
+            sRetryPending.remove(channel);
+            return;
+        }
+        if (!sRetryPending.add(channel)) {
+            return;
+        }
+        try {
+            sExecutor.schedule(() -> {
+                sRetryPending.remove(channel);
+                doPublish(channel, attempt + 1);
+            }, RETRY_DELAYS_MS[attempt], TimeUnit.MILLISECONDS);
+        } catch (Throwable t) {
+            sRetryPending.remove(channel);
+        }
+    }
+
+    /** 仅供单测重置重试链状态（生产不调用）。 */
+    static void resetRetryStateForTest() {
+        sRetryPending.clear();
     }
 
     /** 反射 ActivityThread.currentActivityThread().getApplication()，成功一次后缓存；失败返回 null。 */
