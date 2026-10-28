@@ -13,16 +13,24 @@ import androidx.preference.PreferenceFragmentCompat;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Set;
 
 /**
  * 首页定制与导航精简页面。
+ *
+ * <p>所有 remote prefs 读取都在后台线程完成，结果回主线程渲染；
+ * 框架未连接时三个多选项置灰并显示“设置不会生效”，写入失败则回滚 UI。
  */
 public class HomeCustomizeFragment extends PreferenceFragmentCompat {
 
     private static final int REQ_PICK_BG = 1001;
 
+    private static final String KEY_UNAVAILABLE = "home_customize_unavailable";
+
     private ConfigStore mStore;
+    /** 丢弃过期的后台读取结果，避免旧快照覆盖新一次 refresh。 */
+    private int mRefreshGeneration;
 
     // 9.6.13 新增 6 项（BANNER_0 / GREETING / NOTE / PODCAST_NARROW_SCENE /
     // SEARCH_TOP_BANNER / SECONDARY_TAB）与旧 30 项并存；疑似改名项保留旧 code，
@@ -82,7 +90,8 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
         setPreferencesFromResource(R.xml.prefs_home_customize, rootKey);
-        mStore = new ConfigStore(requireContext());
+        // 构造不做 I/O；remote prefs 在 refresh() 的后台任务里解析。
+        mStore = new ConfigStore();
         setupPreferences();
         refresh();
     }
@@ -104,6 +113,11 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
         Preference hint = findPreference("footer_home_custom_hint");
         if (hint != null) {
             hint.setSummary(R.string.home_customize_hint);
+        }
+
+        Preference warning = findPreference(KEY_UNAVAILABLE);
+        if (warning != null) {
+            warning.setVisible(false);
         }
 
         Preference pick = findPreference("mine_bg_pick");
@@ -181,42 +195,111 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
 
     private void bindMultiSelect(String key, String[] entries, String[] values) {
         MultiSelectPreference pref = findPreference(key);
-        if (pref != null) {
-            pref.setEntries(entries);
-            pref.setEntryValues(values);
-            pref.setOnPreferenceChangeListener((preference, newValue) -> {
-                if (newValue instanceof Set) {
-                    @SuppressWarnings("unchecked")
-                    Set<String> set = (Set<String>) newValue;
-                    mStore.putStringSet(key, set);
-                }
-                return true;
-            });
+        if (pref == null) {
+            return;
         }
+        pref.setEntries(entries);
+        pref.setEntryValues(values);
+        // 首次快照回来前先置灰：此时 remote() 还是 false，不能接受写入。
+        pref.setEnabled(false);
+        pref.setOnPreferenceChangeListener((preference, newValue) -> {
+            if (!(newValue instanceof Set)) {
+                return false;
+            }
+            @SuppressWarnings("unchecked")
+            Set<String> next = new HashSet<>((Set<String>) newValue);
+            if (!mStore.remote()) {
+                toast(R.string.home_customize_unavailable);
+                return false;
+            }
+            Set<String> before = new HashSet<>(pref.getValues());
+            // 用户已产生更新的选择：作废在途读取，避免旧快照回写覆盖本次修改。
+            mRefreshGeneration++;
+            boolean enqueued = mStore.putStringSet(key, next, saved -> {
+                if (saved || !isAdded()) {
+                    return;
+                }
+                // commit 被远端拒绝：回到保存前的选择并提示，不假装已保存。
+                pref.setValues(before);
+                toast(R.string.home_customize_save_failed);
+            });
+            if (!enqueued) {
+                toast(R.string.home_customize_save_failed);
+                return false;
+            }
+            return true;
+        });
     }
 
+    /**
+     * 重新读取 remote prefs 与背景图状态。binder/磁盘读取全部在后台线程，
+     * 结果回主线程；generation 保证旧快照不会覆盖新一次 refresh。
+     */
     void refresh() {
         if (getContext() == null) {
             return;
         }
-        mStore = new ConfigStore(requireContext());
-        MineBackgroundStore.syncExternal(requireContext());
-        updatePrefValues(Config.KEY_HOME_BLOCKS_FILTER);
-        updatePrefValues(Config.KEY_TOP_CHANNELS_KEEP);
-        updatePrefValues(Config.KEY_BOTTOM_NAV_KEEP);
+        Context context = requireContext();
+        Context appContext = context.getApplicationContext();
+        final Context bgContext = appContext != null ? appContext : context;
+        final int generation = ++mRefreshGeneration;
+        ConfigStore.io().execute(() -> {
+            mStore.resolveRemote();
+            final boolean remote = mStore.remote();
+            final Set<String> blocks = mStore.getStringSet(
+                    Config.KEY_HOME_BLOCKS_FILTER, Collections.emptySet());
+            final Set<String> channels = mStore.getStringSet(
+                    Config.KEY_TOP_CHANNELS_KEEP, Collections.emptySet());
+            final Set<String> bottomNav = mStore.getStringSet(
+                    Config.KEY_BOTTOM_NAV_KEEP, Collections.emptySet());
+            final boolean hasImage = MineBackgroundStore.hasImage(bgContext);
+            ConfigStore.postToMain(() -> {
+                if (!isAdded() || generation != mRefreshGeneration) {
+                    return;
+                }
+                applySnapshot(remote, blocks, channels, bottomNav, hasImage);
+            });
+        });
+        MineBackgroundStore.syncExternal(bgContext);
+    }
+
+    private void applySnapshot(boolean remote, Set<String> blocks, Set<String> channels,
+                               Set<String> bottomNav, boolean hasImage) {
+        applyMultiSelect(Config.KEY_HOME_BLOCKS_FILTER, blocks, remote);
+        applyMultiSelect(Config.KEY_TOP_CHANNELS_KEEP, channels, remote);
+        applyMultiSelect(Config.KEY_BOTTOM_NAV_KEEP, bottomNav, remote);
+
+        Preference warning = findPreference(KEY_UNAVAILABLE);
+        if (warning != null) {
+            warning.setVisible(!remote);
+        }
+        Preference hint = findPreference("footer_home_custom_hint");
+        if (hint != null) {
+            hint.setSummary(remote
+                    ? R.string.home_customize_hint
+                    : R.string.home_customize_unavailable);
+        }
         Preference pick = findPreference("mine_bg_pick");
         if (pick != null) {
-            pick.setSummary(MineBackgroundStore.hasImage(requireContext())
+            pick.setSummary(hasImage
                     ? R.string.mine_bg_pick_summary_set
                     : R.string.mine_bg_pick_summary_unset);
         }
     }
 
-    private void updatePrefValues(String key) {
+    private void applyMultiSelect(String key, Set<String> values, boolean remote) {
         MultiSelectPreference pref = findPreference(key);
-        if (pref != null) {
-            Set<String> saved = mStore.getStringSet(key, Collections.emptySet());
-            pref.setValues(saved);
+        if (pref == null) {
+            return;
+        }
+        pref.setValues(values);
+        pref.setEnabled(remote);
+    }
+
+    private void toast(int resId) {
+        Context context = getContext();
+        if (context != null) {
+            Toast.makeText(context, resId, Toast.LENGTH_SHORT).show();
         }
     }
 }

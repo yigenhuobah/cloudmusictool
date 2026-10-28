@@ -31,11 +31,14 @@ public class ExperimentFragment extends PreferenceFragmentCompat {
     private static final int MAX_OBSERVED = 200;
 
     private ConfigStore mStore;
+    /** 丢弃过期的后台读取结果，避免旧快照覆盖新一次 refresh。 */
+    private int mRefreshGeneration;
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
-        mStore = new ConfigStore(requireContext());
-        rebuild();
+        // 构造不做 I/O；remote prefs 在 refresh() 的后台任务里解析。
+        mStore = new ConfigStore();
+        refresh();
     }
 
     @Override
@@ -46,20 +49,42 @@ public class ExperimentFragment extends PreferenceFragmentCompat {
 
     /** service 绑定或切回本页时重新读取配置与观测数据。 */
     void refresh() {
+        refresh(false);
+    }
+
+    /**
+     * remote prefs 与观测数据都在后台线程读取，结果回主线程重建页面。
+     *
+     * @param announce 读取完成后是否提示“已重新读取”（手动刷新按钮使用）。
+     */
+    private void refresh(boolean announce) {
         if (getContext() == null) {
             return;
         }
-        mStore = new ConfigStore(requireContext());
-        rebuild();
+        Context context = requireContext();
+        Context appContext = context.getApplicationContext();
+        final Context bgContext = appContext != null ? appContext : context;
+        final int generation = ++mRefreshGeneration;
+        ConfigStore.io().execute(() -> {
+            mStore.resolveRemote();
+            final Map<String, String> forceMap = readForceMap();
+            final Map<String, Observed> observed = readObserved(bgContext);
+            ConfigStore.postToMain(() -> {
+                if (!isAdded() || generation != mRefreshGeneration) {
+                    return;
+                }
+                rebuild(forceMap, observed);
+                if (announce) {
+                    toast(R.string.experiment_refreshed);
+                }
+            });
+        });
     }
 
-    private void rebuild() {
+    private void rebuild(Map<String, String> forceMap, Map<String, Observed> observed) {
         Context ctx = requireContext();
         PreferenceManager pm = getPreferenceManager();
         PreferenceScreen screen = pm.createPreferenceScreen(ctx);
-
-        Map<String, String> forceMap = readForceMap();
-        Map<String, Observed> observed = readObserved();
 
         addNotice(screen, ctx);
         addCurated(screen, ctx, forceMap, observed);
@@ -137,8 +162,7 @@ public class ExperimentFragment extends PreferenceFragmentCompat {
         refresh.setSummary(R.string.experiment_refresh_summary);
         refresh.setPersistent(false);
         refresh.setOnPreferenceClickListener(pref -> {
-            refresh();
-            toast(R.string.experiment_refreshed);
+            refresh(true);
             return true;
         });
         category.addPreference(refresh);
@@ -255,15 +279,23 @@ public class ExperimentFragment extends PreferenceFragmentCompat {
         new MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.experiment_cancel_title)
                 .setMessage(R.string.experiment_cancel_message)
-                .setPositiveButton(android.R.string.ok, (d, w) -> {
+                .setPositiveButton(android.R.string.ok, (d, w) -> ConfigStore.io().execute(() -> {
+                    mStore.resolveRemote();
                     Map<String, String> map = readForceMap();
-                    if (map.remove(key) != null && !writeForceMap(map)) {
-                        toast(R.string.experiment_save_failed);
-                        return;
-                    }
-                    rebuild();
-                    toast(R.string.experiment_cancelled);
-                })
+                    boolean removed = map.remove(key) != null;
+                    boolean saved = !removed || writeForceMapBlocking(map);
+                    ConfigStore.postToMain(() -> {
+                        if (!isAdded()) {
+                            return;
+                        }
+                        if (!saved) {
+                            toast(R.string.experiment_save_failed);
+                            return;
+                        }
+                        refresh();
+                        toast(R.string.experiment_cancelled);
+                    });
+                }))
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
     }
@@ -272,14 +304,11 @@ public class ExperimentFragment extends PreferenceFragmentCompat {
         new MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.experiment_reset_title)
                 .setMessage(R.string.experiment_reset_message)
-                .setPositiveButton(android.R.string.ok, (d, w) -> {
-                    if (!writeForceMap(new LinkedHashMap<>())) {
-                        toast(R.string.experiment_save_failed);
-                        return;
-                    }
-                    rebuild();
-                    toast(R.string.experiment_reset_done);
-                })
+                .setPositiveButton(android.R.string.ok, (d, w) -> ConfigStore.io().execute(() -> {
+                    mStore.resolveRemote();
+                    reportWrite(writeForceMapBlocking(new LinkedHashMap<>()),
+                            R.string.experiment_reset_done);
+                }))
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
     }
@@ -291,34 +320,38 @@ public class ExperimentFragment extends PreferenceFragmentCompat {
             return;
         }
 
-        Map<String, String> map = readForceMap();
+        // read-modify-write 全部在同一个后台任务里完成，避免主线程 binder 与丢更新。
+        ConfigStore.io().execute(() -> {
+            mStore.resolveRemote();
+            Map<String, String> map = readForceMap();
 
-        if (group != null) {
-            // promoted = 已提升的 key（forceMap 中不属于 CURATED 的）+ 本次待提升的 key
-            Set<String> promoted = new LinkedHashSet<>();
-            for (String forcedKey : map.keySet()) {
-                if (!AbTestPolicy.isCurated(forcedKey)) {
-                    promoted.add(forcedKey);
+            if (group != null) {
+                // promoted = 已提升的 key（forceMap 中不属于 CURATED 的）+ 本次待提升的 key
+                Set<String> promoted = new LinkedHashSet<>();
+                for (String forcedKey : map.keySet()) {
+                    if (!AbTestPolicy.isCurated(forcedKey)) {
+                        promoted.add(forcedKey);
+                    }
                 }
+                promoted.add(key);
+                if (!AbTestPolicy.isAllowed(key, promoted)) {
+                    ConfigStore.postToMain(() -> {
+                        if (isAdded()) {
+                            toast(R.string.experiment_promote_denied);
+                        }
+                    });
+                    return;
+                }
+                map.put(key, group);
+            } else {
+                map.remove(key);
             }
-            promoted.add(key);
-            if (!AbTestPolicy.isAllowed(key, promoted)) {
-                toast(R.string.experiment_promote_denied);
-                return;
-            }
-            map.put(key, group);
-        } else {
-            map.remove(key);
-        }
 
-        if (!writeForceMap(map)) {
-            toast(R.string.experiment_save_failed);
-            return;
-        }
-        rebuild();
-        toast(R.string.experiment_saved);
+            reportWrite(writeForceMapBlocking(map), R.string.experiment_saved);
+        });
     }
 
+    /** 只在后台线程调用：remote prefs 的 getString 是 binder 调用。 */
     private Map<String, String> readForceMap() {
         String raw = mStore.getString(Config.KEY_ABTEST_FORCE_MAP, null);
         // 实验页只校验分组名、不做白名单/黑名单过滤（需展示全部已强开项）；
@@ -327,8 +360,12 @@ public class ExperimentFragment extends PreferenceFragmentCompat {
                 (key, group) -> AbTestPolicy.isValidGroup(group));
     }
 
-    /** @return true 表示已写入 remote prefs；false 表示框架未连接或提交失败。 */
-    private boolean writeForceMap(Map<String, String> map) {
+    /**
+     * 同步写入 force map，只在后台线程调用。
+     *
+     * @return true 表示 remote prefs 已接受本次 commit。
+     */
+    private boolean writeForceMapBlocking(Map<String, String> map) {
         JSONObject obj = new JSONObject();
         try {
             for (Map.Entry<String, String> entry : map.entrySet()) {
@@ -336,15 +373,31 @@ public class ExperimentFragment extends PreferenceFragmentCompat {
             }
         } catch (Throwable ignored) {
         }
-        return mStore.putString(Config.KEY_ABTEST_FORCE_MAP, obj.toString());
+        return mStore.putStringBlocking(Config.KEY_ABTEST_FORCE_MAP, obj.toString()).saved();
+    }
+
+    /** 后台任务完成后的统一 UI 反馈：失败只提示，成功提示并重新读取实际状态。 */
+    private void reportWrite(boolean saved, int successToast) {
+        ConfigStore.postToMain(() -> {
+            if (!isAdded()) {
+                return;
+            }
+            if (!saved) {
+                toast(R.string.experiment_save_failed);
+                return;
+            }
+            refresh();
+            toast(successToast);
+        });
     }
 
     // --------------------------------------------------------------- observed
 
-    private Map<String, Observed> readObserved() {
+    /** 只在后台线程调用：StatusProvider 读本地 SharedPreferences。 */
+    private Map<String, Observed> readObserved(Context context) {
         LinkedHashMap<String, Observed> out = new LinkedHashMap<>();
         try {
-            String raw = StatusProvider.readExperiments(requireContext());
+            String raw = StatusProvider.readExperiments(context);
             if (raw == null || raw.isEmpty()) {
                 return out;
             }

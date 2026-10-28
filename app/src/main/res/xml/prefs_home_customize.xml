@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <Preference
+        android:key="home_customize_unavailable"
+        android:title="@string/home_customize_unavailable_title"
+        android:summary="@string/home_customize_unavailable"
+        android:persistent="false"
+        android:selectable="false"
+        android:visible="false" />
+
     <PreferenceCategory android:title="@string/home_customize_title">
 
         <com.cloudmusictool.app.MultiSelectPreference

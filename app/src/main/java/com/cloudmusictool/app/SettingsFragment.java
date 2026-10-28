@@ -1,6 +1,7 @@
 package com.cloudmusictool.app;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.os.Bundle;
 import android.widget.Toast;
@@ -36,7 +37,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
         setPreferencesFromResource(R.xml.prefs, rootKey);
-        mStore = new ConfigStore(requireContext());
+        // 构造不做 I/O；remote prefs 在 refresh() 的后台任务里解析。
+        mStore = new ConfigStore();
         mStatusExecutor = Executors.newSingleThreadExecutor(r -> {
             Thread thread = new Thread(r, "CloudMusicTool-Status");
             thread.setDaemon(true);
@@ -76,9 +78,46 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 p.setEnabled(false);
                 continue;
             }
+            // 首次快照回来前先置灰：此时 remote() 还是 false，不能接受写入。
+            p.setEnabled(false);
             p.setOnPreferenceChangeListener((pref, value) -> {
-                if (value instanceof Boolean) {
-                    mStore.put(f.key, (Boolean) value);
+                if (!(value instanceof Boolean) || !(pref instanceof MaterialSwitchPreference)) {
+                    return false;
+                }
+                boolean next = (Boolean) value;
+                MaterialSwitchPreference sw = (MaterialSwitchPreference) pref;
+                boolean before = sw.isCheckedValue();
+                if (!mStore.remote()) {
+                    Toast.makeText(requireContext(),
+                            R.string.status_remote_unavailable, Toast.LENGTH_SHORT).show();
+                    return false;
+                }
+                // 用户已产生更新的选择：作废在途快照，避免旧值回写覆盖本次修改。
+                mStatusGeneration.incrementAndGet();
+                boolean enqueued = mStore.put(f.key, next, saved -> {
+                    if (!isAdded()) {
+                        return;
+                    }
+                    // 写结果比任何在途快照都新，作废它们；成功时以提交值为准。
+                    mStatusGeneration.incrementAndGet();
+                    Preference current = findPreference(f.key);
+                    if (saved) {
+                        if (current instanceof MaterialSwitchPreference) {
+                            ((MaterialSwitchPreference) current).setCheckedValue(next);
+                        }
+                        return;
+                    }
+                    // commit 被远端拒绝：回滚开关并提示，不假装已保存。
+                    if (current instanceof MaterialSwitchPreference) {
+                        ((MaterialSwitchPreference) current).setCheckedValue(before);
+                    }
+                    Toast.makeText(requireContext(),
+                            R.string.setting_save_failed, Toast.LENGTH_SHORT).show();
+                });
+                if (!enqueued) {
+                    Toast.makeText(requireContext(),
+                            R.string.setting_save_failed, Toast.LENGTH_SHORT).show();
+                    return false;
                 }
                 return true;
             });
@@ -98,42 +137,47 @@ public class SettingsFragment extends PreferenceFragmentCompat {
      * 桌面图标开关。
      *
      * <p>改的是本模块 launcher alias 的组件状态，与目标进程的 remote prefs 无关，
-     * 所以不走 ConfigStore。
+     * 所以不走 ConfigStore。组件状态读写是 PackageManager binder，
+     * 统一放到后台队列；失败时回滚开关。
      */
     private void bindLauncherIcon() {
         Preference pref = findPreference(KEY_HIDE_ICON);
         if (!(pref instanceof MaterialSwitchPreference)) {
             return;
         }
-        MaterialSwitchPreference sw = (MaterialSwitchPreference) pref;
+        final MaterialSwitchPreference sw = (MaterialSwitchPreference) pref;
         sw.setTitle(R.string.app_hide_icon_title);
         sw.setSummary(R.string.app_hide_icon_summary);
-        // 初始值交给紧随其后的 refresh() -> syncLauncherIconState()，避免重复读取 binder。
+        // 初始值交给紧随其后的 refresh() -> applySnapshot()，避免重复读取 binder。
         sw.setOnPreferenceChangeListener((preference, value) -> {
             if (!(value instanceof Boolean)) {
                 return false;
             }
-            boolean hide = (Boolean) value;
-            if (!LauncherIcon.setHidden(requireContext(), hide)) {
-                Toast.makeText(requireContext(),
-                        R.string.app_hide_icon_failed, Toast.LENGTH_LONG).show();
-                return false;
-            }
-            Toast.makeText(requireContext(),
-                    hide ? R.string.app_hide_icon_hidden_toast
-                            : R.string.app_hide_icon_shown_toast,
-                    Toast.LENGTH_SHORT).show();
+            final boolean hide = (Boolean) value;
+            final boolean before = sw.isCheckedValue();
+            Context context = requireContext();
+            Context appContext = context.getApplicationContext();
+            final Context bgContext = appContext != null ? appContext : context;
+            ConfigStore.io().execute(() -> {
+                final boolean ok = LauncherIcon.setHidden(bgContext, hide);
+                ConfigStore.postToMain(() -> {
+                    if (!isAdded()) {
+                        return;
+                    }
+                    if (!ok) {
+                        sw.setCheckedValue(before);
+                        Toast.makeText(requireContext(),
+                                R.string.app_hide_icon_failed, Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    Toast.makeText(requireContext(),
+                            hide ? R.string.app_hide_icon_hidden_toast
+                                    : R.string.app_hide_icon_shown_toast,
+                            Toast.LENGTH_SHORT).show();
+                });
+            });
             return true;
         });
-    }
-
-    /** 组件状态可能被外部改动（adb、清数据、重装），回到本页时以系统状态为准重刷一次。 */
-    private void syncLauncherIconState() {
-        Preference pref = findPreference(KEY_HIDE_ICON);
-        if (pref instanceof MaterialSwitchPreference) {
-            ((MaterialSwitchPreference) pref)
-                    .setCheckedValue(LauncherIcon.isHidden(requireContext()));
-        }
     }
 
     private void bindPages() {
@@ -152,48 +196,44 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         }
     }
 
-    /** 重新读取框架状态与开关值；service 绑定后由 Activity 调用。 */
+    /**
+     * 重新读取框架状态与开关值；service 绑定后由 Activity 调用。
+     *
+     * <p>remote prefs 解析、开关读取、launcher 组件状态与状态卡查询全部在
+     * mStatusExecutor 上完成，结果回主线程一次性渲染；generation 丢弃过期结果。
+     */
     void refresh() {
         if (getContext() == null || mStatusExecutor == null
                 || mStatusExecutor.isShutdown()) {
             return;
         }
-        mStore = new ConfigStore(requireContext());
-        boolean writable = mStore.remote();
-        for (Feature f : Feature.values()) {
-            Preference p = findPreference(f.key);
-            if (p instanceof MaterialSwitchPreference) {
-                MaterialSwitchPreference sw = (MaterialSwitchPreference) p;
-                if (f.blocked()) {
-                    sw.setCheckedValue(false);
-                    sw.setEnabled(false);
-                } else {
-                    sw.setCheckedValue(mStore.get(f.key, f.defaultEnabled));
-                    sw.setEnabled(writable);
-                }
-            }
-        }
-        syncLauncherIconState();
-        refreshStatusAsync();
-    }
-
-    private void refreshStatusAsync() {
-        final XposedService service = ServiceBridge.get();
         final Activity activity = getActivity();
-        final android.content.Context appContext = requireContext().getApplicationContext();
         if (activity == null) {
             return;
         }
+        Context context = requireContext();
+        Context appContext = context.getApplicationContext();
+        final Context bgContext = appContext != null ? appContext : context;
+        final XposedService service = ServiceBridge.get();
         final int generation = mStatusGeneration.incrementAndGet();
         try {
             mStatusExecutor.execute(() -> {
-                StatusSnapshot snapshot = queryStatus(service, appContext);
+                // 首次解析 remote prefs 是同步 binder，必须在后台线程。
+                mStore.resolveRemote();
+                final boolean writable = mStore.remote();
+                final Feature[] features = Feature.values();
+                final boolean[] enabled = new boolean[features.length];
+                for (int i = 0; i < features.length; i++) {
+                    enabled[i] = mStore.get(features[i].key, features[i].defaultEnabled);
+                }
+                final boolean iconHidden = LauncherIcon.isHidden(bgContext);
+                final StatusSnapshot snapshot = queryStatus(service, bgContext, writable);
                 activity.runOnUiThread(() -> {
                     if (!isAdded() || mStatusGeneration.get() != generation
                             || ServiceBridge.get() != service) {
                         return;
                     }
-                    renderStatus(snapshot);
+                    applySnapshot(features, enabled, writable, iconHidden, snapshot);
                 });
             });
         } catch (Throwable ignored) {
@@ -201,7 +241,33 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         }
     }
 
-    private StatusSnapshot queryStatus(XposedService service, android.content.Context context) {
+    private void applySnapshot(Feature[] features, boolean[] enabled, boolean writable,
+                               boolean iconHidden, StatusSnapshot snapshot) {
+        for (int i = 0; i < features.length; i++) {
+            Feature f = features[i];
+            Preference p = findPreference(f.key);
+            if (!(p instanceof MaterialSwitchPreference)) {
+                continue;
+            }
+            MaterialSwitchPreference sw = (MaterialSwitchPreference) p;
+            if (f.blocked()) {
+                sw.setCheckedValue(false);
+                sw.setEnabled(false);
+            } else {
+                sw.setCheckedValue(enabled[i]);
+                sw.setEnabled(writable);
+            }
+        }
+        // 组件状态可能被外部改动（adb、清数据、重装），回到本页时以系统状态为准。
+        Preference icon = findPreference(KEY_HIDE_ICON);
+        if (icon instanceof MaterialSwitchPreference) {
+            ((MaterialSwitchPreference) icon).setCheckedValue(iconHidden);
+        }
+        renderStatus(snapshot);
+    }
+
+    private StatusSnapshot queryStatus(XposedService service, Context context,
+                                       boolean remotePrefs) {
         StatusSnapshot snapshot = new StatusSnapshot();
         if (service != null) {
             try {
@@ -221,7 +287,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             snapshot.targetVersion = info.versionName;
         } catch (Throwable ignored) {
         }
-        snapshot.remotePrefs = ServiceBridge.remotePreferences(Config.GROUP) != null;
+        snapshot.remotePrefs = remotePrefs;
         snapshot.failedFeatures = StatusProvider.failedFeatureCount(context);
         return snapshot;
     }

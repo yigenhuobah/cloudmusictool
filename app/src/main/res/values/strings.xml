@@ -18,6 +18,7 @@
     <string name="status_target_missing">未安装</string>
     <string name="status_remote_ok">remote prefs 可用，开关改动目标进程可读</string>
     <string name="status_remote_unavailable">remote prefs 不可用，开关不可用</string>
+    <string name="setting_save_failed">保存失败，设置未生效</string>
 
     <!-- 异常横幅 -->
     <string name="status_warning_version">目标应用版本 %1$s 未适配（适配版本 %2$s），功能可能失效</string>
@@ -198,6 +199,9 @@
     <!-- 首页定制页 -->
     <string name="home_customize_title">首页与导航定制</string>
     <string name="home_customize_hint">本页配置已持久化至远程配置。勾选后重启网易云音乐生效；未勾选任何项时对应功能保持全量显示</string>
+    <string name="home_customize_unavailable_title">框架未连接</string>
+    <string name="home_customize_unavailable">框架未连接，设置不会生效；请在 LSPosed 中启用模块并勾选网易云音乐</string>
+    <string name="home_customize_save_failed">保存失败，设置未生效</string>
     <string name="home_blocks_title">发现页推荐卡片隐藏</string>
     <string name="home_blocks_summary">勾选需要在首页过滤的卡片类型</string>
     <string name="home_channels_title">顶部频道保留</string>
