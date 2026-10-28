@@ -68,7 +68,45 @@ public final class RuntimeHookBootstrap {
     /** 运行时 installer 只执行一次（多个 Activity 的 onCreate 只认第一个）。 */
     private static final AtomicBoolean sRuntimeInstalled = new AtomicBoolean();
 
+    /**
+     * 运行时 ClassLoader 探测类，任一可加载即视为有效。
+     *
+     * 9.6.13 首个 Activity 的 ClassLoader 是 Tinker DelegateLastClassLoader，
+     * 能加载宿主类；若拿到的是构造异常/中间态 loader（加载不到任何宿主类），
+     * 不能直接执行 installer，否则所有 hook 都会挂在无效 loader 上且
+     * sRuntimeInstalled 永远为 true。这里只做 Class.forName（initialize=false），
+     * 不使用 DexKit，避免在主线程新增 dex 全盘扫描。
+     */
+    static final String[] RUNTIME_PROBE_CLASSES = {
+            "com.netease.cloudmusic.meta.virtual.UserBackgroundInfo",
+            "com.netease.cloudmusic.music.biz.setting.activity.SettingActivity",
+            "com.netease.cloudmusic.discovery.view.newframework.BaseArkV3Fragment",
+    };
+
     private RuntimeHookBootstrap() {
+    }
+
+    /** 校验运行时 ClassLoader 能加载任一探测宿主类；纯 JVM 可用测试 ClassLoader 覆盖。 */
+    static boolean runtimeLoaderUsable(ClassLoader cl) {
+        return runtimeLoaderUsable(cl, RUNTIME_PROBE_CLASSES);
+    }
+
+    static boolean runtimeLoaderUsable(ClassLoader cl, String... probeClasses) {
+        if (cl == null || probeClasses == null) {
+            return false;
+        }
+        for (String className : probeClasses) {
+            if (className == null || className.isEmpty()) {
+                continue;
+            }
+            try {
+                Class.forName(className, false, cl);
+                return true;
+            } catch (Throwable ignored) {
+                // 换下一个探测类；全部失败才判定 loader 不可用。
+            }
+        }
+        return false;
     }
 
     /**
@@ -140,6 +178,14 @@ public final class RuntimeHookBootstrap {
         }
         if (snapshot.isEmpty()) {
             // 允许后续 Activity 在 installer 登记后重试。
+            sRuntimeInstalled.set(false);
+            return;
+        }
+        if (!runtimeLoaderUsable(runtimeCl)) {
+            // loader 尚不能加载宿主类（Tinker 中间态或构造异常）：不执行 installer，
+            // 重置标志让后续 Activity 用新的运行时 loader 重试。
+            HookKit.warn(module, "runtime loader unusable (no host class loadable): "
+                    + runtimeCl + ", deferring runtime hooks");
             sRuntimeInstalled.set(false);
             return;
         }
