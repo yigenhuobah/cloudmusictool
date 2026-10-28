@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.res.Configuration;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.ColorDrawable;
@@ -20,6 +21,7 @@ import com.cloudmusictool.app.Config;
 import com.cloudmusictool.app.Feature;
 import com.cloudmusictool.app.HookState;
 import com.cloudmusictool.app.SampleSize;
+import com.cloudmusictool.app.StatusProvider;
 import com.cloudmusictool.app.profile.Profile9613;
 import com.cloudmusictool.app.profile.ProfileRegistry;
 import com.cloudmusictool.app.profile.TargetProfile;
@@ -96,8 +98,15 @@ public final class MineBackgroundHooks {
     private static final AtomicBoolean sApplying = new AtomicBoolean(false);
 
     private static volatile Bitmap sCachedBitmap;
-    /** sCachedBitmap 对应 external 源文件的 {lastModified, length} 指纹;null 表示缓存经 provider 兜底读取,无源文件可 stat。 */
+    /**
+     * sCachedBitmap 对应源文件的 {lastModified, length} 指纹；null 表示当前缓存
+     * 没有可比对的源（旧版 Provider 或无源可读），保持「直接用缓存」旧行为。
+     */
     private static volatile long[] sCachedFingerprint;
+    /** 指纹来源是否为 Provider 兜底路径；true 时重校验走 ContentResolver.query。 */
+    private static volatile boolean sCachedFingerprintFromProvider;
+    /** 指纹哨兵：确定源已不存在（清除图片），缓存必须过期。 */
+    private static final long[] FINGERPRINT_MISSING = new long[0];
     /** 9.6.08：模块是否已通过 W1(true) 强制宿主全屏；9.6.13 不使用。 */
     private static volatile boolean sForcedFullScreen;
     /**
@@ -589,9 +598,10 @@ public final class MineBackgroundHooks {
                 return;
             }
             Bitmap bitmap = sCachedBitmap;
-            if (bitmap == null || bitmap.isRecycled() || cachedSourceStale(modulePackage)) {
-                loadAsync(module, f, manager, container, context,
-                        Uri.parse("content://" + modulePackage + ".status/mine_background"));
+            Uri uri = Uri.parse("content://" + modulePackage + ".status/mine_background");
+            if (bitmap == null || bitmap.isRecycled()
+                    || cachedSourceStale(context, modulePackage, uri)) {
+                loadAsync(module, f, manager, container, context, uri);
                 return;
             }
             applyBitmap(module, f, manager, container, bitmap);
@@ -603,32 +613,96 @@ public final class MineBackgroundHooks {
     }
 
     /**
-     * 缓存命中前校验 external 源文件指纹:模块 App 侧换图/清除会写/删
-     * Android/media/&lt;模块包名&gt;/mine_background.jpg,指纹变化或文件消失
-     * 说明缓存已过期,需丢弃缓存重走 loadAsync(加载成功则替换缓存,
-     * 加载失败走 clearApplied 清除旧背景)。
+     * 缓存命中前校验源指纹:模块 App 侧换图/清除会重写或删除
+     * mine_background.jpg，指纹变化或文件消失说明缓存已过期，需丢弃缓存
+     * 重走 loadAsync(加载成功则替换缓存，加载失败走 clearApplied 清除旧背景)。
      *
-     * 已知限制:缓存经 provider 读 internal 的兜底路径(external 不可读时)
-     * 拿不到源文件指纹,此处无法 stat 校验,维持原行为直接用缓存。
+     * external 路径直接 stat 源文件；Provider 兜底路径(external 不可读)经
+     * {@link StatusProvider} 查询同名文件长度/修改时间。任一步读取失败都
+     * 降级为「用缓存」，不因校验本身影响贴图；只有确定源已消失才判过期。
      */
-    private static boolean cachedSourceStale(String modulePackage) {
+    private static boolean cachedSourceStale(Context context, String modulePackage, Uri uri) {
         long[] fingerprint = sCachedFingerprint;
         if (fingerprint == null) {
             return false;
         }
-        File external = externalFile(modulePackage);
-        if (external == null) {
+        long[] current;
+        if (sCachedFingerprintFromProvider) {
+            current = providerFingerprint(context, uri);
+        } else {
+            File external = externalFile(modulePackage);
+            if (external == null) {
+                return false;
+            }
+            try {
+                current = external.isFile()
+                        ? new long[]{external.lastModified(), external.length()}
+                        : FINGERPRINT_MISSING;
+            } catch (Throwable t) {
+                // stat 失败降级为「用缓存」，避免校验本身影响贴图
+                return false;
+            }
+        }
+        return fingerprintStale(fingerprint, current);
+    }
+
+    /**
+     * 纯函数指纹决策（包内可见便于 JVM 单测）：
+     * <ul>
+     *   <li>cached/current 为 null：无法比对（旧缓存/查询失败），保持旧行为不过期；</li>
+     *   <li>current 为空数组：确定源已消失，过期；</li>
+     *   <li>其余：修改时间或长度变化即过期。</li>
+     * </ul>
+     */
+    static boolean fingerprintStale(long[] cached, long[] current) {
+        if (cached == null || current == null) {
             return false;
         }
+        if (current.length == 0) {
+            return true;
+        }
+        if (cached.length < 2) {
+            return true;
+        }
+        return cached[0] != current[0] || cached[1] != current[1];
+    }
+
+    /**
+     * 经 Provider 读取内部图片 {lastModified, length}。返回 null 表示无法
+     * 校验（provider 不支持/被拦截/查询异常），空数组表示文件确实已删除。
+     */
+    private static long[] providerFingerprint(Context context, Uri uri) {
+        if (context == null || uri == null) {
+            return null;
+        }
+        Cursor cursor = null;
         try {
-            if (!external.isFile()) {
-                return true;
+            cursor = context.getContentResolver().query(uri,
+                    new String[]{StatusProvider.COLUMN_LENGTH,
+                            StatusProvider.COLUMN_LAST_MODIFIED},
+                    null, null, null);
+            if (cursor == null) {
+                return null;
             }
-            return external.lastModified() != fingerprint[0]
-                    || external.length() != fingerprint[1];
+            if (!cursor.moveToFirst()) {
+                return FINGERPRINT_MISSING;
+            }
+            int lengthIndex = cursor.getColumnIndex(StatusProvider.COLUMN_LENGTH);
+            int modifiedIndex = cursor.getColumnIndex(StatusProvider.COLUMN_LAST_MODIFIED);
+            if (lengthIndex < 0 || modifiedIndex < 0
+                    || cursor.isNull(lengthIndex) || cursor.isNull(modifiedIndex)) {
+                return null;
+            }
+            return new long[]{cursor.getLong(modifiedIndex), cursor.getLong(lengthIndex)};
         } catch (Throwable t) {
-            // stat 失败降级为「用缓存」,避免校验本身影响贴图
-            return false;
+            return null;
+        } finally {
+            if (cursor != null) {
+                try {
+                    cursor.close();
+                } catch (Throwable ignored) {
+                }
+            }
         }
     }
 
@@ -642,6 +716,7 @@ public final class MineBackgroundHooks {
         new Thread(() -> {
             Bitmap decoded = null;
             long[] fingerprint = null;
+            boolean fromProvider = false;
             try {
                 // 优先读共享目录：MIUI/HyperOS 会拦截模块 Provider 的跨进程唤醒。
                 File external = externalFile(HookState.modulePackage());
@@ -657,12 +732,19 @@ public final class MineBackgroundHooks {
                 }
                 if (decoded == null) {
                     decoded = decode(context, uri);
+                    if (decoded != null) {
+                        // Provider 兜底路径也记录内部文件指纹；旧版模块不支持
+                        // query 时返回 null，保持「无指纹可比」的旧行为。
+                        fingerprint = providerFingerprint(context, uri);
+                        fromProvider = fingerprint != null;
+                    }
                 }
             } catch (Throwable t) {
                 HookKit.warn(module, f.id + " background decode failed: " + t.getMessage());
             }
             final Bitmap bitmap = decoded;
             final long[] sourceFingerprint = fingerprint;
+            final boolean sourceFromProvider = fromProvider;
             MAIN.post(() -> {
                 sLoading.set(false);
                 if (bitmap == null || bitmap.isRecycled()) {
@@ -671,6 +753,7 @@ public final class MineBackgroundHooks {
                 }
                 sCachedBitmap = bitmap;
                 sCachedFingerprint = sourceFingerprint;
+                sCachedFingerprintFromProvider = sourceFromProvider;
                 if (container.isAttachedToWindow()) {
                     applyBitmap(module, f, manager, container, bitmap);
                 }
@@ -759,12 +842,12 @@ public final class MineBackgroundHooks {
                                      Object manager, ViewGroup container) {
         try {
             clearContainer(container);
-            Bitmap cached = sCachedBitmap;
+            // 冻结的位图可能仍被其他 ImageView 持有（进程级共享），这里只清引用，
+            // 不主动 recycle；否则其他页面继续绘制会抛 "Canvas: trying to use a
+            // recycled bitmap"。回收交给 GC。
             sCachedBitmap = null;
             sCachedFingerprint = null;
-            if (cached != null && !cached.isRecycled()) {
-                cached.recycle();
-            }
+            sCachedFingerprintFromProvider = false;
 
             int type = managerType(manager);
             boolean hostFullScreen = type == 4;

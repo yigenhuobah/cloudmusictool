@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
+import android.database.MatrixCursor;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Bundle;
@@ -36,6 +37,9 @@ public class StatusProvider extends ContentProvider {
     public static final String TYPE_EXPERIMENTS = "experiments";
     /** 「我的」页背景图片的固定 URI 路径；只接受这一个路径，避免目录穿越。 */
     public static final String PATH_MINE_BACKGROUND = "/mine_background";
+    /** 背景文件元数据列：目标进程据此判断缓存是否过期。 */
+    public static final String COLUMN_LENGTH = "length";
+    public static final String COLUMN_LAST_MODIFIED = "last_modified";
 
     private static final String MIME_JPEG = "image/jpeg";
 
@@ -230,7 +234,27 @@ public class StatusProvider extends ContentProvider {
     @Override
     public Cursor query(Uri uri, String[] projection, String selection,
                         String[] selectionArgs, String sortOrder) {
-        return null;
+        // 只暴露固定背景路径的元数据；调用方必须仍是网易云音乐。
+        if (uri == null || !PATH_MINE_BACKGROUND.equals(uri.getPath())) {
+            return null;
+        }
+        int uid = Binder.getCallingUid();
+        if (!isTargetUid(uid)) {
+            Log.w(TAG, "mine background query rejected: uid=" + uid);
+            return null;
+        }
+        MatrixCursor cursor = new MatrixCursor(
+                new String[]{COLUMN_LENGTH, COLUMN_LAST_MODIFIED});
+        Context context = getContext();
+        if (context == null) {
+            return cursor;
+        }
+        File file = MineBackgroundStore.file(context);
+        // 文件不存在时返回 0 行：目标进程据此把「已清除」与「查询失败」区分开。
+        if (file.isFile() && file.length() > 0) {
+            cursor.addRow(new Object[]{file.length(), file.lastModified()});
+        }
+        return cursor;
     }
 
     @Override
