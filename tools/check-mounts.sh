@@ -19,6 +19,8 @@
 #   （旧变量 APK 仍作为 TARGET_APK 的别名）
 #
 # 缓存/临时文件固定在 <repo>/tools/.dexsql-cache/（已在 .gitignore 中忽略）。
+# 本脚本不做 dexsql 查询缓存，每次都用当前 APK 直接查询；apk.meta 记录
+# 路径/大小/mtime/sha256，同路径替换 APK 时会清理旧临时结果并重新查询。
 #
 # 输出: OK / GONE / ERROR；GONE 或 ERROR 时退出码非 0。
 set -u
@@ -284,6 +286,66 @@ TSV="$CACHE_DIR/mounts.tsv"
 RAW="$CACHE_DIR/query.out"
 ERR="$CACHE_DIR/query.err"
 trap 'rm -f "$TSV" "$RAW" "$ERR" "${TSV}.clean"' EXIT
+
+# ---- APK 指纹 -------------------------------------------------------------
+# 本脚本不缓存查询结果，每次都用当前 APK 重新查询；这里仍记录指纹，
+# 以便同路径替换 APK 时明确丢弃上一轮可能残留的临时结果。
+sha256_of() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" 2>/dev/null | awk '{print $1}'
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$1" 2>/dev/null | awk '{print $1}'
+    elif command -v openssl >/dev/null 2>&1; then
+        openssl dgst -sha256 "$1" 2>/dev/null | awk '{print $NF}'
+    fi
+}
+file_size() {
+    wc -c < "$1" 2>/dev/null | tr -d '[:space:]'
+}
+file_mtime() {
+    stat -c %Y "$1" 2>/dev/null \
+        || stat -f %m "$1" 2>/dev/null \
+        || date -r "$1" +%s 2>/dev/null
+}
+
+APK_SIZE="$(file_size "$TARGET_APK")"
+APK_MTIME="$(file_mtime "$TARGET_APK")"
+APK_SHA="$(sha256_of "$TARGET_APK" || true)"
+APK_ABS="$(cd "$(dirname "$TARGET_APK")" 2>/dev/null && pwd)/$(basename "$TARGET_APK")"
+META="$CACHE_DIR/apk.meta"
+
+meta_value() {
+    [ -f "$META" ] || return 1
+    sed -n "s/^$1=//p" "$META" | head -1
+}
+meta_matches() {
+    [ -f "$META" ] || return 1
+    [ "$(meta_value path)" = "$APK_ABS" ] || return 1
+    [ "$(meta_value size)" = "$APK_SIZE" ] || return 1
+    if [ -n "$APK_SHA" ]; then
+        [ "$(meta_value sha256)" = "$APK_SHA" ] || return 1
+    else
+        [ -n "$APK_MTIME" ] || return 1
+        [ "$(meta_value mtime)" = "$APK_MTIME" ] || return 1
+    fi
+    return 0
+}
+
+if [ -f "$META" ] && ! meta_matches; then
+    echo "APK 指纹已变化（同路径替换），丢弃旧临时结果并重新查询..." >&2
+    rm -f "$TSV" "$RAW" "$ERR" "${TSV}.clean"
+fi
+{
+    printf 'version=2\n'
+    printf 'path=%s\n' "$APK_ABS"
+    printf 'size=%s\n' "$APK_SIZE"
+    printf 'mtime=%s\n' "${APK_MTIME:-unknown}"
+    printf 'sha256=%s\n' "${APK_SHA:--}"
+} > "$META.tmp" && mv -f "$META.tmp" "$META" \
+    || echo "WARN: cannot write APK meta: $META" >&2
+
+echo "APK 指纹: size=$APK_SIZE mtime=${APK_MTIME:-unknown} sha256=${APK_SHA:-unavailable}"
+echo "签名校验: 完整参数/返回类型（来自 profile JSON）"
 
 json_to_tsv() {
     local file="$1"

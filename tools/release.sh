@@ -244,6 +244,10 @@ sync_official_repo() {
     fi
     local official_tag="${VERSION_CODE}-${VERSION}"
     local work_dir dl_dir apk_name local_sha remote_sha attempt
+    local has_gh=0
+    if command -v gh >/dev/null 2>&1; then
+        has_gh=1
+    fi
 
     if [ "$DRY_RUN" -eq 1 ]; then
         printf '[dry-run] clone %s 到临时目录\n' "$OFFICIAL_REPO"
@@ -251,13 +255,19 @@ sync_official_repo() {
         printf '[dry-run] cp README.md + %s 到官方仓\n' "$(basename "$APK")"
         printf '[dry-run] git add / commit / tag %s\n' "$official_tag"
         [ "$NO_PUSH" -eq 1 ] || printf '[dry-run] git push 分支与 tag %s\n' "$official_tag"
-        [ "$NO_PUSH" -eq 1 ] || printf '[dry-run] gh release download %s 并比对 APK SHA-256\n' "$official_tag"
+        if [ "$NO_PUSH" -eq 0 ]; then
+            if [ "$has_gh" -eq 1 ]; then
+                printf '[dry-run] gh release download %s 并比对 APK SHA-256\n' "$official_tag"
+            else
+                printf '[dry-run] 未找到 gh，将跳过官方仓资产 SHA-256 校验（tag %s）\n' "$official_tag"
+            fi
+        fi
         return
     fi
 
     work_dir="$(mktemp -d)"
     CLEANUP_DIRS+=("$work_dir")
-    if command -v gh >/dev/null 2>&1; then
+    if [ "$has_gh" -eq 1 ]; then
         run gh repo clone "$OFFICIAL_REPO" "$work_dir"
     else
         run git clone "https://github.com/${OFFICIAL_REPO}.git" "$work_dir"
@@ -294,6 +304,12 @@ sync_official_repo() {
 
     git -C "$work_dir" push origin HEAD
     git -C "$work_dir" push origin "$official_tag"
+
+    if [ "$has_gh" -eq 0 ]; then
+        warn "未找到 gh：官方仓已推送，但跳过 Release 资产 SHA-256 校验（tag ${official_tag}）"
+        warn "     安装 gh 后重跑，或手动下载官方仓资产核对 SHA-256"
+        return
+    fi
 
     dl_dir="$(mktemp -d)"
     CLEANUP_DIRS+=("$dl_dir")
