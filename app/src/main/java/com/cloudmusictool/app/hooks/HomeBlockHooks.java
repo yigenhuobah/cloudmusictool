@@ -9,8 +9,12 @@ import org.json.JSONObject;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 import io.github.libxposed.api.XposedModule;
@@ -30,7 +34,7 @@ import io.github.libxposed.api.XposedModule;
  */
 public final class HomeBlockHooks {
 
-    private static final int MAX_JSON_CHARS = 16 * 1024 * 1024;
+    static final int MAX_JSON_CHARS = 16 * 1024 * 1024;
     /** 同一 Feature 的扫描日志（无命中）最短间隔，避免宿主高频调用刷屏。 */
     private static final long SCAN_LOG_INTERVAL_MS = 10_000L;
 
@@ -220,10 +224,33 @@ public final class HomeBlockHooks {
     }
 
     private static Set<String> collectTokens(Object item) {
+        if (item == null) {
+            return Collections.emptySet();
+        }
+        synchronized (sTokenCache) {
+            Set<String> cached = sTokenCache.get(item);
+            if (cached != null) {
+                return cached;
+            }
+        }
         Set<String> tokens = collectCodes(item);
         collectModuleKeys(item, tokens);
-        return tokens;
+        Set<String> result = tokens.isEmpty()
+                ? Collections.<String>emptySet()
+                : Collections.unmodifiableSet(tokens);
+        synchronized (sTokenCache) {
+            sTokenCache.put(item, result);
+        }
+        return result;
     }
+
+    /**
+     * 按 block 身份缓存已提取的 token。WeakHashMap 的弱键不会阻止宿主回收
+     * block；Block 未重写 equals/hashCode 时即按引用身份命中。值只是 String，
+     * 不反向引用 key，弱键可正常回收。缓存读写都在 synchronized 内，
+     * 避免主线程与测试/其他调用方并发修改。
+     */
+    private static final Map<Object, Set<String>> sTokenCache = new WeakHashMap<>();
 
     /** 纯函数：item 是否命中 hideSet。包私有便于 JVM 单测。 */
     static boolean matchesHide(Object item, Set<String> hideSet) {
@@ -283,7 +310,10 @@ public final class HomeBlockHooks {
         if (model == null) {
             return;
         }
-        String text = String.valueOf(HookKit.invokeNoArg(model, "getOriginData"));
+        String text = serializableText(HookKit.invokeNoArg(model, "getOriginData"), MAX_JSON_CHARS);
+        if (text == null) {
+            return;
+        }
         java.util.regex.Matcher mk = MODULE_KEY.matcher(text);
         if (mk.find()) {
             out.add(mk.group());
@@ -354,14 +384,38 @@ public final class HomeBlockHooks {
         if (node == null || out.size() >= max) {
             return;
         }
-        String text = String.valueOf(node);
-        if (text.length() > MAX_JSON_CHARS) {
+        String text = serializableText(node, MAX_JSON_CHARS);
+        if (text == null) {
             return;
         }
         java.util.regex.Matcher m = PAGE_CODE.matcher(text);
         while (m.find() && out.size() < max) {
             out.add(m.group());
         }
+    }
+
+    /**
+     * 提取可扫描的文本。只有已经序列化的 String 和可序列化的 JSON 容器
+     * （org.json / fastjson 等 Map/Collection）才取文本；任意宿主对象直接
+     * 跳过，避免为每个 block 调用不可控的 toString 分配大字符串。
+     * 超过 {@code maxChars} 的文本同样跳过，保持原有 16MB 上限语义。
+     *
+     * @return 可扫描文本；类型不支持或超长时返回 null（不分配新字符串）。
+     */
+    static String serializableText(Object node, int maxChars) {
+        if (node == null) {
+            return null;
+        }
+        String text;
+        if (node instanceof String) {
+            text = (String) node;
+        } else if (node instanceof JSONObject || node instanceof JSONArray
+                || node instanceof Map || node instanceof Collection) {
+            text = String.valueOf(node);
+        } else {
+            return null;
+        }
+        return text.length() > maxChars ? null : text;
     }
 
     private static String asString(Object o) {

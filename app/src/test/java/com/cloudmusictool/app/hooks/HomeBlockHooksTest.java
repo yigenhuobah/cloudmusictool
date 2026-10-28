@@ -3,12 +3,17 @@ package com.cloudmusictool.app.hooks;
 import org.json.JSONObject;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -82,6 +87,83 @@ public class HomeBlockHooksTest {
         assertTrue(HomeBlockHooks.matchesHide(
                 new FakeBlock("PAGE_RECOMMEND_PODCAST_NARROW_SCENE"),
                 set("PAGE_RECOMMEND_PODCAST_SUB_UPDATE")));
+    }
+
+    @Test
+    public void matchesHide_scansSerializableMapAndCollectionNodes() {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("code", "PAGE_RECOMMEND_RADAR");
+        assertTrue(HomeBlockHooks.matchesHide(
+                new FakeDslBlock(new FakeDslModel(map, null, null)),
+                set("PAGE_RECOMMEND_RADAR")));
+
+        assertTrue(HomeBlockHooks.matchesHide(
+                new FakeDslBlock(new FakeDslModel(
+                        new ArrayList<>(Collections.singletonList("PAGE_RECOMMEND_NOTE")),
+                        null, null)),
+                set("PAGE_RECOMMEND_NOTE")));
+    }
+
+    @Test
+    public void matchesHide_nonSerializableNodeIsNotStringified() {
+        // DslBlock 的 originData/extData 不是 JSON/Map/Collection 时直接跳过；
+        // 若还按旧实现 String.valueOf(node)，ToStringBomb 会抛 AssertionError。
+        FakeDslModel model = new FakeDslModel(
+                new ToStringBomb(), new ToStringBomb(), "plain-text");
+        assertFalse(HomeBlockHooks.matchesHide(
+                new FakeDslBlock(model), set("PAGE_RECOMMEND_HIDE")));
+        assertNull(HomeBlockHooks.serializableText(
+                new ToStringBomb(), HomeBlockHooks.MAX_JSON_CHARS));
+    }
+
+    @Test
+    public void matchesHide_oversizedNodeIsStillSkipped() {
+        char[] chars = new char[HomeBlockHooks.MAX_JSON_CHARS + 1];
+        Arrays.fill(chars, 'a');
+        String prefix = "PAGE_RECOMMEND_OVERSIZE";
+        prefix.getChars(0, prefix.length(), chars, 0);
+        String huge = new String(chars);
+
+        assertNull("超过 16MB 上限的节点必须跳过",
+                HomeBlockHooks.serializableText(huge, HomeBlockHooks.MAX_JSON_CHARS));
+        assertFalse(HomeBlockHooks.matchesHide(
+                new FakeDslBlock(new FakeDslModel(huge, null, null)),
+                set("PAGE_RECOMMEND_OVERSIZE")));
+    }
+
+    @Test
+    public void tokenCache_hitsByBlockIdentity() {
+        CountingBlock block = new CountingBlock("PAGE_RECOMMEND_GREETING");
+        Set<String> hide = set("PAGE_RECOMMEND_GREETING");
+        assertTrue(HomeBlockHooks.matchesHide(block, hide));
+        assertEquals(1, block.calls);
+        assertTrue(HomeBlockHooks.matchesHide(block, hide));
+        assertEquals("同一 block 第二次匹配应命中 token 缓存，不再反射扫描", 1, block.calls);
+        assertTrue(HomeBlockHooks.matchesHide(
+                new CountingBlock("PAGE_RECOMMEND_GREETING"), hide));
+    }
+
+    /** 记录 positionCode 反射次数，用于验证 token 缓存命中。 */
+    public static final class CountingBlock {
+        private final String positionCode;
+        int calls;
+
+        CountingBlock(String positionCode) {
+            this.positionCode = positionCode;
+        }
+
+        public String getPositionCode() {
+            calls++;
+            return positionCode;
+        }
+    }
+
+    /** 非序列化宿主对象：一旦被 String.valueOf 就失败。 */
+    public static final class ToStringBomb {
+        @Override
+        public String toString() {
+            throw new AssertionError("non-serializable node must not be stringified");
+        }
     }
 
     /** 9.6.13 的 DslBlock / NativeBlock / RnBlock 都继承 Block，positionCode 是主载体。 */
