@@ -18,6 +18,7 @@ import org.luckypray.dexkit.result.MethodDataList;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,8 +44,10 @@ public final class DexKitLocator {
     private static final String TAG = "CloudMusicTool";
     private static final long SLOW_QUERY_MS = 300L;
 
-    private static final Map<ClassLoader, DexKitBridge> sBridgeCache = new WeakHashMap<>();
-    private static final Map<ClassLoader, Map<String, Class<?>>> sClassCache = new WeakHashMap<>();
+    // 值必须是弱引用：DexKitBridge 和 Class 都会反向强引用 ClassLoader，
+    // 用强 value 会让 WeakHashMap 的弱键永远无法回收（Tinker 热修 loader 泄漏）。
+    private static final Map<ClassLoader, WeakReference<DexKitBridge>> sBridgeCache = new WeakHashMap<>();
+    private static final Map<ClassLoader, Map<String, WeakReference<Class<?>>>> sClassCache = new WeakHashMap<>();
     private static final Map<String, Boolean> sWarmUpKeys = new ConcurrentHashMap<>();
 
     private static volatile String sModuleNativeDir;
@@ -67,7 +70,8 @@ public final class DexKitLocator {
         if (cl == null) {
             return null;
         }
-        DexKitBridge bridge = sBridgeCache.get(cl);
+        WeakReference<DexKitBridge> ref = sBridgeCache.get(cl);
+        DexKitBridge bridge = ref == null ? null : ref.get();
         if (bridge != null) {
             return bridge;
         }
@@ -78,7 +82,7 @@ public final class DexKitLocator {
         try {
             long start = System.currentTimeMillis();
             bridge = DexKitBridge.create(cl, false);
-            sBridgeCache.put(cl, bridge);
+            sBridgeCache.put(cl, new WeakReference<>(bridge));
             Log.i(TAG, "DexKitBridge initialized successfully for ClassLoader: " + cl
                     + " (" + (System.currentTimeMillis() - start) + "ms)");
         } catch (Throwable t) {
@@ -230,11 +234,15 @@ public final class DexKitLocator {
         if (key == null) {
             return null;
         }
-        Map<String, Class<?>> cache = classCache(cl);
+        Map<String, WeakReference<Class<?>>> cache = classCache(cl);
         if (cache != null) {
-            Class<?> cached = cache.get(key);
+            WeakReference<Class<?>> ref = cache.get(key);
+            Class<?> cached = ref == null ? null : ref.get();
             if (cached != null) {
                 return cached;
+            }
+            if (ref != null) {
+                cache.remove(key);
             }
         }
 
@@ -299,7 +307,7 @@ public final class DexKitLocator {
             }
 
             if (cache != null) {
-                cache.put(key, chosen);
+                cache.put(key, new WeakReference<>(chosen));
             }
             Log.i(TAG, "DexKit fallback found class (candidates=" + targetCandidates.size()
                     + ", chosen=" + chosen.getName() + ", targetHint=" + className
@@ -466,12 +474,12 @@ public final class DexKitLocator {
         t.start();
     }
 
-    private static Map<String, Class<?>> classCache(ClassLoader cl) {
+    private static Map<String, WeakReference<Class<?>>> classCache(ClassLoader cl) {
         if (cl == null) {
             return null;
         }
         synchronized (sClassCache) {
-            Map<String, Class<?>> map = sClassCache.get(cl);
+            Map<String, WeakReference<Class<?>>> map = sClassCache.get(cl);
             if (map == null) {
                 map = new ConcurrentHashMap<>();
                 sClassCache.put(cl, map);
