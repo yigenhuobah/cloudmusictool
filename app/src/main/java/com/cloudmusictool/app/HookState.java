@@ -41,8 +41,10 @@ public final class HookState {
     private static volatile String sAbTestLastFailure;
 
     // 节流器包私有可整体替换：单测注入假时钟；执行器与发送管线在 TargetProcessPublisher。
+    // 生产用单调时钟（nanoTime），墙钟回拨/跳变不会让节流窗口判定错乱。
     static volatile TargetProcessPublisher.PublishThrottle sThrottle =
-            new TargetProcessPublisher.PublishThrottle(System::currentTimeMillis);
+            new TargetProcessPublisher.PublishThrottle(
+                    TargetProcessPublisher.PublishThrottle.MONOTONIC_CLOCK);
 
     private static volatile String sModulePackage;
     private static volatile String sProcessName;

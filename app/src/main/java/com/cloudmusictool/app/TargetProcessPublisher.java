@@ -4,13 +4,14 @@ import android.content.Context;
 import android.os.Bundle;
 import android.util.Log;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 目标进程 -> 模块 App 的共享回传管线（design-3 / P2-10 家族根治）。
@@ -71,8 +72,11 @@ public final class TargetProcessPublisher {
     // warning-once 标志：按通道实例（单例，恒等比较）各记一次，等价于原先各自的 volatile 布尔。
     private static final Set<Channel> sContextWarned = ConcurrentHashMap.newKeySet();
     private static final Set<Channel> sFailureWarned = ConcurrentHashMap.newKeySet();
-    // 重试链在途的通道：同一通道同时只保留一条链，避免安装期多次 publish 重复排任务。
-    private static final Set<Channel> sRetryPending = ConcurrentHashMap.newKeySet();
+    // 重试链在途任务：同一通道同时只保留一条链，避免安装期多次 publish 重复排任务。
+    // 保存 future 才能在成功/短路/耗尽时取消已排任务——只清标记的话，已排任务仍会执行
+    // 并重复发送。所有访问都在 sRetryLock 内（schedule 与 cancel 需要成对原子）。
+    private static final Map<Channel, ScheduledFuture<?>> sRetryPending = new HashMap<>();
+    private static final Object sRetryLock = new Object();
 
     // 包私有可整体替换：单测置空/注入（与 sExecutor 同）；生产只由 targetContext() 写入。
     static volatile Context sTargetContext;
@@ -106,12 +110,12 @@ public final class TargetProcessPublisher {
     private static void doPublish(Channel channel, int attempt) {
         String pkg = channel.modulePackage();
         if (pkg == null || pkg.isEmpty()) {
-            sRetryPending.remove(channel);
+            cancelRetry(channel);
             return;
         }
         String json = channel.buildJson();
         if (json == null) {
-            sRetryPending.remove(channel);
+            cancelRetry(channel);
             return;
         }
         Context ctx = targetContext();
@@ -135,35 +139,67 @@ public final class TargetProcessPublisher {
                 Log.w(TAG, channel.publishFailureWarning(t));
             }
         } finally {
-            sRetryPending.remove(channel);
+            // 发送成功（或失败）即视为本次发布完成：取消仍在排队的重试，避免迟到任务
+            // 在状态已成功回传后再次发送。
+            cancelRetry(channel);
         }
     }
 
     /**
      * context 未就绪时排下一次重试；同一通道同时只保留一条链。任务执行前先移除
-     * 在途标记，使下一次仍失败时能继续排后续重试。
+     * 在途 future，使下一次仍失败时能继续排后续重试；链耗尽时同样取消并清空。
      */
     private static void scheduleContextRetry(Channel channel, int attempt) {
-        if (attempt >= RETRY_DELAYS_MS.length) {
-            sRetryPending.remove(channel);
-            return;
+        synchronized (sRetryLock) {
+            if (attempt >= RETRY_DELAYS_MS.length) {
+                cancelRetryLocked(channel);
+                return;
+            }
+            if (sRetryPending.containsKey(channel)) {
+                return;
+            }
+            ScheduledFuture<?> future;
+            try {
+                future = sExecutor.schedule(() -> {
+                    synchronized (sRetryLock) {
+                        sRetryPending.remove(channel);
+                    }
+                    doPublish(channel, attempt + 1);
+                }, RETRY_DELAYS_MS[attempt], TimeUnit.MILLISECONDS);
+            } catch (Throwable t) {
+                return;
+            }
+            // future 为 null 只可能来自不守约的执行器实现（真实 ExecutorService 不会）；
+            // 此时仍保留占位以维持单链语义，只是无法取消。
+            sRetryPending.put(channel, future);
         }
-        if (!sRetryPending.add(channel)) {
-            return;
+    }
+
+    /** 取消并移除该通道的在途重试（成功/短路/耗尽路径共用）。 */
+    private static void cancelRetry(Channel channel) {
+        synchronized (sRetryLock) {
+            cancelRetryLocked(channel);
         }
-        try {
-            sExecutor.schedule(() -> {
-                sRetryPending.remove(channel);
-                doPublish(channel, attempt + 1);
-            }, RETRY_DELAYS_MS[attempt], TimeUnit.MILLISECONDS);
-        } catch (Throwable t) {
-            sRetryPending.remove(channel);
+    }
+
+    private static void cancelRetryLocked(Channel channel) {
+        ScheduledFuture<?> future = sRetryPending.remove(channel);
+        if (future != null) {
+            // false：不打断正在执行的任务（其自身会移除 future），只阻止未启动的重试。
+            future.cancel(false);
         }
     }
 
     /** 仅供单测重置重试链状态（生产不调用）。 */
     static void resetRetryStateForTest() {
-        sRetryPending.clear();
+        synchronized (sRetryLock) {
+            for (ScheduledFuture<?> future : sRetryPending.values()) {
+                if (future != null) {
+                    future.cancel(false);
+                }
+            }
+            sRetryPending.clear();
+        }
     }
 
     /** 反射 ActivityThread.currentActivityThread().getApplication()，成功一次后缓存；失败返回 null。 */
@@ -211,6 +247,13 @@ public final class TargetProcessPublisher {
             long now();
         }
 
+        /**
+         * 生产时钟：单调毫秒。节流只关心时间差，墙钟（currentTimeMillis）被回拨时
+         * now - start 变负、窗口长期不关闭（事件被吞）；向前跳变又会提前关窗造成
+         * 重复发送。nanoTime 只保证差值单调，正是窗口判定需要的语义。
+         */
+        public static final Clock MONOTONIC_CLOCK = () -> System.nanoTime() / 1_000_000L;
+
         /** 一次变化的调度决策：sendNow 立即发送；hasTrailing() 时需在 trailingDelayMs 后检查尾沿。 */
         public static final class Decision {
             public final boolean sendNow;
@@ -233,48 +276,53 @@ public final class TargetProcessPublisher {
         private static final long NO_TRAILING = -1L;
 
         private final Clock mClock;
+        /**
+         * 以下三个字段只由 decide()/onWindowClose() 读写，两方法均为 synchronized：
+         * 关窗必须原子地「置关窗 + 消费 pending」，否则并发 decide 在关窗后置的
+         * pending 会被旧窗口的关窗误消费（或被新窗口的关窗提前消费）。
+         */
         /** 当前窗口起点；NO_WINDOW 表示窗口关闭。 */
-        private final AtomicLong mWindowStart = new AtomicLong(NO_WINDOW);
+        private long mWindowStart = NO_WINDOW;
         /** 窗口内有变化待尾沿发送。 */
-        private final AtomicBoolean mPending = new AtomicBoolean(false);
+        private boolean mPending;
         /** 尾沿检查任务是否已排队。 */
-        private final AtomicBoolean mTrailingQueued = new AtomicBoolean(false);
+        private boolean mTrailingQueued;
 
         public PublishThrottle(Clock clock) {
             mClock = clock;
         }
 
         /**
-         * 计算一次状态变化的调度决策。线程安全（基于 CAS，CAS 失败重读重判）。
+         * 计算一次状态变化的调度决策。与 {@link #onWindowClose()} 互斥（synchronized），
+         * 保证关窗只消费属于当前窗口的 pending。
          */
-        public Decision decide() {
-            for (;;) {
-                long now = mClock.now();
-                long start = mWindowStart.get();
-                if (start == NO_WINDOW || now - start >= PUBLISH_INTERVAL_MS) {
-                    // 无窗口或窗口已过期：本变化开新窗，立即发送（领先沿）。
-                    if (mWindowStart.compareAndSet(start, now)) {
-                        return new Decision(true, NO_TRAILING);
-                    }
-                    continue;
-                }
-                // 窗口内：只置 pending，尾沿检查任务排队一次，不重复排。
-                mPending.set(true);
-                if (mTrailingQueued.compareAndSet(false, true)) {
-                    return new Decision(false, PUBLISH_INTERVAL_MS - (now - start));
-                }
-                return new Decision(false, NO_TRAILING);
+        public synchronized Decision decide() {
+            long now = mClock.now();
+            long start = mWindowStart;
+            if (start == NO_WINDOW || now - start >= PUBLISH_INTERVAL_MS) {
+                // 无窗口或窗口已过期：本变化开新窗，立即发送（领先沿）。
+                mWindowStart = now;
+                return new Decision(true, NO_TRAILING);
             }
+            // 窗口内：只置 pending，尾沿检查任务排队一次，不重复排。
+            mPending = true;
+            if (!mTrailingQueued) {
+                mTrailingQueued = true;
+                return new Decision(false, PUBLISH_INTERVAL_MS - (now - start));
+            }
+            return new Decision(false, NO_TRAILING);
         }
 
         /**
          * 窗口关闭时检查尾沿：pending 置位则消费并返回 true（调用方发送一次尾沿），
          * 无论是否发送都关窗，允许下一次变化重新开窗走领先沿。
          */
-        public boolean onWindowClose() {
-            mTrailingQueued.set(false);
-            mWindowStart.set(NO_WINDOW);
-            return mPending.getAndSet(false);
+        public synchronized boolean onWindowClose() {
+            mTrailingQueued = false;
+            mWindowStart = NO_WINDOW;
+            boolean pending = mPending;
+            mPending = false;
+            return pending;
         }
     }
 }

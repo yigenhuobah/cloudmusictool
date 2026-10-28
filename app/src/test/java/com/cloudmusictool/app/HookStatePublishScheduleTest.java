@@ -10,10 +10,15 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Delayed;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -175,6 +180,75 @@ public class HookStatePublishScheduleTest {
         assertEquals("再次 flush 仍立即提交", 3, mExecutor.directTasks.size());
     }
 
+    /**
+     * 并发 smoke：多线程同时 decide/onWindowClose（假时钟固定在窗口内），锁保证
+     * 「关窗 + 消费 pending」原子。精确交错需要在方法内部插桩，纯 JVM 无法确定性
+     * 复现，因此钉住设计不变量：不抛异常、领先沿/尾沿次数不超过关窗次数 + 1、
+     * 关窗后下一次变化必走领先沿。
+     */
+    @Test
+    public void concurrentDecideAndClose_keepsWindowInvariants() throws Exception {
+        final TargetProcessPublisher.PublishThrottle throttle =
+                new TargetProcessPublisher.PublishThrottle(mClock);
+        mClock.set(0L);
+        final int threads = 8;
+        final int iterations = 500;
+        final CountDownLatch start = new CountDownLatch(1);
+        final AtomicInteger leading = new AtomicInteger();
+        final AtomicInteger trailing = new AtomicInteger();
+        final List<Future<?>> workers = new ArrayList<>();
+        ExecutorService pool = Executors.newFixedThreadPool(threads + 1);
+        try {
+            for (int i = 0; i < threads; i++) {
+                workers.add(pool.submit(new Callable<Void>() {
+                    @Override
+                    public Void call() throws Exception {
+                        start.await();
+                        for (int j = 0; j < iterations; j++) {
+                            TargetProcessPublisher.PublishThrottle.Decision d = throttle.decide();
+                            if (d.sendNow) {
+                                leading.incrementAndGet();
+                            }
+                            if (d.hasTrailing()) {
+                                trailing.incrementAndGet();
+                                assertTrue("尾沿延迟必须为正", d.trailingDelayMs > 0);
+                            }
+                        }
+                        return null;
+                    }
+                }));
+            }
+            Future<Integer> closer = pool.submit(new Callable<Integer>() {
+                @Override
+                public Integer call() throws Exception {
+                    start.await();
+                    int closes = 0;
+                    for (int j = 0; j < iterations; j++) {
+                        // 每次调用都关窗（无论是否有 pending），都可能放行一次新的领先沿。
+                        throttle.onWindowClose();
+                        closes++;
+                    }
+                    return closes;
+                }
+            });
+            start.countDown();
+            for (Future<?> worker : workers) {
+                worker.get(10, TimeUnit.SECONDS);
+            }
+            int closes = closer.get(10, TimeUnit.SECONDS);
+
+            // 固定时钟下窗口不会自然过期：每次关窗最多再允许一次领先沿/一次尾沿排队。
+            assertTrue("领先沿次数不超过关窗次数 + 1", leading.get() <= closes + 1);
+            assertTrue("尾沿检查任务每次关窗最多再排一次", trailing.get() <= closes + 1);
+        } finally {
+            pool.shutdownNow();
+        }
+
+        // 最后一次关窗后窗口必为关闭态：下一次变化重新走领先沿（pending 不会泄漏）。
+        throttle.onWindowClose();
+        assertTrue("关窗后的首次变化必须立即发送", throttle.decide().sendNow);
+    }
+
     private static String buildJson() throws Exception {
         Method m = HookState.class.getDeclaredMethod("buildJson");
         m.setAccessible(true);
@@ -229,7 +303,8 @@ public class HookStatePublishScheduleTest {
         @Override
         public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
             scheduledTasks.add(new ScheduledTask(command, unit.toMillis(delay)));
-            return null; // 生产代码不消费返回值。
+            // 生产代码会保存 schedule 返回值以便成功路径取消，必须返回非 null 的假 future。
+            return new FakeScheduledFuture();
         }
 
         private UnsupportedOperationException unsupported() {
@@ -313,6 +388,44 @@ public class HookStatePublishScheduleTest {
         public <T> T invokeAny(Collection<? extends Callable<T>> tasks,
                                long timeout, TimeUnit unit) {
             throw unsupported();
+        }
+    }
+
+    /** schedule 返回值的最小假实现：本测试不等待、不取消，只要求非 null。 */
+    private static final class FakeScheduledFuture implements ScheduledFuture<Object> {
+        @Override
+        public boolean cancel(boolean mayInterruptIfRunning) {
+            return true;
+        }
+
+        @Override
+        public boolean isCancelled() {
+            return false;
+        }
+
+        @Override
+        public boolean isDone() {
+            return false;
+        }
+
+        @Override
+        public Object get() {
+            throw new UnsupportedOperationException("单测不等待 future");
+        }
+
+        @Override
+        public Object get(long timeout, TimeUnit unit) {
+            throw new UnsupportedOperationException("单测不等待 future");
+        }
+
+        @Override
+        public long getDelay(TimeUnit unit) {
+            return 0L;
+        }
+
+        @Override
+        public int compareTo(Delayed other) {
+            return 0;
         }
     }
 }
