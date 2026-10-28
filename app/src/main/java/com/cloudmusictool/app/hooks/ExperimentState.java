@@ -1,5 +1,8 @@
 package com.cloudmusictool.app.hooks;
 
+import android.util.Log;
+
+import com.cloudmusictool.app.ReportProtocol;
 import com.cloudmusictool.app.StatusProvider;
 import com.cloudmusictool.app.TargetProcessPublisher;
 
@@ -12,6 +15,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -28,15 +32,21 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class ExperimentState {
 
+    private static final String TAG = "CloudMusicTool";
     private static final int MAX_TRACKED_KEYS = 500;
     private static final int MAX_KEYS = 200;
     private static final int MAX_JSON_CHARS = 64 * 1024;
 
     private static final Map<String, Item> sItems = new ConcurrentHashMap<>();
 
+    // 超长条目只记一次日志，避免异常数据刷屏。
+    private static final AtomicBoolean sOversizeWarned = new AtomicBoolean();
+
     // 「领先 + 尾沿」节流器：与 HookState 同语义（每通道一个实例，窗口互不干扰）。
+    // 生产用单调时钟（nanoTime），墙钟回拨/跳变不会让节流窗口判定错乱。
     private static final TargetProcessPublisher.PublishThrottle sThrottle =
-            new TargetProcessPublisher.PublishThrottle(System::currentTimeMillis);
+            new TargetProcessPublisher.PublishThrottle(
+                    TargetProcessPublisher.PublishThrottle.MONOTONIC_CLOCK);
 
     private static volatile String sModulePackage;
 
@@ -138,6 +148,22 @@ public final class ExperimentState {
         TargetProcessPublisher.publish(sThrottle, sChannel);
     }
 
+    /**
+     * 单条记录是否可写入 payload：key/group/source 任一超过
+     * {@link ReportProtocol#MAX_VALUE_CHARS} 时整条跳过。
+     *
+     * StatusProvider 对超长字符串是「整个 payload 拒绝」而非截断，若照常写入，
+     * 一条异常 key 就会让本次 experiments 回传全部丢失；跳过该条可保留其它条目。
+     * 包私有静态便于纯 JVM 契约测试。
+     */
+    static boolean isEntryWithinProtocolLimits(String key, String group, String source) {
+        return withinValueLimit(key) && withinValueLimit(group) && withinValueLimit(source);
+    }
+
+    private static boolean withinValueLimit(String value) {
+        return value == null || value.length() <= ReportProtocol.MAX_VALUE_CHARS;
+    }
+
     private static String buildJson() {
         try {
             List<Map.Entry<String, Item>> entries = new ArrayList<>(sItems.entrySet());
@@ -152,10 +178,21 @@ public final class ExperimentState {
             for (int i = 0; i < limit; i++) {
                 Map.Entry<String, Item> e = entries.get(i);
                 Item item = e.getValue();
+                String key = e.getKey();
+                String group = item.group == null ? "c" : item.group;
+                String source = item.source == null ? "unknown" : item.source;
+                if (!isEntryWithinProtocolLimits(key, group, source)) {
+                    // 超长条目整条跳过：协议按单值 256 字符整体校验，单条超长会拖垮全部条目。
+                    if (sOversizeWarned.compareAndSet(false, true)) {
+                        Log.w(TAG, "experiments entry skipped: key/group/source exceeds "
+                                + ReportProtocol.MAX_VALUE_CHARS + " chars");
+                    }
+                    continue;
+                }
                 JSONObject o = new JSONObject();
-                o.put("key", e.getKey());
-                o.put("group", item.group == null ? "c" : item.group);
-                o.put("source", item.source == null ? "unknown" : item.source);
+                o.put("key", key);
+                o.put("group", group);
+                o.put("source", source);
                 o.put("count", item.count.get());
                 o.put("lastAt", item.lastAt);
                 items.put(o);
