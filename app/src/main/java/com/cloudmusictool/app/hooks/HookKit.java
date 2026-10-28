@@ -201,10 +201,15 @@ final class HookKit {
             MountSpec mapped = findSpecByRequestedName(cls, name);
             if (mapped != null) {
                 Method resolved = MountResolver.resolveMethod(mapped, cls, cls.getClassLoader());
-                if (resolved != null) {
+                if (resolved != null && matchesExpected(resolved, returnType, params)) {
                     info(module, logPrefix(f) + " profile mapped method " + cls.getName() + "#" + name
                             + " -> " + mapped.methodName + " (" + mapped.id + ")");
                     return resolved;
+                }
+                if (resolved != null) {
+                    warn(module, logPrefix(f) + " profile mapped signature mismatch "
+                            + cls.getName() + "#" + name + " -> " + mapped.methodName
+                            + " (" + mapped.id + "); fallback");
                 }
             }
             // 2) 常规路径：请求名即 methodName，且与 hook 期望的参数/返回一致才使用。
@@ -245,10 +250,14 @@ final class HookKit {
             MountSpec mapped = findSpecByRequestedName(cls, name);
             if (mapped != null) {
                 Method resolved = MountResolver.resolveMethod(mapped, cls, cls.getClassLoader());
-                if (resolved != null) {
+                if (resolved != null && matchesExpected(resolved, returnType, params)) {
                     Log.i(TAG, "profile mapped method " + cls.getName() + "#" + name
                             + " -> " + mapped.methodName + " (" + mapped.id + ") (quiet)");
                     return resolved;
+                }
+                if (resolved != null) {
+                    Log.w(TAG, "profile mapped signature mismatch " + cls.getName() + "#" + name
+                            + " -> " + mapped.methodName + " (" + mapped.id + "); fallback");
                 }
             }
             // 2) 常规路径。
@@ -322,6 +331,17 @@ final class HookKit {
             }
         }
         return first;
+    }
+
+    /** 校验解析出的方法是否符合调用方期望；null 表示该维度不限制。 */
+    static boolean matchesExpected(Method method, Class<?> returnType, Class<?>[] params) {
+        if (method == null) {
+            return false;
+        }
+        if (params != null && !sameParams(method.getParameterTypes(), params)) {
+            return false;
+        }
+        return returnType == null || sameType(returnType, method.getReturnType());
     }
 
     private static boolean sameParams(Class<?>[] actual, Class<?>[] expected) {
