@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### 兼容
+
+- **网易云 9.6.15**：9.6.15（versionCode 9006015）复用 9.6.13 的挂载点集合；
+  2026-10-29 对 9.6.15 base.apk 全量体检 145/145 OK。未适配版本仍 fail-open。
+
 ### 修复
 
 - **冷启动首报丢失**：目标进程 context 未就绪时，`TargetProcessPublisher` 原先

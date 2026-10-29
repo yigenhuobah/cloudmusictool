@@ -51,7 +51,7 @@ public class AboutFragment extends Fragment {
         version.setText(getString(R.string.about_version, versionName, versionCode));
 
         TextView target = view.findViewById(R.id.about_target);
-        target.setText(getString(R.string.about_target, VersionGate.SUPPORTED_VERSION));
+        target.setText(getString(R.string.about_target, VersionGate.SUPPORTED_VERSION_LABEL));
 
         TextView source = view.findViewById(R.id.about_source);
         SpannableStringBuilder sourceText =
