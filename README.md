@@ -5,7 +5,7 @@
 > 当前版本 **2.4.5**（versionCode 15）。适配网易云音乐 **9.6.08 / 9.6.13 / 9.6.15**（versionCode 9006008 / 9006013 / 9006015）。
 > 与网易官方无任何关联，仅供学习研究和个人设备使用。
 
-**仓库**：<https://github.com/yigenhuobah/cloudmusictool> ｜ **下载**：[Releases](https://github.com/yigenhuobah/cloudmusictool/releases)
+**仓库**：<https://github.com/yigenhuobah/cloudmusictool> ｜ **下载**：[Releases](https://github.com/yigenhuobah/cloudmusictool/releases) ｜ **反馈**：[Issues](https://github.com/yigenhuobah/cloudmusictool/issues/new/choose)
 
 ## 兼容性
 

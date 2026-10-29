@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安装与激活问题
+    url: https://github.com/yigenhuobah/cloudmusictool#安装
+    about: 模块装不上、LSPosed 里看不到、作用域怎么勾，先看 README 的「安装」一节
+  - name: 兼容版本说明
+    url: https://github.com/yigenhuobah/cloudmusictool#兼容性
+    about: 确认网易云音乐版本在适配范围内，以及已知限制
