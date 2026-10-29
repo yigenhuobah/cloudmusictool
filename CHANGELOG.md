@@ -1,18 +1,106 @@
 # Changelog
 
-## Unreleased
+## 2.4.5 - 2026-10-29
+
+深度代码评审第 4 轮（Phase 2–5）：调度、配置写入、首页/背景热路径与诊断链路
+加固，并新增网易云 9.6.15 兼容。
+
+### 新增
+
+- **配置写入结果与异步提交（Phase 3）**：`ConfigStore` 引入 `WriteResult`
+  （`SAVED` / `REJECTED` / `UNAVAILABLE` / `FAILED`），开关与多选写入改为
+  后台单线程队列 + 异步 `commit`，真实结果回主线程。框架未连接时设置页、
+  首页定制的开关置灰并提示；远端拒绝时开关/多选回滚并提示「保存失败，
+  设置未生效」。设置页、实验页、首页定制的 remote prefs 读取与桌面图标
+  组件状态读写全部移出主线程；桌面图标开关失败时回滚并提示。
+- **首页 block token 缓存（Phase 4）**：`HomeBlockHooks` 按 block 身份
+  （`WeakHashMap` 弱键）缓存已提取的 positionCode / moduleKey，滚动时不再
+  重复反射与正则；只有 String、org.json、Map/Collection 才序列化，任意
+  宿主对象不再调用不可控的 `toString`。
+- **「我的」页背景源指纹（Phase 4）**：共享目录不可读、走 Provider 兜底时，
+  通过 `StatusProvider.query` 读取内部图片 length / lastModified 指纹，
+  换图或清除后能及时让缓存失效。
+- **运行时 ClassLoader 校验（Phase 4）**：`RuntimeHookBootstrap` 在安装运行时
+  UI hook 前用 3 个宿主类探测 ClassLoader；Tinker 中间态或异常 loader 不执行
+  installer 并重置标志，等后续 Activity 重试，避免 hook 挂在无效 loader 上。
+- **诊断会话与新鲜度（Phase 5）**：回传新增 `session`（目标进程启动时刻）；
+  模块侧丢弃迟到的旧会话整包回写；超过 10 分钟没有新回写时诊断页标记
+  「数据已过期」，不再把旧快照当成健康数据。
+- **工具链**：`check-mounts.sh` 记录 APK 路径/大小/mtime/SHA-256，同路径
+  替换 APK 时丢弃旧临时结果；`release.sh` 在未安装 `gh` 时跳过官方仓资产
+  SHA-256 校验并明确告警。
+
+### 修复
+
+- **冷启动首报 context 未就绪**：目标进程 context 未就绪时，
+  `TargetProcessPublisher` 原先直接丢弃本次状态快照，诊断页在无后续事件时
+  可能长期为空。现改为按 1s/2s/4s 有界重试最多 3 次，同一通道只保留一条
+  重试链；成功、短路或重试耗尽都会取消在途任务。快照幂等，重复发送不会
+  产生副作用，仅修复回传时机。
+- **Profile 映射签名校验**：`HookKit` 使用 Profile 映射方法前校验参数与返回
+  类型；不匹配时输出 warn 并回退常规查找，避免挂到同名的错误重载方法。
+- **DexKit 弱缓存**：bridge 与 class 缓存的值改为 `WeakReference`。此前
+  `WeakHashMap` 的弱键被强 value 反向引用，Tinker 热修 ClassLoader 无法回收。
+- **重试取消与单调时钟（Phase 2）**：`TargetProcessPublisher` 在发送成功、
+  短路或重试耗尽时取消已排队的重试任务，避免状态已回传后迟到任务再次发送；
+  `PublishThrottle` 的窗口判定改为 `synchronized`，消除「关窗消费 pending」
+  与并发 decide 的竞争；生产时钟改用 `nanoTime` 单调毫秒，墙钟回拨不再吞
+  事件、向前跳变不再重复发送。
+- **ExperimentState 超长条目（Phase 2）**：key / group / source 任一超过协议
+  上限（256 字符）时整条跳过并只告警一次。StatusProvider 对超长字符串是整包
+  拒绝，跳过单条可保留其它 experiments 数据。
+- **「我的」页背景共享 Bitmap**：清除背景时不再主动 `recycle` 进程级共享
+  位图，只清引用交给 GC，修复其它页面继续绘制时的
+  `Canvas: trying to use a recycled bitmap` 崩溃。
+- **失败横幅误报（Phase 5）**：`failedFeatureCount` 只统计主进程、TTL 内、
+  已启用且「expected > 0 且 installed <= 0」或 `criticalFailed > 0` 的功能；
+  普通 `lastFailure` 只作诊断。`expected=0` 的功能（如实验面板）不再计入。
+- **设置页旧快照覆盖（Phase 3）**：后台读取结果用 generation 丢弃过期快照；
+  用户刚修改的开关/多选不会被更早的读取结果回写覆盖。
+
+### 诊断
+
+- 诊断页数据来源新增「数据已过期：超过 10 分钟未收到目标进程回写」。
+- 回传 payload 根键白名单新增 `session`；迟到的旧会话回写记录
+  `status report ignored: stale session`。
+- Profile 映射签名不匹配、运行时 loader 不可用、experiments 条目超长均输出
+  明确的 warn 日志，便于定位适配问题。
+- 异常横幅只认 critical 挂载失败，可选挂载点改名不再把整个功能判死。
 
 ### 兼容
 
 - **网易云 9.6.15**：9.6.15（versionCode 9006015）复用 9.6.13 的挂载点集合；
-  2026-10-29 对 9.6.15 base.apk 全量体检 145/145 OK。未适配版本仍 fail-open。
+  2026-10-29 对 9.6.15 base.apk 全量体检 145/145 OK。版本门禁与「关于」页
+  展示 9.6.08 / 9.6.13 / 9.6.15；未适配版本仍 fail-open。
 
-### 修复
+### 已知限制
 
-- **冷启动首报丢失**：目标进程 context 未就绪时，`TargetProcessPublisher` 原先
-  直接丢弃本次状态快照，诊断页在无后续事件时可能长期为空。现改为按
-  1s/2s/4s 有界重试最多 3 次，同一通道只保留一条重试链；快照幂等，重复发送
-  不会产生副作用。仅修复回传时机，不改功能行为。
+- 底栏保留清单**无法去掉「首页」Tab**（9.6.13/9.6.15 主页面初始化依赖首页，
+  强行删除会导致启动卡死）。
+- UI-03 的隐藏清单基于旧版 block code；9.6.13/9.6.15 首页新增的
+  `PAGE_RECOMMEND_SEARCH_TOP_BANNER` / `SEARCH_CHANNEL_ENTRY` / `MORE_RCMD`
+  等 code 需要在新版首页定制里勾选对应项才会隐藏。
+- 「我的页背景」清除后宿主侧 `validType=4` 注入不会回滚（与 2.4.2 一致），
+  清除后如仍显示背景可重启网易云。
+- 9.6.15 复用 9.6.13 Profile，目前只完成挂载点静态体检，未做 9.6.15 单独
+  真机验收；如 9.6.15 后续小版本改动类/方法坐标，需要重新体检。
+- 诊断数据 TTL 为 10 分钟且不发送心跳：目标进程空闲超过 10 分钟会显示
+  「数据已过期」，这是设计内的「未知」状态，不是故障。
+- 异常横幅只统计 critical 挂载失败；非 critical 子项失败仅出现在诊断页，
+  不会触发横幅。
+
+### 验证
+
+- `:app:testDebugUnitTest`：252 个用例通过；`:app:lintDebug`、
+  `:app:assembleRelease` 通过。
+- 9.6.15 挂载体检 145/145 OK（`profile9613.json` + `--allow-version`，
+  `RESULT: OK=145 GONE=0 ERROR=0`）。
+- `tools/verify-apk.sh` PASS：versionCode=15 / versionName=2.4.5，签名证书
+  SHA-256 `eea85cac2aee030a28a2fe1e6f5b4e3e3c9448b674e53ec5bf88c3ea09d08925`，
+  R8 keep 与 Xposed 元数据全部通过。
+- APK：`app/build/outputs/apk/release/cloudmusictool-2.4.5.apk`，
+  4,253,165 字节（约 4.06 MiB），SHA-256
+  `f3c7e63f645fd205e4661c3fb062d06419706bcd7025d9cbf59bc59eaf1d2d75`。
 
 ## 2.4.4 - 2026-10-27
 

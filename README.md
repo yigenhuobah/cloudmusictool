@@ -2,7 +2,7 @@
 
 网易云音乐 Android 客户端的 LSPosed 体验优化模块：去广告、精简界面、收敛弹窗、隐私加固。
 
-> 当前版本 **2.4.4**（versionCode 14）。适配网易云音乐 **9.6.08 / 9.6.13**（versionCode 9006008 / 9006013）。
+> 当前版本 **2.4.5**（versionCode 15）。适配网易云音乐 **9.6.08 / 9.6.13 / 9.6.15**（versionCode 9006008 / 9006013 / 9006015）。
 > 与网易官方无任何关联，仅供学习研究和个人设备使用。
 
 **仓库**：<https://github.com/yigenhuobah/cloudmusictool> ｜ **下载**：[Releases](https://github.com/yigenhuobah/cloudmusictool/releases)
@@ -11,7 +11,7 @@
 
 | 项 | 值 |
 |---|---|
-| 目标应用 | `com.netease.cloudmusic` **9.6.08 / 9.6.13** (versionCode 9006008 / 9006013) |
+| 目标应用 | `com.netease.cloudmusic` **9.6.08 / 9.6.13 / 9.6.15** (versionCode 9006008 / 9006013 / 9006015) |
 | 模块包名 | `io.github.yigenhuobah.cloudmusictool` |
 | Xposed API | libxposed API 102（`minApiVersion=102` / `targetApiVersion=102`） |
 | 系统要求 | Android 10+（minSdk 29） |
@@ -146,20 +146,29 @@ gradlew.bat :app:assembleRelease
 - `implementation io.github.libxposed:service:102.0.0`
 - `implementation org.luckypray:dexkit:2.3.0`（硬编码失败时兜底，已启用 legacy JNI 打包）
 - AppCompat / Material / androidx.preference
-- 单测：JUnit 4.13.2 + `org.json:json`
+- 单测：JUnit 4.13.2 + `org.json:json`；当前 **252 个用例**（`:app:testDebugUnitTest`）
 
 ## 已知限制
 
-- **适配版本：9.6.08 / 9.6.13**。其他版本默认 best-effort 继续挂载（与 QuietBox 语义一致），功能可能失效，状态卡/横幅会提示未适配。
+- **适配版本：9.6.08 / 9.6.13 / 9.6.15**。其他版本默认 best-effort 继续挂载（与 QuietBox 语义一致），功能可能失效，状态卡/横幅会提示未适配。
 - 广告由服务端下发，模块只能阻止展示/上报，不能阻止接口请求。
 - 宿主存在 Tinker 风格热补丁，补丁可能替换被 hook 的实现。
-- **9.6.13 适配状态（2.4.4 已真机验证）**：UI-03 按 `Block.positionCode`
-  过滤 `MixContainerData.getResources()`（含 `NativeBlock` / `RnBlock` 兜底）；
-  UI-05 过滤 `tf0.o$a#y` 入参（9.6.13 专属挂载点，Profile 门控），**首页 Tab
-  始终保留**（主页面初始化依赖首页，删除会导致启动卡死）；EN-01 hook
-  `MyMusicProxyFragment#kc()Z` 强制原生页（9.6.08 回退 `oc()Z`），真机确认
-  `sg.s=true`、`hc` 创建 `MyMusicFragmentV4`、本地背景与内容遮罩生效。
-  三项均已挂运行时 ClassLoader bootstrap（Tinker 兼容）。
+- **9.6.13 / 9.6.15 适配状态**：9.6.13 已在 2.4.4 真机验证；9.6.15 复用
+  9.6.13 Profile，2026-10-29 对 9.6.15 base.apk 完成 145/145 挂载点静态体检，
+  未做 9.6.15 单独真机验收。UI-03 按 `Block.positionCode` 过滤
+  `MixContainerData.getResources()`（含 `NativeBlock` / `RnBlock` 兜底）；
+  UI-05 过滤 `tf0.o$a#y` 入参（Profile 门控）；EN-01 hook
+  `MyMusicProxyFragment#kc()Z` 强制原生页（9.6.08 回退 `oc()Z`）。三项均挂
+  运行时 ClassLoader bootstrap（Tinker 兼容），并校验运行时 loader 可加载宿主类。
+- **底栏无法去掉「首页」Tab**：9.6.13/9.6.15 主页面初始化依赖首页，强行删除
+  会导致启动卡死；保留清单未包含首页时结果为「首页 + 保留清单」。
+- **UI-03 新 code 需手动勾选**：9.6.13/9.6.15 首页新增的
+  `PAGE_RECOMMEND_SEARCH_TOP_BANNER` / `SEARCH_CHANNEL_ENTRY` / `MORE_RCMD`
+  等 block code 不在旧清单中，需要在首页定制里勾选对应项才会隐藏。
+- **清除「我的页背景」后 `validType=4` 不回滚**：宿主侧注入不会随清除撤销，
+  清除后如仍显示背景可重启网易云（与 2.4.2 一致）。
+- 诊断数据 TTL 为 10 分钟且不发送心跳；目标进程空闲超过 10 分钟时诊断页显示
+  「数据已过期」，这是设计内的「未知」状态。异常横幅只统计 critical 挂载失败。
 - UI-06 侧栏抽屉无可靠挂载点，保持 blocked，设置页置灰。
 - 部分 UI 挂载点没有 DexKit 锚点，只能精确类名匹配；宿主改名时对应子项报告缺失。
 - DexKit 兜底依赖 release 的 legacy JNI 打包；旧版本/改版仍可能定位失败。
