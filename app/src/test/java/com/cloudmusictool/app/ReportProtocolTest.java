@@ -317,7 +317,7 @@ public class ReportProtocolTest {
     public void failedFeatureCountIgnoresStaleOrMissingReportTime() throws Exception {
         final long now = 1_700_000_000_000L;
         long ttl = ReportProtocol.DEFAULT_TTL_MS;
-        JSONObject features = new JSONObject().put("SPLASH_AD", feature(true, 0, ""));
+        JSONObject features = new JSONObject().put("SPLASH_AD", feature(true, 0, "类未找到"));
 
         JSONObject root = new JSONObject();
         root.put("process", ReportProtocol.MAIN_PROCESS);
@@ -338,6 +338,26 @@ public class ReportProtocolTest {
         root.remove("updatedAt");
         assertEquals("缺少 report_time 视为未知", 0,
                 ReportProtocol.failedFeatureCount(root, now, ttl));
+    }
+
+    @Test
+    public void failedFeatureCountIgnoresFeatureWithoutMounts() throws Exception {
+        JSONObject features = new JSONObject();
+        features.put("AB_TEST_PANEL", new JSONObject()
+                .put("enabled", true)
+                .put("expected", 0)
+                .put("installed", 0)
+                .put("failed", 0)
+                .put("criticalFailed", 0)
+                .put("unavailable", true));
+
+        JSONObject root = new JSONObject();
+        root.put("process", ReportProtocol.MAIN_PROCESS);
+        root.put("updatedAt", System.currentTimeMillis());
+        root.put("features", features);
+
+        assertEquals("expected=0 的零挂载点功能不应计入失败横幅",
+                0, ReportProtocol.failedFeatureCount(root));
     }
 
     @Test
@@ -456,6 +476,7 @@ public class ReportProtocolTest {
         JSONObject o = new JSONObject();
         o.put("enabled", enabled);
         o.put("installed", installed);
+        o.put("expected", installed + (skip == null || skip.isEmpty() ? 0 : 1));
         o.put("lastFailure", skip);
         return o;
     }

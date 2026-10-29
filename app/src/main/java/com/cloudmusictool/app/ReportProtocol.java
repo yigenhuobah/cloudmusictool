@@ -287,8 +287,12 @@ public final class ReportProtocol {
             if (feature == null || !feature.optBoolean("enabled", false)) {
                 continue;
             }
-            if (feature.optInt("installed", 0) <= 0
-                    || feature.optInt("criticalFailed", 0) > 0) {
+            int expected = feature.optInt("expected", 0);
+            int installed = feature.optInt("installed", 0);
+            int critical = feature.optInt("criticalFailed", 0);
+            // expected=0 表示该功能本版本没有定义任何挂载点（如实验面板），
+            // 不能因为 installed=0 就计入失败横幅。
+            if ((expected > 0 && installed <= 0) || critical > 0) {
                 count++;
             }
         }
