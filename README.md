@@ -155,7 +155,8 @@ gradlew.bat :app:assembleRelease
 - 宿主存在 Tinker 风格热补丁，补丁可能替换被 hook 的实现。
 - **9.6.13 / 9.6.15 适配状态**：9.6.13 已在 2.4.4 真机验证；9.6.15 复用
   9.6.13 Profile，2026-10-29 对 9.6.15 base.apk 完成 145/145 挂载点静态体检，
-  未做 9.6.15 单独真机验收。UI-03 按 `Block.positionCode` 过滤
+  并在真机（网易云 9.6.15）确认 `installed=134/134`、`failed=0`、版本横幅消失；
+  未做 9.6.15 的逐功能效果回归。UI-03 按 `Block.positionCode` 过滤
   `MixContainerData.getResources()`（含 `NativeBlock` / `RnBlock` 兜底）；
   UI-05 过滤 `tf0.o$a#y` 入参（Profile 门控）；EN-01 hook
   `MyMusicProxyFragment#kc()Z` 强制原生页（9.6.08 回退 `oc()Z`）。三项均挂
