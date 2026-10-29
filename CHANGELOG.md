@@ -100,7 +100,7 @@
   R8 keep 与 Xposed 元数据全部通过。
 - APK：`app/build/outputs/apk/release/cloudmusictool-2.4.5.apk`，
   4,253,165 字节（约 4.06 MiB），SHA-256
-  `f3c7e63f645fd205e4661c3fb062d06419706bcd7025d9cbf59bc59eaf1d2d75`。
+  `7184566341875033ad704208459624a9a7dd817ced708564cb5edd430b6ad62e`。
 
 ## 2.4.4 - 2026-10-27
 
