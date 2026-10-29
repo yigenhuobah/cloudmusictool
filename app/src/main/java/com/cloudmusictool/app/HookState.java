@@ -31,6 +31,20 @@ public final class HookState {
     private static final int MAX_JSON_CHARS = 64 * 1024;
     private static final int MAX_FAILURE_CHARS = 160;
 
+    /**
+     * 进程级会话标识：目标进程启动时刻（epoch ms）。
+     *
+     * 目标进程重启后 session 单调变大，StatusProvider 据此丢弃迟到的旧会话整包回写；
+     * 新会话直接整段覆盖。读取侧以根级 updatedAt 作为 report_time，超过
+     * {@link ReportProtocol#DEFAULT_TTL_MS}（10 分钟）没有新回写即视为过期（未知），
+     * 诊断页显示“数据已过期”。
+     *
+     * 这里刻意不发送周期性心跳：心跳会引入常驻的固定频率调度，且与单测注入的
+     * 可数执行器（只支持 execute/schedule，scheduleAtFixedRate 直接抛异常）语义冲突；
+     * 空闲但健康的目标进程会随 TTL 自然过期，属于设计内的“未知”状态。
+     */
+    static final String SESSION = String.valueOf(System.currentTimeMillis());
+
     private static final Map<Feature, State> sStates = new ConcurrentHashMap<>();
 
     // ABTEST 不是 Feature（AbTestHooks 本地定位/安装），单独一组静态计数，
@@ -285,6 +299,14 @@ public final class HookState {
     }
 
     private static String buildJson() {
+        return buildJson(MAX_JSON_CHARS);
+    }
+
+    /**
+     * 包内部入口：单测用极小上限直接验证超限后的摘要回退分支（truncated + session）。
+     * 生产只经无参 {@link #buildJson()} 走 {@link #MAX_JSON_CHARS}。
+     */
+    static String buildJson(int maxChars) {
         try {
             JSONObject root = new JSONObject();
             JSONObject features = new JSONObject();
@@ -334,6 +356,7 @@ public final class HookState {
             }
             JSONObject abtest = abTestSummary();
             root.put("updatedAt", System.currentTimeMillis());
+            root.put("session", SESSION);
             if (sProcessName != null) {
                 root.put("process", sProcessName);
             }
@@ -349,10 +372,11 @@ public final class HookState {
             }
             root.put("features", features);
             String json = root.toString();
-            if (json.length() > MAX_JSON_CHARS) {
+            if (json.length() > maxChars) {
                 // 极端情况下退回摘要，保证不超过 64KB。
                 JSONObject compact = new JSONObject();
                 compact.put("updatedAt", System.currentTimeMillis());
+                compact.put("session", SESSION);
                 if (sProcessName != null) {
                     compact.put("process", sProcessName);
                 }

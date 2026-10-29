@@ -112,11 +112,17 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
             return getString(R.string.diag_source_empty);
         }
         long updatedAt = root.optLong("updatedAt", 0L);
+        boolean fresh = ReportProtocol.isFresh(updatedAt,
+                System.currentTimeMillis(), ReportProtocol.DEFAULT_TTL_MS);
         String time = updatedAt > 0
                 ? new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
                         .format(new Date(updatedAt))
                 : getString(R.string.diag_no_data);
         String summary = getString(R.string.diag_source_ok, time);
+        if (!fresh) {
+            // TTL 外或没有 report_time：数据未知，不展示为健康快照。
+            summary = summary + "\n" + getString(R.string.diag_stale);
+        }
         if (root.optBoolean("truncated", false)) {
             summary = summary + "\n" + getString(R.string.diag_truncated);
         }

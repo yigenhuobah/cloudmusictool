@@ -131,6 +131,7 @@
     <string name="diag_source_title">数据来源</string>
     <string name="diag_source_ok">目标进程回写 · 更新于 %1$s</string>
     <string name="diag_source_empty">暂无目标进程回写，启动目标应用后自动上报</string>
+    <string name="diag_stale">数据已过期：超过 10 分钟未收到目标进程回写</string>
     <string name="diag_truncated">回传数据过大，仅保留摘要</string>
     <string name="diag_no_data">—</string>
     <string name="diag_registered">registered</string>

@@ -41,6 +41,7 @@ public class ReportProtocolTest {
         }
         JSONObject root = new JSONObject();
         root.put("updatedAt", System.currentTimeMillis());
+        root.put("session", "1700000000000");
         root.put("process", ReportProtocol.MAIN_PROCESS);
         root.put("enabledFeatures", Feature.values().length);
         root.put("installed", 18);
@@ -56,9 +57,10 @@ public class ReportProtocolTest {
 
     @Test
     public void mountsTruncatedVariantIsAccepted() throws Exception {
-        // HookState.buildJson 超 64KB 时退回摘要：无 features/process，truncated=true。
+        // HookState.buildJson 超 64KB 时退回摘要：无 features，truncated=true，session 保留。
         JSONObject root = new JSONObject();
         root.put("updatedAt", System.currentTimeMillis());
+        root.put("session", "1700000000000");
         root.put("enabledFeatures", 3);
         root.put("installed", 5);
         root.put("expected", 9);
@@ -271,19 +273,71 @@ public class ReportProtocolTest {
     }
 
     @Test
+    public void mountsPayloadAcceptsSessionRootKey() throws Exception {
+        // session = 目标进程启动毫秒字符串，是新版本新增的根键；旧版缺省也合法。
+        JSONObject root = mountsRoot();
+        root.put("session", "1700000000123");
+
+        assertNull(ReportProtocol.validateMountsPayload(root));
+    }
+
+    @Test
     public void failedFeatureCountCountsEnabledFailuresOnly() throws Exception {
         JSONObject features = new JSONObject();
-        features.put("SPLASH_AD", feature(true, 0, "类未找到"));
+        features.put("SPLASH_AD", feature(true, 0, "类未找到"));          // installed<=0 -> 失败
+        features.put("FEED_AD", feature(true, 3, "方法未找到"));           // 仅普通失败 -> 诊断
+        features.put("COMMENT_AD", feature(true, 2, "")
+                .put("criticalFailed", 1));                                // critical -> 失败
+        features.put("CLIPBOARD", feature(false, 0, "类未找到"));          // 未启用 -> 忽略
+
+        JSONObject root = new JSONObject();
+        root.put("process", ReportProtocol.MAIN_PROCESS);
+        root.put("updatedAt", System.currentTimeMillis());
+        root.put("features", features);
+
+        assertEquals("已启用且 installed<=0 或 criticalFailed>0 计为失败", 2,
+                ReportProtocol.failedFeatureCount(root));
+    }
+
+    @Test
+    public void failedFeatureCountIgnoresOrdinaryLastFailure() throws Exception {
+        JSONObject features = new JSONObject();
         features.put("FEED_AD", feature(true, 3, "方法未找到"));
-        features.put("COMMENT_AD", feature(true, 2, ""));
-        features.put("CLIPBOARD", feature(false, 0, "类未找到"));
+
+        JSONObject root = new JSONObject();
+        root.put("process", ReportProtocol.MAIN_PROCESS);
+        root.put("updatedAt", System.currentTimeMillis());
+        root.put("features", features);
+
+        assertEquals("普通 lastFailure 只作诊断，不计入横幅",
+                0, ReportProtocol.failedFeatureCount(root));
+    }
+
+    @Test
+    public void failedFeatureCountIgnoresStaleOrMissingReportTime() throws Exception {
+        final long now = 1_700_000_000_000L;
+        long ttl = ReportProtocol.DEFAULT_TTL_MS;
+        JSONObject features = new JSONObject().put("SPLASH_AD", feature(true, 0, ""));
 
         JSONObject root = new JSONObject();
         root.put("process", ReportProtocol.MAIN_PROCESS);
         root.put("features", features);
 
-        assertEquals("已启用且 installed=0 或 skip 非空计为失败", 2,
-                ReportProtocol.failedFeatureCount(root));
+        root.put("updatedAt", now - ttl - 1L);
+        assertEquals("超过 TTL 视为未知", 0,
+                ReportProtocol.failedFeatureCount(root, now, ttl));
+
+        root.put("updatedAt", now - ttl);
+        assertEquals("TTL 边界内仍有效", 1,
+                ReportProtocol.failedFeatureCount(root, now, ttl));
+
+        root.put("updatedAt", 0L);
+        assertEquals("updatedAt<=0 视为未知", 0,
+                ReportProtocol.failedFeatureCount(root, now, ttl));
+
+        root.remove("updatedAt");
+        assertEquals("缺少 report_time 视为未知", 0,
+                ReportProtocol.failedFeatureCount(root, now, ttl));
     }
 
     @Test
@@ -292,6 +346,7 @@ public class ReportProtocolTest {
         features.put("AUDIO_CLIP_AD", feature(true, 0, "类未找到"));
         JSONObject root = new JSONObject();
         root.put("process", "com.netease.cloudmusic:play");
+        root.put("updatedAt", System.currentTimeMillis());
         root.put("features", features);
 
         assertEquals(0, ReportProtocol.failedFeatureCount(root));
@@ -301,6 +356,50 @@ public class ReportProtocolTest {
     public void failedFeatureCountHandlesMissingData() {
         assertEquals(0, ReportProtocol.failedFeatureCount(null));
         assertEquals(0, ReportProtocol.failedFeatureCount(new JSONObject()));
+    }
+
+    // ---------------------------------------------------------- 会话与新鲜度（纯逻辑）
+
+    @Test
+    public void isFreshHonoursTtlAndBoundaries() {
+        final long now = 1_700_000_000_000L;
+        final long ttl = ReportProtocol.DEFAULT_TTL_MS;
+
+        assertEquals("TTL 固定 10 分钟", 10 * 60 * 1000L, ttl);
+        assertFalse("updatedAt<=0 表示从未回传", ReportProtocol.isFresh(0L, now, ttl));
+        assertFalse(ReportProtocol.isFresh(-1L, now, ttl));
+        assertTrue(ReportProtocol.isFresh(now, now, ttl));
+        assertTrue("TTL 边界内（含边界）仍新鲜", ReportProtocol.isFresh(now - ttl, now, ttl));
+        assertFalse(ReportProtocol.isFresh(now - ttl - 1L, now, ttl));
+        assertTrue("设备时钟回拨按新鲜处理", ReportProtocol.isFresh(now + 5_000L, now, ttl));
+        assertFalse("ttl<=0 视为过期", ReportProtocol.isFresh(now, now, 0L));
+    }
+
+    @Test
+    public void staleSessionDetection() {
+        assertFalse("没有已存会话：不判旧", ReportProtocol.isStaleSession(null, "100"));
+        assertFalse(ReportProtocol.isStaleSession("", "100"));
+        assertFalse("同一会话不判旧", ReportProtocol.isStaleSession("100", "100"));
+        assertFalse("更新会话不判旧", ReportProtocol.isStaleSession("100", "101"));
+        assertTrue("更早会话判旧", ReportProtocol.isStaleSession("100", "99"));
+        assertTrue("缺 session 的旧版本回写判旧",
+                ReportProtocol.isStaleSession("100", null));
+        assertTrue(ReportProtocol.isStaleSession("100", ""));
+        assertTrue("非数字 session 按 0 处理", ReportProtocol.isStaleSession("100", "abc"));
+        assertFalse("已存 session 非数字：按没有会话处理",
+                ReportProtocol.isStaleSession("abc", "100"));
+    }
+
+    @Test
+    public void newSessionDetection() {
+        assertTrue("首次带 session 回传即新会话", ReportProtocol.isNewSession(null, "100"));
+        assertTrue(ReportProtocol.isNewSession("", "100"));
+        assertTrue(ReportProtocol.isNewSession("99", "100"));
+        assertFalse("同一会话不是新会话", ReportProtocol.isNewSession("100", "100"));
+        assertFalse(ReportProtocol.isNewSession("101", "100"));
+        assertFalse("缺 session 不触发新会话", ReportProtocol.isNewSession("100", null));
+        assertFalse(ReportProtocol.isNewSession("100", ""));
+        assertFalse(ReportProtocol.isNewSession("100", "abc"));
     }
 
     @Test
@@ -328,6 +427,7 @@ public class ReportProtocolTest {
     private JSONObject mountsRoot() throws Exception {
         JSONObject root = new JSONObject();
         root.put("updatedAt", System.currentTimeMillis());
+        root.put("session", "1700000000000");
         root.put("process", ReportProtocol.MAIN_PROCESS);
         root.put("enabledFeatures", 1);
         root.put("installed", 1);

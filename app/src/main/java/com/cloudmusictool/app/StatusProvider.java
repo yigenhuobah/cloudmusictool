@@ -65,7 +65,11 @@ public class StatusProvider extends ContentProvider {
         return handle(method, extras);
     }
 
-    private Bundle handle(String method, Bundle extras) {
+    /**
+     * synchronized：目标应用的多个进程 binder 线程可能并发进来，「读已存 JSON ->
+     * 会话比较 -> 落盘」必须串行，否则迟到的旧会话可能在新会话写入之后覆盖它。
+     */
+    private synchronized Bundle handle(String method, Bundle extras) {
         if (!"report".equals(method) || extras == null) {
             return null;
         }
@@ -95,8 +99,9 @@ public class StatusProvider extends ContentProvider {
         }
         // 结构白名单：payload 必须与生产者 schema 一致（ReportProtocol 的真实契约），
         // 半信任调用方写入未知键/超长字符串/超量条目在此整体拒绝。
+        JSONObject root;
         try {
-            JSONObject root = new JSONObject(json);
+            root = new JSONObject(json);
             String reason = experiments
                     ? ReportProtocol.validateExperimentsPayload(root)
                     : ReportProtocol.validateMountsPayload(root);
@@ -110,7 +115,18 @@ public class StatusProvider extends ContentProvider {
         }
         String prefsKey = experiments ? KEY_EXPERIMENTS : KEY_STATE;
         try {
-            prefs().edit().putString(prefsKey, json).apply();
+            SharedPreferences prefs = prefs();
+            String stored = prefs.getString(prefsKey, null);
+            String incomingSession = root.optString("session", "");
+            // 迟到的旧会话整包丢弃：目标进程重启后 session 变大；更早进程的
+            // 回写不能覆盖新会话数据。缺 session 的上一个版本同样按旧会话处理。
+            if (ReportProtocol.isStaleSession(storedSession(stored), incomingSession)) {
+                Log.i(TAG, "status report ignored: stale session " + incomingSession);
+                return null;
+            }
+            // 新会话（isNewSession）无需逐 key 清理：每个通道只存一份整包 JSON，
+            // putString 即整段覆盖，旧会话数据不会残留。
+            prefs.edit().putString(prefsKey, json).apply();
         } catch (Throwable t) {
             Log.w(TAG, "status store failed", t);
             return null;
@@ -118,6 +134,18 @@ public class StatusProvider extends ContentProvider {
         Bundle out = new Bundle();
         out.putBoolean(KEY_OK, true);
         return out;
+    }
+
+    /** 已存整包 JSON 的 session；缺失/损坏/旧版本返回空串（按没有会话处理）。 */
+    private static String storedSession(String storedJson) {
+        if (storedJson == null || storedJson.isEmpty()) {
+            return "";
+        }
+        try {
+            return new JSONObject(storedJson).optString("session", "");
+        } catch (Throwable t) {
+            return "";
+        }
     }
 
     private boolean isTargetUid(int uid) {
@@ -159,7 +187,32 @@ public class StatusProvider extends ContentProvider {
         }
     }
 
-    /** 已启用且明确失败的功能数；供主页面异常横幅使用。 */
+    /** 最近一次回传的 report_time（存储 JSON 的根级 updatedAt）；缺失/损坏返回 0。 */
+    public static long reportUpdatedAt(Context context) {
+        String json = readState(context);
+        if (json == null || json.isEmpty()) {
+            return 0L;
+        }
+        try {
+            long updatedAt = new JSONObject(json).optLong("updatedAt", 0L);
+            return updatedAt > 0L ? updatedAt : 0L;
+        } catch (Throwable t) {
+            return 0L;
+        }
+    }
+
+    /** 回传数据是否在 TTL（{@link ReportProtocol#DEFAULT_TTL_MS}）内；过期/从未回传返回 false。 */
+    public static boolean hasFreshReport(Context context) {
+        return ReportProtocol.isFresh(reportUpdatedAt(context),
+                System.currentTimeMillis(), ReportProtocol.DEFAULT_TTL_MS);
+    }
+
+    /**
+     * 已启用且明确失败的功能数；供主页面异常横幅使用。
+     *
+     * 失败判定见 {@link ReportProtocol#failedFeatureCount(JSONObject)}：数据过期/
+     * 未知（updatedAt <= 0 或超过 TTL）一律返回 0，避免旧会话长期误报。
+     */
     public static int failedFeatureCount(Context context) {
         String json = readState(context);
         if (json == null || json.isEmpty()) {

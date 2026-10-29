@@ -40,6 +40,8 @@ public class HookStateJsonContractTest {
 
         JSONObject root = new JSONObject(buildJson());
         assertTrue(root.has("updatedAt"));
+        assertTrue("session 是读取侧会话门禁的根键", root.has("session"));
+        assertEquals(HookState.SESSION, root.getString("session"));
         assertEquals("main", root.getString("process"));
         assertTrue(root.has("features"));
 
@@ -129,6 +131,8 @@ public class HookStateJsonContractTest {
 
         JSONObject root = new JSONObject(buildJson());
         assertTrue(root.has("updatedAt"));
+        assertTrue("session 必须始终输出", root.has("session"));
+        assertEquals(HookState.SESSION, root.getString("session"));
         assertFalse("process 未记录时不应输出", root.has("process"));
         assertTrue(root.has("enabledFeatures"));
         assertTrue(root.has("installed"));
@@ -139,5 +143,26 @@ public class HookStateJsonContractTest {
         assertTrue(root.has("unavailableFeatures"));
         assertTrue(root.has("features"));
         assertFalse("未超 64KB 时不应截断", root.has("truncated"));
+    }
+
+    /**
+     * 超限摘要分支：truncated=true 时仍必须输出 session 与 report_time（updatedAt），
+     * 否则读取侧会把摘要误判为无会话/过期数据。用包内极小上限入口直达该分支。
+     */
+    @Test
+    public void truncatedSummaryKeepsSessionAndReportTime() throws Exception {
+        HookState.init("com.example.module", "main");
+        Feature f = Feature.SPLASH_AD;
+        HookState.enable(f);
+        HookState.installed(f, "m1");
+
+        JSONObject compact = new JSONObject(HookState.buildJson(0));
+        assertTrue("超限必须回退为摘要", compact.getBoolean("truncated"));
+        assertTrue("摘要也必须携带 session", compact.has("session"));
+        assertEquals(HookState.SESSION, compact.getString("session"));
+        assertTrue("摘要也必须携带 report_time", compact.has("updatedAt"));
+        assertTrue(compact.getLong("updatedAt") > 0L);
+        assertEquals("main", compact.getString("process"));
+        assertFalse("摘要不携带逐功能明细", compact.has("features"));
     }
 }
