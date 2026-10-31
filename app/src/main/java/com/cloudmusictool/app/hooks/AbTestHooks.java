@@ -47,6 +47,13 @@ public final class AbTestHooks {
     private static final AtomicInteger sObserveLogs = new AtomicInteger(0);
     private static final Map<String, long[]> sForceLogState = new ConcurrentHashMap<>();
 
+    /**
+     * checkExperiment 的观测作用域：外层 hook 在作用域内调用 proceed()，宿主内部会再进
+     * b#x 的内层 hook。内层已经记录过的 key 在外层不再二次计数——同一次查询只应记一次，
+     * 且 source 保持内层的 "model"，不被外层后写的 libra/old 覆盖。
+     */
+    private static final ThreadLocal<Set<String>> sObserveScope = new ThreadLocal<>();
+
     private static volatile boolean sConfigResolved;
     private static volatile Class<?> sLibraClass;
     private static volatile Constructor<?> sLibraCtor;
@@ -92,30 +99,58 @@ public final class AbTestHooks {
             Class<?> cls = HookKit.findClass(module, null, cl, CLS_MANAGER);
             Method m = HookKit.findMethod(module, null, cls, "checkExperiment", null,
                     new Class<?>[]{String.class, boolean.class}, (String[]) null);
-            install(module, "ABTestManagerImpl#checkExperiment", m, chain -> {
-                Object result = chain.proceed();
-                try {
-                    String key = argString(chain, 0);
-                    if (result == null) {
-                        String forced = forcedGroup(key);
-                        if (forced != null) {
-                            Object cfg = createConfig(module, cl, key, forced);
-                            if (cfg != null) {
-                                logForce(module, key, forced);
-                                observe(module, key, forced, sourceOf(cfg));
-                                return cfg;
-                            }
-                        }
-                        return null;
-                    }
-                    observe(module, key, groupOf(result), sourceOf(result));
-                } catch (Throwable t) {
-                    HookKit.warn(module, "ABTEST observe error checkExperiment: " + t.getMessage());
-                }
-                return result;
-            });
+            install(module, "ABTestManagerImpl#checkExperiment", m,
+                    chain -> interceptCheckExperiment(module, cl, chain));
         } catch (Throwable t) {
             recordNotFound(module, "ABTestManagerImpl#checkExperiment", "skip", t);
+        }
+    }
+
+    /**
+     * ABTestManagerImpl#checkExperiment 的 hook 体。
+     *
+     * proceed() 只调用一次且不在 catch 内：宿主异常原样抛回（作用域靠 finally 复原）。
+     * 宿主内部还会调用 abtest2.b#x，其 hook 会先记一次观测；因此本次调用内的观测
+     * 记进同一个作用域集合，外层不再对同一 key 重复计数。
+     */
+    static Object interceptCheckExperiment(XposedModule module, ClassLoader cl,
+                                           XposedInterface.Chain chain) throws Throwable {
+        Set<String> observedInCall = new HashSet<>();
+        Object result = proceedInObserveScope(chain, observedInCall);
+        try {
+            String key = argString(chain, 0);
+            if (result == null) {
+                String forced = forcedGroup(key);
+                if (forced != null) {
+                    Object cfg = createConfig(module, cl, key, forced);
+                    if (cfg != null) {
+                        logForce(module, key, forced);
+                        observe(module, key, forced, sourceOf(cfg), observedInCall);
+                        return cfg;
+                    }
+                }
+                return null;
+            }
+            observe(module, key, groupOf(result), sourceOf(result), observedInCall);
+        } catch (Throwable t) {
+            HookKit.warn(module, "ABTEST observe error checkExperiment: " + t.getMessage());
+        }
+        return result;
+    }
+
+    /** 在观测作用域内放行宿主方法；仅做作用域复原，不捕获/改写宿主异常。 */
+    private static Object proceedInObserveScope(XposedInterface.Chain chain, Set<String> scope)
+            throws Throwable {
+        Set<String> previous = sObserveScope.get();
+        sObserveScope.set(scope);
+        try {
+            return chain.proceed();
+        } finally {
+            if (previous == null) {
+                sObserveScope.remove();
+            } else {
+                sObserveScope.set(previous);
+            }
         }
     }
 
@@ -149,31 +184,40 @@ public final class AbTestHooks {
             Class<?> cls = HookKit.findClass(module, null, cl, CLS_MODEL);
             Method m = HookKit.findMethod(module, null, cls, "x", null,
                     new Class<?>[]{String.class, boolean.class}, (String[]) null);
-            install(module, "abtest2.b#x", m, chain -> {
-                Object result = chain.proceed();
-                try {
-                    String key = argString(chain, 0);
-                    if (result == null) {
-                        String forced = forcedGroup(key);
-                        if (forced != null) {
-                            Object cfg = createConfig(module, cl, key, forced);
-                            if (cfg != null) {
-                                logForce(module, key, forced);
-                                observe(module, key, forced, "model");
-                                return cfg;
-                            }
-                        }
-                        return null;
-                    }
-                    observe(module, key, groupOf(result), "model");
-                } catch (Throwable t) {
-                    HookKit.warn(module, "ABTEST observe error b#x: " + t.getMessage());
-                }
-                return result;
-            });
+            install(module, "abtest2.b#x", m, chain -> interceptModel(module, cl, chain));
         } catch (Throwable t) {
             recordNotFound(module, "abtest2.b#x", "skip", t);
         }
+    }
+
+    /**
+     * abtest2.b#x 的 hook 体：模型层查询，source 固定记 "model"。
+     *
+     * 外层 checkExperiment 的 hook 通过 {@link #sObserveScope} 感知本次调用，
+     * 因此这里先记录后，外层不会对同一 key 再记一次。
+     */
+    static Object interceptModel(XposedModule module, ClassLoader cl,
+                                 XposedInterface.Chain chain) throws Throwable {
+        Object result = chain.proceed();
+        try {
+            String key = argString(chain, 0);
+            if (result == null) {
+                String forced = forcedGroup(key);
+                if (forced != null) {
+                    Object cfg = createConfig(module, cl, key, forced);
+                    if (cfg != null) {
+                        logForce(module, key, forced);
+                        observe(module, key, forced, "model");
+                        return cfg;
+                    }
+                }
+                return null;
+            }
+            observe(module, key, groupOf(result), "model");
+        } catch (Throwable t) {
+            HookKit.warn(module, "ABTEST observe error b#x: " + t.getMessage());
+        }
+        return result;
     }
 
     private static void installStartupHook(XposedModule module, ClassLoader cl) {
@@ -455,6 +499,23 @@ public final class AbTestHooks {
     }
 
     private static void observe(XposedModule module, String key, String group, String source) {
+        // 内层（b#x）观测：若当前线程正处于 checkExperiment 的作用域内，把 key 记进该作用域，
+        // 外层随后的同 key 观测据此去重。
+        observe(module, key, group, source, sObserveScope.get());
+    }
+
+    /**
+     * 记录一次观测。
+     *
+     * @param observedInCall 当前 checkExperiment 调用内已记录过的 key 集合（由内层 b#x
+     *                       的观测填入）；非 null 且本次 key 已在集合中时直接返回，
+     *                       使同一次查询只计一次数、source 保持内层值。
+     */
+    private static void observe(XposedModule module, String key, String group, String source,
+                                Set<String> observedInCall) {
+        if (observedInCall != null && key != null && !observedInCall.add(key)) {
+            return;
+        }
         try {
             ExperimentState.record(key, group, source);
         } catch (Throwable ignored) {

@@ -9,6 +9,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
+import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 
 /**
@@ -81,21 +82,8 @@ public final class StartupOrchestrationHooks {
                         boolean.class, new Class<?>[0]);
                 if (m != null) {
                     if (m.getReturnType() == boolean.class || m.getReturnType() == Boolean.class) {
-                        HookKit.install(module, f, "StartupTask#runOnUIThread", m, chain -> {
-                            try {
-                                String task = taskNameOf(chain.getThisObject());
-                                if (shouldOrchestrate(blocklist, chain.getThisObject())) {
-                                    HookKit.hit(module, f, "StartupTask.runOnUIThread",
-                                            "StartupTask.runOnUIThread -> false " + task);
-                                    return Boolean.FALSE;
-                                }
-                                return chain.proceed();
-                            } catch (Throwable t) {
-                                HookKit.error(module, f.id
-                                        + " intercept error StartupTask#runOnUIThread", t);
-                                return chain.proceed();
-                            }
-                        });
+                        HookKit.install(module, f, "StartupTask#runOnUIThread", m,
+                                chain -> interceptRunOnUiThread(module, f, blocklist, chain));
                     } else {
                         HookKit.warn(module, f.id + " skip StartupTask#runOnUIThread: unexpected return "
                                 + m.getReturnType());
@@ -111,25 +99,8 @@ public final class StartupOrchestrationHooks {
                         int.class, new Class<?>[0]);
                 if (m != null) {
                     if (m.getReturnType() == int.class || m.getReturnType() == Integer.class) {
-                        HookKit.install(module, f, "StartupTask#priority", m, chain -> {
-                            try {
-                                Object base = chain.proceed();
-                                String task = taskNameOf(chain.getThisObject());
-                                if (!shouldOrchestrate(blocklist, chain.getThisObject())) {
-                                    return base;
-                                }
-                                int current = base instanceof Number ? ((Number) base).intValue() : 0;
-                                int shifted = current > Integer.MAX_VALUE - PRIORITY_PENALTY
-                                        ? Integer.MAX_VALUE
-                                        : current + PRIORITY_PENALTY;
-                                HookKit.hit(module, f, "StartupTask.priority",
-                                        "StartupTask.priority " + current + " -> " + shifted + " " + task);
-                                return shifted;
-                            } catch (Throwable t) {
-                                HookKit.error(module, f.id + " intercept error StartupTask#priority", t);
-                                return chain.proceed();
-                            }
-                        });
+                        HookKit.install(module, f, "StartupTask#priority", m,
+                                chain -> interceptPriority(module, f, blocklist, chain));
                     } else {
                         HookKit.warn(module, f.id + " skip StartupTask#priority: unexpected return "
                                 + m.getReturnType());
@@ -145,21 +116,8 @@ public final class StartupOrchestrationHooks {
                         int.class, new Class<?>[0]);
                 if (m != null) {
                     if (m.getReturnType() == int.class || m.getReturnType() == Integer.class) {
-                        HookKit.install(module, f, "StartupTask#runOnStage", m, chain -> {
-                            try {
-                                Object stage = chain.proceed();
-                                String task = taskNameOf(chain.getThisObject());
-                                if (shouldOrchestrate(blocklist, chain.getThisObject())) {
-                                    HookKit.hit(module, f, "StartupTask.runOnStage",
-                                            "StartupTask.runOnStage kept " + stage + " " + task);
-                                }
-                                return stage;
-                            } catch (Throwable t) {
-                                HookKit.error(module, f.id
-                                        + " intercept error StartupTask#runOnStage", t);
-                                return chain.proceed();
-                            }
-                        });
+                        HookKit.install(module, f, "StartupTask#runOnStage", m,
+                                chain -> interceptRunOnStage(module, f, blocklist, chain));
                     } else {
                         HookKit.warn(module, f.id + " skip StartupTask#runOnStage: unexpected return "
                                 + m.getReturnType());
@@ -174,21 +132,8 @@ public final class StartupOrchestrationHooks {
                 Method m = HookKit.findMethod(module, f, cls, "degradeInit",
                         void.class, new Class<?>[0]);
                 if (m != null && m.getReturnType() == void.class) {
-                    HookKit.install(module, f, "StartupTask#degradeInit", m, chain -> {
-                        try {
-                            String task = taskNameOf(chain.getThisObject());
-                            if (shouldOrchestrate(blocklist, chain.getThisObject())) {
-                                HookKit.hit(module, f, "StartupTask.degradeInit",
-                                        "StartupTask.degradeInit skipped " + task);
-                                return null;
-                            }
-                            return chain.proceed();
-                        } catch (Throwable t) {
-                            HookKit.error(module, f.id
-                                    + " intercept error StartupTask#degradeInit", t);
-                            return chain.proceed();
-                        }
-                    });
+                    HookKit.install(module, f, "StartupTask#degradeInit", m,
+                            chain -> interceptDegradeInit(module, f, blocklist, chain));
                 } else if (m != null) {
                     HookKit.warn(module, f.id + " skip StartupTask#degradeInit: unexpected return "
                             + m.getReturnType());
@@ -198,6 +143,95 @@ public final class StartupOrchestrationHooks {
             }
         } catch (Throwable t) {
             HookKit.error(module, f.id + " StartupTask hook failed", t);
+        }
+    }
+
+    /**
+     * runOnUIThread：命中黑名单返回 false；其余路径只 proceed 一次。
+     * 判定阶段的异常只记录，随后走 proceed 放行宿主原逻辑。
+     */
+    static Object interceptRunOnUiThread(XposedModule module, Feature f, Set<String> blocklist,
+                                         XposedInterface.Chain chain) throws Throwable {
+        try {
+            String task = taskNameOf(chain.getThisObject());
+            if (shouldOrchestrate(blocklist, chain.getThisObject())) {
+                HookKit.hit(module, f, "StartupTask.runOnUIThread",
+                        "StartupTask.runOnUIThread -> false " + task);
+                return Boolean.FALSE;
+            }
+        } catch (Throwable t) {
+            HookKit.error(module, f.id + " intercept error StartupTask#runOnUIThread", t);
+        }
+        return proceed(module, f, "StartupTask#runOnUIThread", chain);
+    }
+
+    /**
+     * priority：先 proceed 一次拿到宿主值，再按黑名单加罚分。
+     *
+     * proceed 必须在所有 try 之外调用一次；后处理（记账/日志）抛异常时返回宿主原值，
+     * 绝不二次 proceed —— 否则宿主 priority() 会被执行两遍，首个异常还会被第二次调用覆盖。
+     */
+    static Object interceptPriority(XposedModule module, Feature f, Set<String> blocklist,
+                                    XposedInterface.Chain chain) throws Throwable {
+        Object base = proceed(module, f, "StartupTask#priority", chain);
+        try {
+            String task = taskNameOf(chain.getThisObject());
+            if (!shouldOrchestrate(blocklist, chain.getThisObject())) {
+                return base;
+            }
+            int current = base instanceof Number ? ((Number) base).intValue() : 0;
+            int shifted = current > Integer.MAX_VALUE - PRIORITY_PENALTY
+                    ? Integer.MAX_VALUE
+                    : current + PRIORITY_PENALTY;
+            HookKit.hit(module, f, "StartupTask.priority",
+                    "StartupTask.priority " + current + " -> " + shifted + " " + task);
+            return Integer.valueOf(shifted);
+        } catch (Throwable t) {
+            HookKit.error(module, f.id + " intercept error StartupTask#priority", t);
+            return base;
+        }
+    }
+
+    /** runOnStage：只记录不改动；proceed 只调用一次，后处理失败返回宿主原值。 */
+    static Object interceptRunOnStage(XposedModule module, Feature f, Set<String> blocklist,
+                                      XposedInterface.Chain chain) throws Throwable {
+        Object stage = proceed(module, f, "StartupTask#runOnStage", chain);
+        try {
+            String task = taskNameOf(chain.getThisObject());
+            if (shouldOrchestrate(blocklist, chain.getThisObject())) {
+                HookKit.hit(module, f, "StartupTask.runOnStage",
+                        "StartupTask.runOnStage kept " + stage + " " + task);
+            }
+        } catch (Throwable t) {
+            HookKit.error(module, f.id + " intercept error StartupTask#runOnStage", t);
+        }
+        return stage;
+    }
+
+    /** degradeInit：命中黑名单跳过（void）；其余路径只 proceed 一次。 */
+    static Object interceptDegradeInit(XposedModule module, Feature f, Set<String> blocklist,
+                                       XposedInterface.Chain chain) throws Throwable {
+        try {
+            String task = taskNameOf(chain.getThisObject());
+            if (shouldOrchestrate(blocklist, chain.getThisObject())) {
+                HookKit.hit(module, f, "StartupTask.degradeInit",
+                        "StartupTask.degradeInit skipped " + task);
+                return null;
+            }
+        } catch (Throwable t) {
+            HookKit.error(module, f.id + " intercept error StartupTask#degradeInit", t);
+        }
+        return proceed(module, f, "StartupTask#degradeInit", chain);
+    }
+
+    /** 唯一的 proceed 入口：异常记录后原样抛回，调用方不得再补一次。 */
+    private static Object proceed(XposedModule module, Feature f, String label,
+                                  XposedInterface.Chain chain) throws Throwable {
+        try {
+            return chain.proceed();
+        } catch (Throwable t) {
+            HookKit.error(module, f.id + " proceed error " + label, t);
+            throw t;
         }
     }
 

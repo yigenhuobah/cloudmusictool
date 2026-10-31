@@ -71,7 +71,10 @@ public final class TargetProfile {
                 }
             }
         }
-        return null;
+        // 方法名已改名的覆盖（如 9.6.13 的 LoadingAdManager#E -> H）：hook 侧仍按
+        // 旧名查询，spec.methodName 是新名而 logicalName 保留旧逻辑名。精确名未命中
+        // 时按 logicalName 回退，否则 critical 挂载点失败会被判成 non-critical。
+        return findByLogicalName(className, methodName);
     }
 
     /**

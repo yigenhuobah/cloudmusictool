@@ -2,6 +2,7 @@ package com.cloudmusictool.app.hooks;
 
 import com.cloudmusictool.app.profile.Profile9608;
 import com.cloudmusictool.app.profile.Profile9613;
+import com.cloudmusictool.app.profile.Profile9615;
 
 import org.junit.Test;
 
@@ -80,9 +81,11 @@ public class BottomTabHooksTest {
 
     @Test
     public void tabListBuildClass_gatedTo9613Profile() {
-        // 9.6.13 专属 tf0.o$a；9.6.08 不得返回查找名，避免 HookKit 登记
-        // 「类未找到 tf0.o$a」造成诊断误报。
+        // 9.6.13/9.6.15 的挂载表都包含 tf0.o$a#y；9.6.08 不得返回查找名，
+        // 避免 HookKit 登记「类未找到 tf0.o$a」造成诊断误报。
         assertEquals("tf0.o$a", BottomTabHooks.tabListBuildClass(Profile9613.PROFILE));
+        assertEquals("9.6.15 复用 9.6.13 挂载表，门控必须同样放行",
+                "tf0.o$a", BottomTabHooks.tabListBuildClass(Profile9615.PROFILE));
         assertNull(BottomTabHooks.tabListBuildClass(Profile9608.PROFILE));
         assertNull(BottomTabHooks.tabListBuildClass(null));
     }

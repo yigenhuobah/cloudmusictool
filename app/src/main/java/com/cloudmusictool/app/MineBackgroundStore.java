@@ -42,9 +42,19 @@ public final class MineBackgroundStore {
         t.setDaemon(true);
         return t;
     });
-    private static final Handler sMain = new Handler(Looper.getMainLooper());
+    /** 主线程 Handler 懒初始化：静态初始化不构造 Android 对象，文件操作可被纯 JVM 单测直接加载。 */
+    private static volatile Handler sMainHandler;
 
-    /** 异步导入结果回调，保证在主线程执行。 */
+    private static Handler mainHandler() {
+        Handler handler = sMainHandler;
+        if (handler == null) {
+            handler = new Handler(Looper.getMainLooper());
+            sMainHandler = handler;
+        }
+        return handler;
+    }
+
+    /** 异步导入/清除的结果回调，保证在主线程执行。 */
     public interface Callback {
         void onResult(boolean ok);
     }
@@ -123,6 +133,52 @@ public final class MineBackgroundStore {
         return new File(dst.getParentFile(), dst.getName() + TMP_SUFFIX);
     }
 
+    /** 覆盖旧图前先移动到这里的备份：与 dest 同目录，替换失败时用于恢复。 */
+    private static File backupFile(Context context) {
+        return new File(context.getFilesDir(), FILE_NAME + ".bak");
+    }
+
+    /** 文件移动抽象：生产环境是 {@link File#renameTo}，单测可伪造失败。 */
+    interface Mover {
+        boolean move(File from, File to);
+    }
+
+    /**
+     * 首次 rename 失败（个别 ROM 不允许覆盖已存在文件）后的兜底。
+     *
+     * <p>先把旧图移动到备份再重试，重试失败则把备份恢复回 dest：任何一步失败
+     * 都不会删除用户原有背景（旧实现先 delete 再重试，重试失败即丢图）。
+     *
+     * <p>包私有 + {@link Mover} 便于纯 JVM 单测覆盖“重试仍失败”的分支。
+     *
+     * @return true 表示 dest 已是新图。
+     */
+    static boolean replaceExisting(File tmp, File dest, File backup, Mover mover) {
+        boolean hadOld = dest.exists();
+        if (hadOld && !mover.move(dest, backup)) {
+            // 旧图原样留在 dest：本次导入失败，但用户背景不受影响。
+            Log.w(TAG, "backup mine background failed");
+            return false;
+        }
+        if (mover.move(tmp, dest)) {
+            if (hadOld && backup.exists() && !backup.delete()) {
+                Log.w(TAG, "delete mine background backup failed");
+            }
+            return true;
+        }
+        if (hadOld && !mover.move(backup, dest)) {
+            // rename 恢复不可用时降级为拷贝，尽量把旧图放回目标路径。
+            if (copyTo(backup, dest)) {
+                if (backup.exists() && !backup.delete()) {
+                    Log.w(TAG, "delete mine background backup failed");
+                }
+            } else {
+                Log.w(TAG, "restore mine background failed");
+            }
+        }
+        return false;
+    }
+
     public static boolean hasImage(Context context) {
         try {
             File file = file(context);
@@ -163,16 +219,10 @@ public final class MineBackgroundStore {
                 return false;
             }
             File dest = file(app);
-            if (!tmp.renameTo(dest)) {
-                // Android/Linux 上 rename 通常可直接覆盖；个别 ROM 对已存在目标
-                // 会失败，此时删掉旧文件再重试一次。
-                if (dest.exists()) {
-                    dest.delete();
-                }
-                if (!tmp.renameTo(dest)) {
-                    Log.w(TAG, "rename mine background failed");
-                    return false;
-                }
+            if (!tmp.renameTo(dest)
+                    && !replaceExisting(tmp, dest, backupFile(app), File::renameTo)) {
+                Log.w(TAG, "rename mine background failed");
+                return false;
             }
             File external = externalFile(app);
             if (external != null) {
@@ -201,7 +251,7 @@ public final class MineBackgroundStore {
     public static void importImageAsync(final Context context, final Uri uri, final Callback callback) {
         if (context == null || uri == null) {
             if (callback != null) {
-                sMain.post(() -> callback.onResult(false));
+                mainHandler().post(() -> callback.onResult(false));
             }
             return;
         }
@@ -216,7 +266,7 @@ public final class MineBackgroundStore {
                 result = false;
             }
             final boolean ok = result;
-            sMain.post(() -> notifyResult(callback, ok));
+            mainHandler().post(() -> notifyResult(callback, ok));
         });
     }
 
@@ -234,43 +284,73 @@ public final class MineBackgroundStore {
     /**
      * 删除已保存的背景与残留临时文件。
      *
-     * <p>删除被投递到与导入共用的单线程队列执行，本方法投递后立即返回：
-     * 清除必然排在在途导入之后出队（FIFO），不会再被其无声撤销。调用方的
-     * toast/刷新等即时反馈不变，仅文件删除延后到队列出队——清除后紧接着的
-     * {@link #hasImage} 可能仍读到旧文件，待队列排空后的刷新才反映新状态。
+     * <p>删除被投递到与导入共用的单线程队列执行，投递后立即返回。调用方
+     * 需要“删除已完成”的确定结果时用 {@link #clear(Context, Callback)}：
+     * 回调在主线程收到真实删除结果，之后再调用 {@link #hasImage} 不会读到旧文件。
      */
     public static void clear(Context context) {
+        clear(context, null);
+    }
+
+    /**
+     * 删除已保存的背景，并在主线程回调真实结果。
+     *
+     * <p>回调在队列出队并完成删除后才投递，因此回调里的刷新能读到删除后的状态；
+     * 任一路径删除失败（内部图 / 共享副本）返回 false，调用方不能再提示“已清除”。
+     */
+    public static void clear(Context context, Callback callback) {
         if (context == null) {
+            mainHandler().post(() -> notifyResult(callback, false));
             return;
         }
         Context app = context.getApplicationContext();
         final Context ctx = app != null ? app : context;
-        sExecutor.execute(() -> clearSync(ctx));
+        try {
+            sExecutor.execute(() -> {
+                final boolean ok = clearSync(ctx);
+                mainHandler().post(() -> notifyResult(callback, ok));
+            });
+        } catch (Throwable t) {
+            Log.w(TAG, "enqueue clear mine background failed", t);
+            mainHandler().post(() -> notifyResult(callback, false));
+        }
     }
 
-    private static void clearSync(Context context) {
+    /** @return true 表示内部图与共享副本都已删除（删除失败时目标进程仍可能读到旧图）。 */
+    private static boolean clearSync(Context context) {
         try {
-            File file = file(context);
-            if (file.exists() && !file.delete()) {
-                Log.w(TAG, "delete mine background failed");
-            }
-            File tmp = tmpFile(context);
-            if (tmp.exists() && !tmp.delete()) {
-                Log.w(TAG, "delete mine background tmp failed");
-            }
             File external = externalFile(context);
-            if (external != null) {
-                File externalTmp = tmpOf(external);
-                if (externalTmp.exists() && !externalTmp.delete()) {
-                    Log.w(TAG, "delete external mine background tmp failed");
-                }
-                if (external.exists() && !external.delete()) {
-                    Log.w(TAG, "delete external mine background failed");
-                }
-            }
+            File externalTmp = external != null ? tmpOf(external) : null;
+            return deleteBackgroundFiles(file(context), tmpFile(context), external, externalTmp);
         } catch (Throwable t) {
             Log.w(TAG, "clear mine background failed", t);
+            return false;
         }
+    }
+
+    /**
+     * 逐个删除背景相关文件；任一存在但删不掉都返回 false。
+     * 包私有便于单测用真实临时文件覆盖失败判定。
+     */
+    static boolean deleteBackgroundFiles(File internal, File tmp, File external, File externalTmp) {
+        boolean ok = true;
+        if (internal != null && internal.exists() && !internal.delete()) {
+            Log.w(TAG, "delete mine background failed");
+            ok = false;
+        }
+        if (tmp != null && tmp.exists() && !tmp.delete()) {
+            Log.w(TAG, "delete mine background tmp failed");
+            ok = false;
+        }
+        if (externalTmp != null && externalTmp.exists() && !externalTmp.delete()) {
+            Log.w(TAG, "delete external mine background tmp failed");
+            ok = false;
+        }
+        if (external != null && external.exists() && !external.delete()) {
+            Log.w(TAG, "delete external mine background failed");
+            ok = false;
+        }
+        return ok;
     }
 
     /**

@@ -66,10 +66,15 @@ public final class SplashAdHooks {
         }
 
         // 1. 最终展示判定：E(AdInfo)Z -> false
+        //    记住实际挂上的那个方法：签名扫描只在它确实安装成功时才排除，
+        //    定位/安装失败时扫描必须能按签名补挂。
+        Method installedJudge = null;
         if (adInfoCls != null) {
             Method mE = HookKit.findMethod(module, f, managerCls, "E", adInfoCls);
-            HookKit.install(module, f, "LoadingAdManager#E", mE,
-                    HookKit.constBool(module, f, "LoadingAdManager.E -> false", false));
+            if (HookKit.install(module, f, "LoadingAdManager#E", mE,
+                    HookKit.constBool(module, f, "LoadingAdManager.E -> false", false))) {
+                installedJudge = mE;
+            }
         }
 
         // 2. 热启动拉起：G(Activity)V -> return
@@ -82,30 +87,48 @@ public final class SplashAdHooks {
         HookKit.install(module, f, "LoadingAdManager#o", mO, chain -> {
             try {
                 HookKit.hit(module, f, "LoadingAdManager.o -> empty ArrayList");
-                return new ArrayList<>();
             } catch (Throwable t) {
+                // 替换型 hook：记账失败也按拦截语义返回空列表，绝不回退成二次 proceed。
                 HookKit.error(module, f.id + " intercept error LoadingAdManager#o", t);
-                return chain.proceed();
             }
+            return new ArrayList<>();
         });
 
         // 4. 签名扫描：所有 (AdInfo)Z 方法统一返回 false
-        //    9.6.13 的判定方法可能已改名（E -> H），上面的 profile 映射已挂过 H，
-        //    这里把映射后的名字一并排除，避免同一方法重复挂载。
+        //    排除依据是第 1 步实际挂上的方法（按身份比较），而不是无条件按名字跳过：
+        //    第 1 步 install 失败时（Profile 映射签名不符、hook 返回 false 等），
+        //    映射出的新方法名仍能被这里补挂，判定 hook 不会整体失效。
         if (adInfoCls != null) {
-            String judgeName = HookKit.mappedMethodName(managerCls, "E");
-            for (Method m : managerCls.getDeclaredMethods()) {
-                if (m.getName().equals("E") || m.getName().equals(judgeName)) {
-                    continue;
-                }
-                Class<?>[] params = m.getParameterTypes();
-                if (params.length == 1 && params[0] == adInfoCls
-                        && (m.getReturnType() == boolean.class || m.getReturnType() == Boolean.class)) {
-                    HookKit.install(module, f, "LoadingAdManager#" + m.getName() + "(AdInfo)Z", m,
-                            HookKit.constBool(module, f, "LoadingAdManager." + m.getName() + " -> false", false));
-                }
+            for (Method m : judgeScanTargets(managerCls, adInfoCls, installedJudge)) {
+                HookKit.install(module, f, "LoadingAdManager#" + m.getName() + "(AdInfo)Z", m,
+                        HookKit.constBool(module, f, "LoadingAdManager." + m.getName() + " -> false", false));
             }
         }
+    }
+
+    /**
+     * 签名扫描的候选方法：所有 (AdInfo)Z/Boolean 方法，排除第 1 步已成功挂载的那个。
+     *
+     * @param installedJudge 第 1 步判定方法实际挂上的 Method（null 表示第 1 步未挂上，
+     *                       此时全部候选都是补挂目标，不再按名字排除）。
+     */
+    static List<Method> judgeScanTargets(Class<?> managerCls, Class<?> adInfoCls,
+                                         Method installedJudge) {
+        List<Method> targets = new ArrayList<>();
+        for (Method m : managerCls.getDeclaredMethods()) {
+            Class<?>[] params = m.getParameterTypes();
+            if (params.length != 1 || params[0] != adInfoCls) {
+                continue;
+            }
+            if (m.getReturnType() != boolean.class && m.getReturnType() != Boolean.class) {
+                continue;
+            }
+            if (installedJudge != null && installedJudge.equals(m)) {
+                continue;
+            }
+            targets.add(m);
+        }
+        return targets;
     }
 
     private static void hookLoadingAdActivity(XposedModule module, ClassLoader cl, Feature f) {

@@ -1,11 +1,22 @@
 package com.cloudmusictool.app.hooks;
 
+import com.cloudmusictool.app.Feature;
+import com.cloudmusictool.app.HookState;
+
+import org.json.JSONObject;
 import org.junit.Test;
 
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
+import io.github.libxposed.api.XposedInterface;
+import io.github.libxposed.api.XposedModule;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -83,5 +94,58 @@ public class RuntimeHookBootstrapTest {
     public void defaultProbesContainKnownHostClass() {
         assertTrue(Arrays.asList(RuntimeHookBootstrap.RUNTIME_PROBE_CLASSES)
                 .contains("com.netease.cloudmusic.meta.virtual.UserBackgroundInfo"));
+    }
+
+    /**
+     * installer 抛异常必须按 critical 失败记账：否则 failed/expected 都为 0，
+     * 完全失败的功能不会进入 App 失败横幅（ReportProtocol 只在 expected&gt;0 时统计）。
+     */
+    @Test
+    public void installerFailureIsRecordedAsCriticalFailure() throws Exception {
+        Feature f = Feature.OAID_REPORT;
+        JSONObject before = featureJson(f);
+        int failedBefore = before == null ? 0 : before.optInt("failed", 0);
+
+        HookState.enable(f);
+        RuntimeHookBootstrap.recordInstallFailure(loggingModule(), f,
+                new IllegalStateException("boom"));
+        HookState.finish(f);
+
+        JSONObject after = featureJson(f);
+        assertEquals(failedBefore + 1, after.getInt("failed"));
+        assertTrue("安装异常按 critical 记录", after.getInt("criticalFailed") >= 1);
+        assertTrue("整功能失败必须进入 degraded", after.getBoolean("degraded"));
+        assertTrue("一个挂载点都没装上时 unavailable", after.getBoolean("unavailable"));
+        assertEquals("运行时安装异常", after.getString("lastFailure"));
+    }
+
+    private static XposedModule loggingModule() throws Exception {
+        XposedInterface base = (XposedInterface) Proxy.newProxyInstance(
+                XposedInterface.class.getClassLoader(),
+                new Class<?>[]{XposedInterface.class},
+                new InvocationHandler() {
+                    @Override
+                    public Object invoke(Object proxy, Method method, Object[] args) {
+                        if ("log".equals(method.getName())) {
+                            return null;
+                        }
+                        throw new UnsupportedOperationException(method.getName());
+                    }
+                });
+        XposedModule module = new XposedModule() {
+        };
+        module.attachFramework(base, new Runnable() {
+            @Override
+            public void run() {
+            }
+        });
+        return module;
+    }
+
+    private static JSONObject featureJson(Feature f) throws Exception {
+        Method m = HookState.class.getDeclaredMethod("buildJson");
+        m.setAccessible(true);
+        String json = (String) m.invoke(null);
+        return new JSONObject(json).getJSONObject("features").optJSONObject(f.name());
     }
 }

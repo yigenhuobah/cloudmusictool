@@ -117,6 +117,29 @@ public class HookStateJsonContractTest {
         assertFalse(featureJson(f).getBoolean("unavailable"));
     }
 
+    /** 诊断页读取根级 abtest 概要（DiagnosticsFragment 的 installed/failed/lastFailure）。 */
+    @Test
+    public void abtestSummaryKeys_consumedByDiagnostics() throws Exception {
+        HookState.init("com.example.module", "main");
+        JSONObject before = new JSONObject(buildJson()).optJSONObject("abtest");
+        int installedBefore = before == null ? 0 : before.optInt("installed", 0);
+        int failedBefore = before == null ? 0 : before.optInt("failed", 0);
+
+        HookState.abTestInstalled("AbTestHooks#install");
+        HookState.abTestNotFound("AbTestHooks#missing");
+        HookState.abTestNotFound("AbTestHooks#missing"); // 同 label 只记一次
+        HookState.noteAbTest("findClass failed: AbTestHooks#missing");
+
+        JSONObject abtest = new JSONObject(buildJson()).getJSONObject("abtest");
+        assertTrue("诊断页按字符串读 installed", abtest.has("installed"));
+        assertTrue("诊断页按字符串读 failed", abtest.has("failed"));
+        assertTrue("诊断页按字符串读 lastFailure", abtest.has("lastFailure"));
+        assertEquals(installedBefore + 1, abtest.getInt("installed"));
+        assertEquals(failedBefore + 1, abtest.getInt("failed"));
+        assertEquals("findClass failed: AbTestHooks#missing",
+                abtest.getString("lastFailure"));
+    }
+
     private static JSONObject featureJson(Feature f) throws Exception {
         return new JSONObject(buildJson())
                 .getJSONObject("features").getJSONObject(f.name());
@@ -143,6 +166,16 @@ public class HookStateJsonContractTest {
         assertTrue(root.has("unavailableFeatures"));
         assertTrue(root.has("features"));
         assertFalse("未超 64KB 时不应截断", root.has("truncated"));
+    }
+
+    /**
+     * 生产端会话标识必须是 "s&lt;启动毫秒&gt;-&lt;8 位随机 hex&gt;"：读取侧按字符串身份
+     * 判定新会话，随机后缀保证时钟回拨/同毫秒重启时也不会与上一会话撞号。
+     */
+    @Test
+    public void sessionCarriesProcessRandomSuffix() {
+        assertTrue("session 形如 s<millis>-<8 位 hex>，实际：" + HookState.SESSION,
+                HookState.SESSION.matches("s\\d{10,}-[0-9a-f]{8}"));
     }
 
     /**

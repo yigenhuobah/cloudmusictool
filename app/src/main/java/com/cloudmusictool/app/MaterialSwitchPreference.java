@@ -50,20 +50,11 @@ public class MaterialSwitchPreference extends Preference {
         if (sw == null) {
             return;
         }
+        // 布局把开关设为 clickable/focusable=false，点击统一走 Preference.onClick()；
+        // 这里只同步显示状态，不挂 OnCheckedChangeListener（该回调永远不会触发）。
         sw.setOnCheckedChangeListener(null);
         sw.setChecked(mChecked);
         sw.setEnabled(isEnabled());
-        sw.setOnCheckedChangeListener((button, checked) -> {
-            if (!button.isPressed()) {
-                return;
-            }
-            if (callChangeListener(checked)) {
-                mChecked = checked;
-                notifyDependencyChange(shouldDisableDependents());
-            } else {
-                button.setChecked(mChecked);
-            }
-        });
     }
 
     @Override

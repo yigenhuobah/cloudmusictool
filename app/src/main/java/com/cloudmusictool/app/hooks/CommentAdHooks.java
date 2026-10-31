@@ -5,6 +5,7 @@ import com.cloudmusictool.app.Feature;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
+import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 
 /**
@@ -31,20 +32,8 @@ public final class CommentAdHooks {
                 Method y1 = entryCls != null
                         ? HookKit.findMethod(module, f, adapter, "y1", entryCls)
                         : HookKit.findByNameAndArity(adapter, "y1", 1);
-                HookKit.install(module, f, "CommentAdapter#y1", y1, chain -> {
-                    try {
-                        Object entry = chain.getArg(0);
-                        clearField(entry, "ad");
-                        clearField(entry, "commentGeneralBanner");
-                        clearField(entry, "vipRcmdList");
-                        clearField(entry, "liveRcmdList");
-                        HookKit.hit(module, f, "CommentAdapter.y1: cleared ad fields");
-                        return chain.proceed();
-                    } catch (Throwable t) {
-                        HookKit.error(module, f.id + " y1 intercept error", t);
-                        return chain.proceed();
-                    }
-                });
+                HookKit.install(module, f, "CommentAdapter#y1", y1,
+                        chain -> interceptEntry(module, f, chain));
             }
         } catch (Throwable t) {
             HookKit.error(module, f.id + " CommentAdapter hook failed", t);
@@ -101,6 +90,33 @@ public final class CommentAdHooks {
             }
         } catch (Throwable t) {
             HookKit.error(module, f.id + " CommentVipRcmdAdapter hook failed", t);
+        }
+    }
+
+    /**
+     * CommentAdapter#y1 的 hook 体：先清空广告字段，再调用 proceed() 一次。
+     *
+     * 清理阶段的异常只记录（下一次 bind 仍有原样数据，不能因此中断宿主）；
+     * 宿主方法自身抛出的异常记录后原样抛回，绝不在 catch 里补第二次 proceed，
+     * 否则同一次 bind 会被执行两遍。
+     */
+    static Object interceptEntry(XposedModule module, Feature f, XposedInterface.Chain chain)
+            throws Throwable {
+        try {
+            Object entry = chain.getArg(0);
+            clearField(entry, "ad");
+            clearField(entry, "commentGeneralBanner");
+            clearField(entry, "vipRcmdList");
+            clearField(entry, "liveRcmdList");
+            HookKit.hit(module, f, "CommentAdapter.y1: cleared ad fields");
+        } catch (Throwable t) {
+            HookKit.error(module, f.id + " y1 intercept error", t);
+        }
+        try {
+            return chain.proceed();
+        } catch (Throwable t) {
+            HookKit.error(module, f.id + " y1 proceed error", t);
+            throw t;
         }
     }
 

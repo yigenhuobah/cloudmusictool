@@ -67,7 +67,7 @@ public class StatusProvider extends ContentProvider {
 
     /**
      * synchronized：目标应用的多个进程 binder 线程可能并发进来，「读已存 JSON ->
-     * 会话比较 -> 落盘」必须串行，否则迟到的旧会话可能在新会话写入之后覆盖它。
+     * 会话身份比较 -> 落盘」必须串行，否则迟到的旧会话可能在新会话写入之后覆盖它。
      */
     private synchronized Bundle handle(String method, Bundle extras) {
         if (!"report".equals(method) || extras == null) {
@@ -118,15 +118,17 @@ public class StatusProvider extends ContentProvider {
             SharedPreferences prefs = prefs();
             String stored = prefs.getString(prefsKey, null);
             String incomingSession = root.optString("session", "");
-            // 迟到的旧会话整包丢弃：目标进程重启后 session 变大；更早进程的
-            // 回写不能覆盖新会话数据。缺 session 的上一个版本同样按旧会话处理。
-            if (ReportProtocol.isStaleSession(storedSession(stored), incomingSession)) {
-                Log.i(TAG, "status report ignored: stale session " + incomingSession);
-                return null;
+            // 会话只做身份比较：字符串不同即新会话（本包整段覆盖旧数据），相同即同进程。
+            // 不再按毫秒大小丢弃整批回写——设备时钟回拨会让新进程的毫秒值更小，
+            // 旧逻辑会把该进程整个生命周期的回传全部丢掉。
+            SharedPreferences.Editor editor = prefs.edit();
+            if (!experiments
+                    && ReportProtocol.isNewSession(storedSession(stored), incomingSession)) {
+                // 新会话开始：上一会话的实验命中快照立即失效。experiments 通道
+                // 无新观测时不发空快照，不清除就会一直把旧会话命中当当前数据展示。
+                editor.remove(KEY_EXPERIMENTS);
             }
-            // 新会话（isNewSession）无需逐 key 清理：每个通道只存一份整包 JSON，
-            // putString 即整段覆盖，旧会话数据不会残留。
-            prefs.edit().putString(prefsKey, json).apply();
+            editor.putString(prefsKey, json).apply();
         } catch (Throwable t) {
             Log.w(TAG, "status store failed", t);
             return null;
@@ -179,10 +181,11 @@ public class StatusProvider extends ContentProvider {
         }
     }
 
+    /** 清除本地回传快照：mounts 与 experiments 一并移除（experiments 无独立的过期通道）。 */
     public static void clearState(Context context) {
         try {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                    .edit().remove(KEY_STATE).apply();
+                    .edit().remove(KEY_STATE).remove(KEY_EXPERIMENTS).apply();
         } catch (Throwable ignored) {
         }
     }

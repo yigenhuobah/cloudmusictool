@@ -1,7 +1,6 @@
 package com.cloudmusictool.app;
 
 import android.content.Context;
-import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.util.Log;
 
@@ -28,26 +27,15 @@ public final class VersionGate {
     /**
      * 读取目标网易云音乐 versionCode。
      *
-     * 优先 PackageReadyParam.getApplicationInfo().getLongVersionCode()；该 API 在部分
-     * compileSdk stub 中不可直接引用，因此用反射调用（运行时存在即生效）。
-     * 失败后回退 PackageManager.getPackageInfo(...).getLongVersionCode()；再失败返回 -1，
-     * 由调用方回退 versionName。
+     * 直接经 PackageManager.getPackageInfo(...).getLongVersionCode() 读取（公开 API，
+     * minSdk 29 可直接引用）。PackageReadyParam.getApplicationInfo() 没有公开的
+     * versionCode getter（AOSP 的 ApplicationInfo 只有 @hide 的 longVersionCode 字段），
+     * 原反射 getLongVersionCode() 的分支在真机上必然 NoSuchMethodException，已移除。
+     * 读取失败返回 -1，由调用方回退 versionName。
      */
     public static long resolveVersionCode(PackageReadyParam param) {
         if (param == null) {
             return -1L;
-        }
-        try {
-            ApplicationInfo info = param.getApplicationInfo();
-            if (info != null) {
-                java.lang.reflect.Method m =
-                        ApplicationInfo.class.getMethod("getLongVersionCode");
-                Object value = m.invoke(info);
-                if (value instanceof Number) {
-                    return ((Number) value).longValue();
-                }
-            }
-        } catch (Throwable ignored) {
         }
         try {
             Context ctx = targetContext();

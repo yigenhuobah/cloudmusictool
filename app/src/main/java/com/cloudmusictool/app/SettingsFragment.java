@@ -33,6 +33,9 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     private ConfigStore mStore;
     private ExecutorService mStatusExecutor;
     private final AtomicInteger mStatusGeneration = new AtomicInteger();
+    /** 每个 key 的写回令牌与最近确认值；与首页定制页共用同一状态机语义。 */
+    private final HomeCustomizeFragment.WriteGate<Boolean> mWriteGate =
+            new HomeCustomizeFragment.WriteGate<>();
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -59,6 +62,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     @Override
     public void onDestroy() {
         mStatusGeneration.incrementAndGet();
+        mWriteGate.clear();
         if (mStatusExecutor != null) {
             mStatusExecutor.shutdownNow();
             mStatusExecutor = null;
@@ -86,7 +90,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 }
                 boolean next = (Boolean) value;
                 MaterialSwitchPreference sw = (MaterialSwitchPreference) pref;
-                boolean before = sw.isCheckedValue();
+                final boolean before = sw.isCheckedValue();
                 if (!mStore.remote()) {
                     Toast.makeText(requireContext(),
                             R.string.status_remote_unavailable, Toast.LENGTH_SHORT).show();
@@ -94,23 +98,31 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 }
                 // 用户已产生更新的选择：作废在途快照，避免旧值回写覆盖本次修改。
                 mStatusGeneration.incrementAndGet();
-                boolean enqueued = mStore.put(f.key, next, saved -> {
+                final String key = f.key;
+                final long token = mWriteGate.begin(key);
+                boolean enqueued = mStore.put(key, next, saved -> {
+                    // 成功也记确认值：旧写入落盘后仍是后续失败的回滚目标。
+                    boolean latest = mWriteGate.onResult(key, token, saved, next);
                     if (!isAdded()) {
                         return;
                     }
                     // 写结果比任何在途快照都新，作废它们；成功时以提交值为准。
                     mStatusGeneration.incrementAndGet();
-                    Preference current = findPreference(f.key);
-                    if (saved) {
-                        if (current instanceof MaterialSwitchPreference) {
-                            ((MaterialSwitchPreference) current).setCheckedValue(next);
-                        }
+                    if (!latest) {
+                        // 已有更新的写入：旧结果不能覆盖界面。
                         return;
                     }
-                    // commit 被远端拒绝：回滚开关并提示，不假装已保存。
-                    if (current instanceof MaterialSwitchPreference) {
-                        ((MaterialSwitchPreference) current).setCheckedValue(before);
+                    Preference current = findPreference(key);
+                    if (!(current instanceof MaterialSwitchPreference)) {
+                        return;
                     }
+                    MaterialSwitchPreference currentSwitch = (MaterialSwitchPreference) current;
+                    if (saved) {
+                        currentSwitch.setCheckedValue(next);
+                        return;
+                    }
+                    // commit 被远端拒绝：回到最近一次确认落盘的值，不假装已保存。
+                    currentSwitch.setCheckedValue(mWriteGate.rollback(key, before));
                     Toast.makeText(requireContext(),
                             R.string.setting_save_failed, Toast.LENGTH_SHORT).show();
                 });
@@ -149,6 +161,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         sw.setTitle(R.string.app_hide_icon_title);
         sw.setSummary(R.string.app_hide_icon_summary);
         // 初始值交给紧随其后的 refresh() -> applySnapshot()，避免重复读取 binder。
+        // 首次快照回来前先置灰：此时开关还是默认值，不能拿它当系统状态写回。
+        sw.setEnabled(false);
         sw.setOnPreferenceChangeListener((preference, value) -> {
             if (!(value instanceof Boolean)) {
                 return false;
@@ -158,18 +172,32 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             Context context = requireContext();
             Context appContext = context.getApplicationContext();
             final Context bgContext = appContext != null ? appContext : context;
+            // 用户已产生更新的选择：作废在途快照，避免旧 iconHidden 回写覆盖本次修改。
+            mStatusGeneration.incrementAndGet();
+            final long token = mWriteGate.begin(KEY_HIDE_ICON);
             ConfigStore.io().execute(() -> {
                 final boolean ok = LauncherIcon.setHidden(bgContext, hide);
                 ConfigStore.postToMain(() -> {
-                    if (!isAdded()) {
+                    // 写结果比任何在途快照都新：作废它们（即使本次结果已被新写入取代）。
+                    mStatusGeneration.incrementAndGet();
+                    boolean latest = mWriteGate.onResult(KEY_HIDE_ICON, token, ok, hide);
+                    if (!isAdded() || !latest) {
                         return;
                     }
+                    Preference current = findPreference(KEY_HIDE_ICON);
+                    if (!(current instanceof MaterialSwitchPreference)) {
+                        return;
+                    }
+                    MaterialSwitchPreference currentSwitch = (MaterialSwitchPreference) current;
                     if (!ok) {
-                        sw.setCheckedValue(before);
+                        // 失败：回到最近一次确认的系统状态，不假装已切换。
+                        currentSwitch.setCheckedValue(
+                                mWriteGate.rollback(KEY_HIDE_ICON, before));
                         Toast.makeText(requireContext(),
                                 R.string.app_hide_icon_failed, Toast.LENGTH_LONG).show();
                         return;
                     }
+                    currentSwitch.setCheckedValue(hide);
                     Toast.makeText(requireContext(),
                             hide ? R.string.app_hide_icon_hidden_toast
                                     : R.string.app_hide_icon_shown_toast,
@@ -254,6 +282,8 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 sw.setCheckedValue(false);
                 sw.setEnabled(false);
             } else {
+                // 快照值只作为“还没有确认值”时的回滚基线，不覆盖已确认落盘的值。
+                mWriteGate.seed(f.key, enabled[i]);
                 sw.setCheckedValue(enabled[i]);
                 sw.setEnabled(writable);
             }
@@ -261,7 +291,10 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         // 组件状态可能被外部改动（adb、清数据、重装），回到本页时以系统状态为准。
         Preference icon = findPreference(KEY_HIDE_ICON);
         if (icon instanceof MaterialSwitchPreference) {
+            mWriteGate.seed(KEY_HIDE_ICON, iconHidden);
             ((MaterialSwitchPreference) icon).setCheckedValue(iconHidden);
+            // 首次快照已到，开关才有可信初始值。
+            icon.setEnabled(true);
         }
         renderStatus(snapshot);
     }

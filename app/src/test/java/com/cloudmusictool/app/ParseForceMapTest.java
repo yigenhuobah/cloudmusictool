@@ -84,6 +84,31 @@ public class ParseForceMapTest {
     }
 
     @Test
+    public void forceMapCodec_nonStringGroupValues_dropped() {
+        // 解析层契约：group 必须是 JSON 字符串。optString 会把 JSON null/数字/
+        // 布尔/对象转成 "null"/"1"/"true"/"{...}" 等非空串，绕过空 group 剔除。
+        assertEquals(Collections.emptyMap(),
+                ForceMapCodec.parse("{\"tabMerge\":null}"));
+        assertEquals(Collections.emptyMap(),
+                ForceMapCodec.parse("{\"tabMerge\":1}"));
+        assertEquals(Collections.emptyMap(),
+                ForceMapCodec.parse("{\"tabMerge\":true}"));
+        assertEquals(Collections.emptyMap(),
+                ForceMapCodec.parse("{\"tabMerge\":{\"g\":\"t1\"}}"));
+        assertEquals(Collections.emptyMap(),
+                ForceMapCodec.parse("{\"tabMerge\":[\"t1\"]}"));
+    }
+
+    @Test
+    public void forceMapCodec_nonStringGroupDropped_keepsStringEntries() {
+        Map<String, String> out = ForceMapCodec.parse(
+                "{\"tabMerge\":\"t1\",\"numeric\":7,\"nested\":{\"x\":1},\"plain\":\"t2\"}");
+        assertEquals(2, out.size());
+        assertEquals("t1", out.get("tabMerge"));
+        assertEquals("t2", out.get("plain"));
+    }
+
+    @Test
     public void invalidJson_emptyMap() {
         assertEquals(Collections.emptyMap(), parse("{oops"));
         assertEquals(Collections.emptyMap(), parse("[1,2]"));

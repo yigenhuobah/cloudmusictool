@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 
 /**
@@ -45,6 +46,8 @@ public final class TopTabHooks {
             Collections.synchronizedSet(new HashSet<>());
     private static final AtomicBoolean sEmptyConfigLogged = new AtomicBoolean();
     private static final AtomicBoolean sNoMatchLogged = new AtomicBoolean();
+    /** tab 移除失败的 warning-once：removeTab / removeTabView 都是 void，失败必须留痕。 */
+    private static final AtomicBoolean sRemoveFailedLogged = new AtomicBoolean();
 
     private TopTabHooks() {
     }
@@ -116,7 +119,8 @@ public final class TopTabHooks {
                                 getNowChannelItems, chain -> {
                                     Object res = chain.proceed();
                                     try {
-                                        return filterChannelList(module, f, config, res,
+                                        return filterChannelList(module, f,
+                                                config.getFilterSet(Config.KEY_TOP_CHANNELS_KEEP), res,
                                                 tabExtraCls.getSimpleName() + "#getNowChannelItems");
                                     } catch (Throwable t) {
                                         HookKit.error(module, f.id + " intercept error getNowChannelItems", t);
@@ -144,7 +148,8 @@ public final class TopTabHooks {
                                 chain -> {
                                     Object res = chain.proceed();
                                     try {
-                                        return filterChannelList(module, f, config, res,
+                                        return filterChannelList(module, f,
+                                                config.getFilterSet(Config.KEY_TOP_CHANNELS_KEEP), res,
                                                 dtoCls.getSimpleName() + "#getCurrentRes");
                                     } catch (Throwable t) {
                                         HookKit.error(module, f.id + " intercept error getCurrentRes", t);
@@ -175,17 +180,9 @@ public final class TopTabHooks {
                 t0 = HookKit.findByNameAndArity(drh, HookKit.mappedMethodName(drh, "T0"), 1);
             }
             if (t0 != null) {
-                HookKit.install(module, f, "dr.h#T0", t0, chain -> {
-                    try {
-                        Object[] newArgs = filterFirstListArg(module, f, config, chain.getArgs(), "dr.h#T0");
-                        if (newArgs != null) {
-                            return chain.proceed(newArgs);
-                        }
-                    } catch (Throwable t) {
-                        HookKit.error(module, f.id + " intercept error dr.h#T0", t);
-                    }
-                    return chain.proceed();
-                });
+                // proceed 只调用一次：先算过滤后的入参，再放行宿主方法。
+                HookKit.install(module, f, "dr.h#T0", t0, chain -> interceptFilteredArgs(module, f,
+                        config.getFilterSet(Config.KEY_TOP_CHANNELS_KEEP), chain, "dr.h#T0"));
             }
         } catch (Throwable t) {
             HookKit.error(module, f.id + " dr.h hook failed", t);
@@ -209,7 +206,9 @@ public final class TopTabHooks {
                     Object res = chain.proceed();
                     try {
                         if (res instanceof List) {
-                            List<Object> out = filterList(module, f, config, (List<?>) res, "getTabDataList");
+                            List<Object> out = filterList(module, f,
+                                    config.getFilterSet(Config.KEY_TOP_CHANNELS_KEEP), (List<?>) res,
+                                    "getTabDataList");
                             if (out != null) {
                                 return out;
                             }
@@ -237,18 +236,10 @@ public final class TopTabHooks {
                     }
                     m.setAccessible(true);
                     final String label = mName + "(" + pts.length + ")";
-                    HookKit.install(module, f, "BaseArkV3Fragment#" + label, m, chain -> {
-                        try {
-                            Object[] newArgs = filterFirstListArg(module, f, config,
-                                    chain.getArgs(), "BaseArkV3Fragment#" + label);
-                            if (newArgs != null) {
-                                return chain.proceed(newArgs);
-                            }
-                        } catch (Throwable t) {
-                            HookKit.error(module, f.id + " intercept error " + label, t);
-                        }
-                        return chain.proceed();
-                    });
+                    HookKit.install(module, f, "BaseArkV3Fragment#" + label, m, chain ->
+                            interceptFilteredArgs(module, f,
+                                    config.getFilterSet(Config.KEY_TOP_CHANNELS_KEEP), chain,
+                                    "BaseArkV3Fragment#" + label));
                 }
             }
         } catch (Throwable t) {
@@ -285,7 +276,8 @@ public final class TopTabHooks {
                     Object res = chain.proceed();
                     try {
                         if (res instanceof List) {
-                            List<Object> out = filterList(module, f, config, (List<?>) res, label);
+                            List<Object> out = filterList(module, f,
+                                    config.getFilterSet(Config.KEY_TOP_CHANNELS_KEEP), (List<?>) res, label);
                             if (out != null) {
                                 return out;
                             }
@@ -325,18 +317,10 @@ public final class TopTabHooks {
             if (refresh == null) {
                 return;
             }
-            HookKit.install(module, f, "arkview.ArkFragment#refreshAdapterData", refresh, chain -> {
-                try {
-                    Object[] newArgs = filterFirstListArg(module, f, config, chain.getArgs(),
-                            "arkview.ArkFragment#refreshAdapterData");
-                    if (newArgs != null) {
-                        return chain.proceed(newArgs);
-                    }
-                } catch (Throwable t) {
-                    HookKit.error(module, f.id + " intercept error arkview.refreshAdapterData", t);
-                }
-                return chain.proceed();
-            });
+            HookKit.install(module, f, "arkview.ArkFragment#refreshAdapterData", refresh,
+                    chain -> interceptFilteredArgs(module, f,
+                            config.getFilterSet(Config.KEY_TOP_CHANNELS_KEEP), chain,
+                            "arkview.ArkFragment#refreshAdapterData"));
         } catch (Throwable t) {
             HookKit.error(module, f.id + " arkview.ArkFragment hook failed", t);
         }
@@ -408,9 +392,17 @@ public final class TopTabHooks {
                         return res;
                     }
                     // 先移除预创建 View，再从 tabs 列表移除，避免空槽位残留。
-                    removeTabView(tab);
-                    removeTab(layout, tab);
-                    HookKit.hit(module, f, label + " removed pre-created '" + title + "'");
+                    boolean viewRemoved = removeTabView(tab);
+                    boolean tabRemoved = removeTab(layout, tab);
+                    if (tabRemoved) {
+                        HookKit.hit(module, f, label + " removed pre-created '" + title
+                                + "' (view=" + viewRemoved + ")");
+                    } else if (sRemoveFailedLogged.compareAndSet(false, true)) {
+                        // 两个移除都是 void 且可能静默失败；不能再记成「removed」，
+                        // 否则空槽位/多出来的 tab 在诊断里无从发现。
+                        HookKit.warn(module, f.id + " " + label + " could not remove tab '"
+                                + title + "' (view=" + viewRemoved + ")");
+                    }
                 } catch (Throwable t) {
                     HookKit.error(module, f.id + " intercept error MusicTabLayout#" + label, t);
                 }
@@ -441,10 +433,10 @@ public final class TopTabHooks {
         return v == null ? null : v.toString().trim();
     }
 
-    /** 调用 MusicTabLayout.removeTab(k)，移除已添加的 tab。 */
-    private static void removeTab(Object layout, Object tab) {
+    /** 调用 MusicTabLayout.removeTab(k)，返回是否真的调用到宿主的移除方法。 */
+    private static boolean removeTab(Object layout, Object tab) {
         if (layout == null || tab == null) {
-            return;
+            return false;
         }
         try {
             for (Method m : layout.getClass().getMethods()) {
@@ -456,23 +448,24 @@ public final class TopTabHooks {
                 }
                 m.setAccessible(true);
                 m.invoke(layout, tab);
-                return;
+                return true;
             }
         } catch (Throwable ignored) {
         }
+        return false;
     }
 
-    /** 移除 k 关联的预创建 TabView，避免留下空槽位。 */
-    private static void removeTabView(Object tab) {
+    /** 移除 k 关联的预创建 TabView，返回是否找到了 TabView 并解除交互。 */
+    private static boolean removeTabView(Object tab) {
         try {
             Field r = HookKit.findField(tab.getClass(), "r");
             if (r == null) {
-                return;
+                return false;
             }
             r.setAccessible(true);
             Object view = r.get(tab);
             if (!(view instanceof View)) {
-                return;
+                return false;
             }
             View v = (View) view;
             v.setVisibility(View.GONE);
@@ -482,7 +475,9 @@ public final class TopTabHooks {
             if (parent instanceof ViewGroup) {
                 ((ViewGroup) parent).removeView(v);
             }
+            return true;
         } catch (Throwable ignored) {
+            return false;
         }
     }
 
@@ -491,19 +486,41 @@ public final class TopTabHooks {
     // ------------------------------------------------------------------
 
     /**
-     * 过滤列表并返回新 ArrayList；配置为空 / 过滤后为空 / 无变化时返回 null（调用方保持原逻辑）。
+     * 过滤入参后只调用一次 proceed()：宿主方法的异常记录后原样抛回。
+     *
+     * 旧写法把 proceed 放在 try 里、catch 再补一次，宿主方法抛异常时会被执行两遍
+     * （第二次还用未过滤的原始入参）。三个「替换入参」的挂载点共用此实现。
      */
-    private static List<Object> filterList(XposedModule module, Feature f, Config config,
-                                           List<?> list, String source) {
-        Set<String> keepSet = config.getFilterSet(Config.KEY_TOP_CHANNELS_KEEP);
-        if (keepSet == null || keepSet.isEmpty()) {
-            if (sEmptyConfigLogged.compareAndSet(false, true)) {
-                HookKit.info(module, f.id + " top_channels_keep is empty; filtering skipped");
-            }
-            return null;
+    static Object interceptFilteredArgs(XposedModule module, Feature f, Set<String> keepSet,
+                                        XposedInterface.Chain chain, String label) throws Throwable {
+        Object[] newArgs = null;
+        try {
+            newArgs = filterFirstListArg(module, f, keepSet, chain.getArgs(), label);
+        } catch (Throwable t) {
+            HookKit.error(module, f.id + " intercept error " + label, t);
         }
-        if (list == null || list.isEmpty()) {
-            return null;
+        // 两个分支互斥：每次执行只会 proceed 一次。
+        try {
+            return newArgs != null ? chain.proceed(newArgs) : chain.proceed();
+        } catch (Throwable t) {
+            HookKit.error(module, f.id + " proceed error " + label, t);
+            throw t;
+        }
+    }
+
+    /**
+     * 数据层过滤决策（包内可见，便于单测）。
+     *
+     * filtered == null 表示本次不改变数据层，调用方沿用原列表。只要本次没有真正删掉
+     * 任何项（配置为空 / 空列表 / 无匹配 / 无变化），就必须清掉上一轮记录的保留标题与
+     * sDataLayerFiltered：否则宿主回退全量数据后，addTab 兜底仍按旧标题删 tab，
+     * tab 栏与 ViewPager2 的页数/下标不再一致。
+     */
+    static FilterDecision decideFilter(List<?> list, Set<String> keepSet) {
+        boolean emptyConfig = keepSet == null || keepSet.isEmpty();
+        if (emptyConfig || list == null || list.isEmpty()) {
+            resetFilterState();
+            return new FilterDecision(null, false, emptyConfig);
         }
         List<Object> out = new ArrayList<>(list.size());
         for (Object item : list) {
@@ -512,14 +529,12 @@ public final class TopTabHooks {
             }
         }
         if (out.isEmpty()) {
-            if (sNoMatchLogged.compareAndSet(false, true)) {
-                HookKit.warn(module, f.id + " keepSet=" + keepSet
-                        + " matched no tab title; sample=" + sampleTitles(list));
-            }
-            return null;
+            resetFilterState();
+            return new FilterDecision(null, true, false);
         }
         if (out.size() >= list.size()) {
-            return null;
+            resetFilterState();
+            return new FilterDecision(null, false, false);
         }
         // 记录“数据层确实过滤过”以及保留标题；addTab 兜底只在此基础上工作。
         Set<String> kept = new HashSet<>();
@@ -534,8 +549,52 @@ public final class TopTabHooks {
             sKeptTitles.addAll(kept);
         }
         sDataLayerFiltered = true;
-        HookKit.hit(module, f, source + " filtered from " + list.size() + " to " + out.size());
-        return out;
+        return new FilterDecision(out, false, false);
+    }
+
+    /** decideFilter 的结果：filtered == null 表示不改变数据层。 */
+    static final class FilterDecision {
+        final List<Object> filtered;
+        final boolean noMatch;
+        final boolean emptyConfig;
+
+        FilterDecision(List<Object> filtered, boolean noMatch, boolean emptyConfig) {
+            this.filtered = filtered;
+            this.noMatch = noMatch;
+            this.emptyConfig = emptyConfig;
+        }
+    }
+
+    /** 数据层本次没有过滤：清掉上一轮的兜底状态，避免 addTab 按旧标题继续删 tab。 */
+    private static void resetFilterState() {
+        sDataLayerFiltered = false;
+        synchronized (sKeptTitles) {
+            sKeptTitles.clear();
+        }
+    }
+
+    /**
+     * 过滤列表并返回新 ArrayList；配置为空 / 过滤后为空 / 无变化时返回 null（调用方保持原逻辑）。
+     */
+    private static List<Object> filterList(XposedModule module, Feature f, Set<String> keepSet,
+                                           List<?> list, String source) {
+        FilterDecision decision = decideFilter(list, keepSet);
+        if (decision.filtered == null) {
+            if (decision.emptyConfig) {
+                if (sEmptyConfigLogged.compareAndSet(false, true)) {
+                    HookKit.info(module, f.id + " top_channels_keep is empty; filtering skipped");
+                }
+            } else if (decision.noMatch) {
+                if (sNoMatchLogged.compareAndSet(false, true)) {
+                    HookKit.warn(module, f.id + " keepSet=" + keepSet
+                            + " matched no tab title; sample=" + sampleTitles(list));
+                }
+            }
+            return null;
+        }
+        HookKit.hit(module, f, source + " filtered from " + list.size()
+                + " to " + decision.filtered.size());
+        return decision.filtered;
     }
 
     private static String sampleTitles(List<?> list) {
@@ -551,12 +610,12 @@ public final class TopTabHooks {
     }
 
     /** 替换第一个 List 参数；无变化返回 null。 */
-    private static Object[] filterFirstListArg(XposedModule module, Feature f, Config config,
+    private static Object[] filterFirstListArg(XposedModule module, Feature f, Set<String> keepSet,
                                                List<Object> args, String source) {
         if (args == null || args.isEmpty() || !(args.get(0) instanceof List)) {
             return null;
         }
-        List<Object> out = filterList(module, f, config, (List<?>) args.get(0), source);
+        List<Object> out = filterList(module, f, keepSet, (List<?>) args.get(0), source);
         if (out == null) {
             return null;
         }
@@ -566,12 +625,12 @@ public final class TopTabHooks {
     }
 
     /** 旧链路的返回值过滤（返回新列表）。 */
-    private static Object filterChannelList(XposedModule module, Feature f, Config config,
+    private static Object filterChannelList(XposedModule module, Feature f, Set<String> keepSet,
                                             Object res, String source) {
         if (!(res instanceof List)) {
             return res;
         }
-        List<Object> out = filterList(module, f, config, (List<?>) res, source);
+        List<Object> out = filterList(module, f, keepSet, (List<?>) res, source);
         return out != null ? out : res;
     }
 }

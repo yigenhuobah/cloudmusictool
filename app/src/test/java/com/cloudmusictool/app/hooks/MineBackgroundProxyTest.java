@@ -2,6 +2,7 @@ package com.cloudmusictool.app.hooks;
 
 import com.cloudmusictool.app.profile.Profile9608;
 import com.cloudmusictool.app.profile.Profile9613;
+import com.cloudmusictool.app.profile.Profile9615;
 
 import org.junit.Test;
 
@@ -85,6 +86,8 @@ public class MineBackgroundProxyTest {
         // 9.6.13 只有 pe(Activity)，不得调用 W1(boolean)/kd(String)；
         // 9.6.08/未知版本保留 pe()/D1()/W1(true)/kd("custom_bg")。
         assertTrue(MineBackgroundHooks.use9613FullScreen(Profile9613.PROFILE));
+        assertTrue("9.6.15 只复用 9.6.13 挂载表，versionCode 不同，门控不得按等值判断",
+                MineBackgroundHooks.use9613FullScreen(Profile9615.PROFILE));
         assertFalse(MineBackgroundHooks.use9613FullScreen(Profile9608.PROFILE));
         assertFalse(MineBackgroundHooks.use9613FullScreen(null));
     }

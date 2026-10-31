@@ -5,6 +5,7 @@ import android.os.Bundle;
 import com.cloudmusictool.app.Config;
 import com.cloudmusictool.app.Feature;
 import com.cloudmusictool.app.HookState;
+import com.cloudmusictool.app.profile.ProfileRegistry;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -146,7 +147,8 @@ public final class RuntimeHookBootstrap {
                 sBootstrapInstalled.set(false);
                 return;
             }
-            boolean hooked = HookKit.install(module, null, "runtime/bootstrap", onCreate, chain -> {
+            boolean hooked = HookKit.installUnscoped(module, "RUNTIME", "runtime/bootstrap",
+                    onCreate, chain -> {
                 try {
                     Object self = chain.getThisObject();
                     ClassLoader runtimeCl = self != null
@@ -166,6 +168,16 @@ public final class RuntimeHookBootstrap {
             sBootstrapInstalled.set(false);
             HookKit.error(module, "runtime hooks bootstrap install failed", t);
         }
+    }
+
+    /**
+     * 单个 installer 抛出后的统一记账：按 critical 失败登记，保证
+     * expected/failed/degraded 真实反映整功能失败（否则横幅只在 expected&gt;0 时统计）。
+     */
+    static void recordInstallFailure(XposedModule module, Feature feature, Throwable t) {
+        HookKit.error(module, feature.id + " runtime install failed", t);
+        HookState.markNotFound(feature, "安装异常", true);
+        HookState.note(feature, "运行时安装异常");
     }
 
     private static void installRuntimeHooks(XposedModule module, ClassLoader runtimeCl) {
@@ -199,6 +211,14 @@ public final class RuntimeHookBootstrap {
         }
         HookKit.info(module, (hasUi04 ? "UI-04 runtime loader " : "runtime loader ") + runtimeCl);
 
+        if (ProfileRegistry.active() == null) {
+            // 未适配版本没有 Profile 坐标：installer 只能靠 DexKit 兜底，而本方法运行在
+            // 首个 Activity#onCreate 的主线程。HookKit 在无活动 Profile 时已关闭 DexKit
+            // 兜底（见 HookKit.findClass/findMethod），这里只做硬编码挂载点的 best-effort。
+            HookKit.warn(module, "no active profile: runtime installers use hardcoded mounts only "
+                    + "(DexKit fallback disabled, main-thread scan avoided)");
+        }
+
         int installed = 0;
         int failed = 0;
         long startedAt = System.currentTimeMillis();
@@ -208,7 +228,7 @@ public final class RuntimeHookBootstrap {
                 installed++;
             } catch (Throwable t) {
                 failed++;
-                HookKit.error(module, registration.feature.id + " runtime install failed", t);
+                recordInstallFailure(module, registration.feature, t);
             } finally {
                 HookState.finish(registration.feature);
             }

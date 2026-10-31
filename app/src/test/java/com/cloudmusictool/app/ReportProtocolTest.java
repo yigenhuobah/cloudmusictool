@@ -11,7 +11,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
- * 诊断回传协议：结构白名单、条数与长度边界、主进程门禁与失败功能计数。
+ * 诊断回传协议：结构白名单、条数与长度边界、主进程门禁、会话身份与新鲜度判定、
+ * 失败功能计数。
  *
  * 合法形态夹具对齐真实生产者字段面（HookState.buildJson / ExperimentState.buildJson，
  * 见 HookStateJsonContractTest 的生产侧钉子）；篡改用例覆盖：
@@ -274,11 +275,23 @@ public class ReportProtocolTest {
 
     @Test
     public void mountsPayloadAcceptsSessionRootKey() throws Exception {
-        // session = 目标进程启动毫秒字符串，是新版本新增的根键；旧版缺省也合法。
+        // session = 目标进程会话标识 "s<启动毫秒>-<8 位随机 hex>"，旧版缺省也合法。
         JSONObject root = mountsRoot();
-        root.put("session", "1700000000123");
+        root.put("session", "s1700000000123-3fa4c2d1");
 
         assertNull(ReportProtocol.validateMountsPayload(root));
+    }
+
+    @Test
+    public void experimentsPayloadAcceptsSessionRootKey() throws Exception {
+        // experiments 通道同样允许进程会话标识；旧生产者不写该键也合法。
+        JSONObject root = new JSONObject();
+        root.put("updatedAt", System.currentTimeMillis());
+        root.put("session", "s1700000000123-3fa4c2d1");
+        root.put("items", new JSONArray());
+
+        assertNull("experiments 通道必须接受 session 根键",
+                ReportProtocol.validateExperimentsPayload(root));
     }
 
     @Test
@@ -391,35 +404,55 @@ public class ReportProtocolTest {
         assertTrue(ReportProtocol.isFresh(now, now, ttl));
         assertTrue("TTL 边界内（含边界）仍新鲜", ReportProtocol.isFresh(now - ttl, now, ttl));
         assertFalse(ReportProtocol.isFresh(now - ttl - 1L, now, ttl));
-        assertTrue("设备时钟回拨按新鲜处理", ReportProtocol.isFresh(now + 5_000L, now, ttl));
+        assertTrue("少量时钟抖动仍按新鲜处理", ReportProtocol.isFresh(now + 5_000L, now, ttl));
+        assertTrue("未来时间戳在允许偏差边界内仍新鲜",
+                ReportProtocol.isFresh(now + ReportProtocol.MAX_FUTURE_SKEW_MS, now, ttl));
+        assertFalse("未来时间戳超过 5 分钟视为过期（回拨后的旧快照不能长期新鲜）",
+                ReportProtocol.isFresh(now + ReportProtocol.MAX_FUTURE_SKEW_MS + 1L, now, ttl));
+        assertFalse("时钟回拨：updatedAt 远在未来必须过期",
+                ReportProtocol.isFresh(now + ttl * 10, now, ttl));
         assertFalse("ttl<=0 视为过期", ReportProtocol.isFresh(now, now, 0L));
     }
 
     @Test
-    public void staleSessionDetection() {
-        assertFalse("没有已存会话：不判旧", ReportProtocol.isStaleSession(null, "100"));
-        assertFalse(ReportProtocol.isStaleSession("", "100"));
-        assertFalse("同一会话不判旧", ReportProtocol.isStaleSession("100", "100"));
-        assertFalse("更新会话不判旧", ReportProtocol.isStaleSession("100", "101"));
-        assertTrue("更早会话判旧", ReportProtocol.isStaleSession("100", "99"));
-        assertTrue("缺 session 的旧版本回写判旧",
-                ReportProtocol.isStaleSession("100", null));
-        assertTrue(ReportProtocol.isStaleSession("100", ""));
-        assertTrue("非数字 session 按 0 处理", ReportProtocol.isStaleSession("100", "abc"));
-        assertFalse("已存 session 非数字：按没有会话处理",
-                ReportProtocol.isStaleSession("abc", "100"));
+    public void sessionIdentityDecidesNewSession() {
+        final String current = "s1700000000000-3fa4c2d1";
+
+        assertFalse("同一会话重复上报：仍属同一进程",
+                ReportProtocol.isNewSession(current, current));
+        assertFalse("两边都没有会话标识：无从判断",
+                ReportProtocol.isNewSession(null, null));
+        assertFalse(ReportProtocol.isNewSession("", ""));
+        assertTrue("首次带会话标识的回传即新会话",
+                ReportProtocol.isNewSession(null, current));
+        assertTrue(ReportProtocol.isNewSession("", current));
+        assertTrue("重启后随机后缀不同即新会话",
+                ReportProtocol.isNewSession(current, "s1700000000000-9b8e7f60"));
+        assertTrue("时钟回拨后新会话毫秒值更小，按身份仍判为新会话（不整包丢弃）",
+                ReportProtocol.isNewSession(current, "s1699999990000-3fa4c2d1"));
+        assertTrue("旧格式（纯数字）与新旧格式混合：字符串不同即新会话",
+                ReportProtocol.isNewSession("1700000000000", current));
+        assertTrue(ReportProtocol.isNewSession(current, "1699999990000"));
+        assertFalse("旧版目标进程没有 session：按同会话兼容（模块 App 可单独升级）",
+                ReportProtocol.isNewSession(current, ""));
+        assertFalse(ReportProtocol.isNewSession(current, null));
     }
 
     @Test
-    public void newSessionDetection() {
-        assertTrue("首次带 session 回传即新会话", ReportProtocol.isNewSession(null, "100"));
-        assertTrue(ReportProtocol.isNewSession("", "100"));
-        assertTrue(ReportProtocol.isNewSession("99", "100"));
-        assertFalse("同一会话不是新会话", ReportProtocol.isNewSession("100", "100"));
-        assertFalse(ReportProtocol.isNewSession("101", "100"));
-        assertFalse("缺 session 不触发新会话", ReportProtocol.isNewSession("100", null));
-        assertFalse(ReportProtocol.isNewSession("100", ""));
-        assertFalse(ReportProtocol.isNewSession("100", "abc"));
+    public void failedFeatureCountIgnoresFutureReportTime() throws Exception {
+        final long now = 1_700_000_000_000L;
+        JSONObject features = new JSONObject().put("SPLASH_AD", feature(true, 0, "类未找到"));
+        JSONObject root = new JSONObject();
+        root.put("process", ReportProtocol.MAIN_PROCESS);
+        root.put("features", features);
+
+        root.put("updatedAt", now + ReportProtocol.MAX_FUTURE_SKEW_MS + 1L);
+        assertEquals("时钟回拨导致的未来时间戳视为未知", 0,
+                ReportProtocol.failedFeatureCount(root, now, ReportProtocol.DEFAULT_TTL_MS));
+
+        root.put("updatedAt", now + 30_000L);
+        assertEquals("允许偏差内的时钟抖动仍计入", 1,
+                ReportProtocol.failedFeatureCount(root, now, ReportProtocol.DEFAULT_TTL_MS));
     }
 
     @Test

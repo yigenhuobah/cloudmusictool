@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import io.github.libxposed.api.XposedModule;
 
@@ -96,6 +97,14 @@ public final class MineBackgroundHooks {
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static final AtomicBoolean sLoading = new AtomicBoolean(false);
     private static final AtomicBoolean sApplying = new AtomicBoolean(false);
+    /** 后台校验 Provider 兜底指纹时避免并发重复 query。 */
+    private static final AtomicBoolean sVerifyingProvider = new AtomicBoolean(false);
+    /** 解码在途时被丢弃的 apply 请求：记录最新 manager，加载完成后补一次贴图。 */
+    private static final AtomicReference<Object> sPendingManager = new AtomicReference<>();
+    /** pe(Activity) 反射失败只告警一次，避免每次 onResume 刷屏。 */
+    private static final AtomicBoolean sPeFailedLogged = new AtomicBoolean();
+    /** Profile 模型注入失败只告警一次，避免每次资料刷新刷屏。 */
+    private static final AtomicBoolean sModelInjectWarned = new AtomicBoolean();
 
     private static volatile Bitmap sCachedBitmap;
     /**
@@ -434,6 +443,9 @@ public final class MineBackgroundHooks {
                     if (!args.isEmpty() && args.get(0) != null) {
                         if (forceFullScreenModel(module, f, args.get(0))) {
                             HookKit.hit(module, f, "injected fullScreen validType=4 (profile model)");
+                        } else if (sModelInjectWarned.compareAndSet(false, true)) {
+                            HookKit.warn(module, f.id + " fullScreen profile model injection failed"
+                                    + " (reflection fields missing); not counted as hit");
                         }
                     }
                     return chain.proceed();
@@ -471,7 +483,6 @@ public final class MineBackgroundHooks {
 
     private static boolean forceFullScreenModel(XposedModule module, Feature f, Object info) {
         try {
-            invoke(info, "setValidType", new Class<?>[]{int.class}, 4);
             Object value = HookKit.invokeNoArg(info, "getBackgroundValue");
             if (value == null) {
                 Class<?> valueClass = HookKit.findClass(module, f,
@@ -481,16 +492,34 @@ public final class MineBackgroundHooks {
                     return false;
                 }
                 value = valueClass.newInstance();
-                invoke(info, "setBackgroundValue", new Class<?>[]{valueClass}, value);
+                if (!invokeOk(info, "setBackgroundValue", new Class<?>[]{valueClass}, value)) {
+                    return false;
+                }
             }
-            invoke(value, "setFullPicValue", new Class<?>[]{String.class}, fullPicUri());
-            invoke(value, "setLatestSetPicTime", new Class<?>[]{long.class},
-                    System.currentTimeMillis());
-            return true;
+            return injectFullScreenModelFields(info, value);
         } catch (Throwable t) {
             HookKit.warn(module, f.id + " forceFullScreenModel failed: " + t.getMessage());
             return false;
         }
+    }
+
+    /**
+     * 写入 validType=4/fullPicValue/latestSetPicTime；任一步反射失败返回 false，
+     * 调用方不得再记 hit——否则混淆坐标漂移时诊断会把注入失败显示成成功。
+     * 包内可见便于 JVM 单测。
+     */
+    static boolean injectFullScreenModelFields(Object info, Object value) {
+        if (info == null || value == null) {
+            return false;
+        }
+        if (!invokeOk(info, "setValidType", new Class<?>[]{int.class}, 4)) {
+            return false;
+        }
+        if (!invokeOk(value, "setFullPicValue", new Class<?>[]{String.class}, fullPicUri())) {
+            return false;
+        }
+        return invokeOk(value, "setLatestSetPicTime", new Class<?>[]{long.class},
+                System.currentTimeMillis());
     }
 
     private static Object fullScreenMineBackground(Class<?> mineClass) {
@@ -599,12 +628,19 @@ public final class MineBackgroundHooks {
             }
             Bitmap bitmap = sCachedBitmap;
             Uri uri = Uri.parse("content://" + modulePackage + ".status/mine_background");
-            if (bitmap == null || bitmap.isRecycled()
-                    || cachedSourceStale(context, modulePackage, uri)) {
+            boolean hasCached = bitmap != null && !bitmap.isRecycled();
+            // Provider 兜底指纹需要跨进程 query（可能唤醒模块进程/被 ROM 拦截），
+            // 只能在后台线程校验；主线程先用缓存贴图，避免阻塞导致掉帧/ANR。
+            boolean externalStale = hasCached && !sCachedFingerprintFromProvider
+                    && cachedExternalSourceStale(modulePackage);
+            if (shouldReloadForSource(hasCached, sCachedFingerprintFromProvider, externalStale)) {
                 loadAsync(module, f, manager, container, context, uri);
                 return;
             }
             applyBitmap(module, f, manager, container, bitmap);
+            if (sCachedFingerprintFromProvider) {
+                verifyProviderFingerprintAsync(module, f, manager, container, context, uri);
+            }
         } catch (Throwable t) {
             HookKit.warn(module, f.id + " apply error: " + t.getMessage());
         } finally {
@@ -613,37 +649,71 @@ public final class MineBackgroundHooks {
     }
 
     /**
-     * 缓存命中前校验源指纹:模块 App 侧换图/清除会重写或删除
+     * 缓存命中时的重载决策（纯函数便于 JVM 单测）：
+     * 无可用缓存必须重载；Provider 兜底指纹不在主线程同步校验（由
+     * {@link #verifyProviderFingerprintAsync} 异步处理），其余按 external 指纹判定。
+     */
+    static boolean shouldReloadForSource(boolean hasCachedBitmap, boolean fromProvider,
+                                         boolean externalStale) {
+        if (!hasCachedBitmap) {
+            return true;
+        }
+        return !fromProvider && externalStale;
+    }
+
+    /**
+     * external 路径缓存命中前校验源指纹:模块 App 侧换图/清除会重写或删除
      * mine_background.jpg，指纹变化或文件消失说明缓存已过期，需丢弃缓存
      * 重走 loadAsync(加载成功则替换缓存，加载失败走 clearApplied 清除旧背景)。
      *
-     * external 路径直接 stat 源文件；Provider 兜底路径(external 不可读)经
-     * {@link StatusProvider} 查询同名文件长度/修改时间。任一步读取失败都
-     * 降级为「用缓存」，不因校验本身影响贴图；只有确定源已消失才判过期。
+     * 只做本地 stat，可在宿主主线程执行；Provider 兜底路径的跨进程 query
+     * 见 {@link #verifyProviderFingerprintAsync}。任一步读取失败都降级为
+     * 「用缓存」，不因校验本身影响贴图；只有确定源已消失才判过期。
      */
-    private static boolean cachedSourceStale(Context context, String modulePackage, Uri uri) {
+    private static boolean cachedExternalSourceStale(String modulePackage) {
         long[] fingerprint = sCachedFingerprint;
         if (fingerprint == null) {
             return false;
         }
+        File external = externalFile(modulePackage);
+        if (external == null) {
+            return false;
+        }
         long[] current;
-        if (sCachedFingerprintFromProvider) {
-            current = providerFingerprint(context, uri);
-        } else {
-            File external = externalFile(modulePackage);
-            if (external == null) {
-                return false;
-            }
-            try {
-                current = external.isFile()
-                        ? new long[]{external.lastModified(), external.length()}
-                        : FINGERPRINT_MISSING;
-            } catch (Throwable t) {
-                // stat 失败降级为「用缓存」，避免校验本身影响贴图
-                return false;
-            }
+        try {
+            current = external.isFile()
+                    ? new long[]{external.lastModified(), external.length()}
+                    : FINGERPRINT_MISSING;
+        } catch (Throwable t) {
+            // stat 失败降级为「用缓存」，避免校验本身影响贴图
+            return false;
         }
         return fingerprintStale(fingerprint, current);
+    }
+
+    /**
+     * 后台校验 Provider 兜底指纹：缓存已贴图后再比对源文件，变化/消失时重载。
+     * ContentResolver.query 会跨进程唤醒模块 App（MIUI/HyperOS 可能拦截），
+     * 因此绝不能在宿主主线程执行。
+     */
+    private static void verifyProviderFingerprintAsync(XposedModule module, Feature f,
+                                                       Object manager, ViewGroup container,
+                                                       Context context, Uri uri) {
+        final long[] expected = sCachedFingerprint;
+        if (expected == null || !sVerifyingProvider.compareAndSet(false, true)) {
+            return;
+        }
+        new Thread(() -> {
+            long[] current = providerFingerprint(context, uri);
+            MAIN.post(() -> {
+                sVerifyingProvider.set(false);
+                if (!fingerprintStale(expected, current)) {
+                    return;
+                }
+                HookKit.info(module, f.id + " background source changed, reloading");
+                loadAsync(module, f, manager, container, context, uri);
+            });
+        }, "CloudMusicTool-MineBgCheck").start();
     }
 
     /**
@@ -711,6 +781,9 @@ public final class MineBackgroundHooks {
     private static void loadAsync(XposedModule module, Feature f, Object manager,
                                   ViewGroup container, Context context, Uri uri) {
         if (!sLoading.compareAndSet(false, true)) {
+            // 已有解码在途：记下最新 manager，完成后为它补一次贴图，
+            // 避免页面在解码期间重建后新容器永远拿不到背景。
+            sPendingManager.set(manager);
             return;
         }
         new Thread(() -> {
@@ -748,17 +821,33 @@ public final class MineBackgroundHooks {
             MAIN.post(() -> {
                 sLoading.set(false);
                 if (bitmap == null || bitmap.isRecycled()) {
+                    // 加载失败不自动重试（避免失败循环），等下一次页面事件；
+                    // 清掉 pending manager，避免长期持有已重建页面的引用。
+                    sPendingManager.set(null);
                     clearApplied(module, f, manager, container);
                     return;
                 }
                 sCachedBitmap = bitmap;
                 sCachedFingerprint = sourceFingerprint;
                 sCachedFingerprintFromProvider = sourceFromProvider;
-                if (container.isAttachedToWindow()) {
-                    applyBitmap(module, f, manager, container, bitmap);
+                // 重新从 manager 取当前容器：解码期间页面重建可能换掉了 ViewGroup
+                // （manager 复用同一实例），不能只认加载发起时捕获的旧容器。
+                ViewGroup current = headerBgContainer(manager);
+                if (current != null && current.isAttachedToWindow()) {
+                    applyBitmap(module, f, manager, current, bitmap);
+                }
+                // 解码期间被丢弃的 apply（新容器）用刚拿到的缓存补一次贴图。
+                Object pending = sPendingManager.getAndSet(null);
+                if (shouldReapplyAfterLoad(manager, pending)) {
+                    apply(module, f, pending);
                 }
             });
         }, "CloudMusicTool-MineBg").start();
+    }
+
+    /** 加载完成后是否需要为更新的 apply 请求补贴图（纯函数便于 JVM 单测）。 */
+    static boolean shouldReapplyAfterLoad(Object loadingManager, Object pendingManager) {
+        return pendingManager != null && pendingManager != loadingManager;
     }
 
     /** 读取源文件指纹 {lastModified, length};stat 失败返回 null,按「无指纹可比」处理。 */
@@ -918,18 +1007,35 @@ public final class MineBackgroundHooks {
         }
     }
 
-    /** 9.6.13：只初始化 StatePopView，且同一 Fragment 只做一次。 */
-    private static void applyPeActivityOnce(Object fragment, Activity activity) {
-        if (findMethod(fragment.getClass(), "pe", new Class<?>[]{Activity.class}) == null) {
+    /**
+     * 9.6.13：只初始化 StatePopView，且同一 Fragment 只做一次。
+     *
+     * 记账必须发生在 pe(Activity) 成功之后：反射调用失败（视图未就绪等）时
+     * 保留下一次 apply 的重试机会，不能把失败永久当成「已初始化」。
+     * 包内可见便于 JVM 单测（activity 可传 null）。
+     */
+    static void applyPeActivityOnce(Object fragment, Activity activity) {
+        Method pe = findMethod(fragment.getClass(), "pe", new Class<?>[]{Activity.class});
+        if (pe == null) {
             return;
         }
         synchronized (sPeApplied) {
             if (sPeApplied.containsKey(fragment)) {
                 return;
             }
+        }
+        try {
+            pe.setAccessible(true);
+            pe.invoke(fragment, activity);
+        } catch (Throwable t) {
+            if (sPeFailedLogged.compareAndSet(false, true)) {
+                Log.w(TAG, "EN-01 pe(Activity) failed, will retry: " + t.getMessage());
+            }
+            return;
+        }
+        synchronized (sPeApplied) {
             sPeApplied.put(fragment, Boolean.TRUE);
         }
-        invoke(fragment, "pe", new Class<?>[]{Activity.class}, activity);
     }
 
     /** 9.6.08：pe()/D1()/W1(true)/kd("custom_bg") 完整宿主全屏链路。 */
@@ -945,9 +1051,14 @@ public final class MineBackgroundHooks {
         invoke(fragment, "kd", new Class<?>[]{String.class}, "custom_bg");
     }
 
-    /** 当前活动 Profile 是否为 9.6.13（9.6.08/未知版本走 legacy 链路）。 */
+    /**
+     * 当前活动 Profile 是否使用 9.6.13 起的全屏链路（pe(Activity)，无 W1/kd）。
+     *
+     * 9.6.15 复用 9.6.13 的挂载表但 versionCode 是 9006015，不能按等值判断，
+     * 否则 9.6.15 会落到 legacy 链路。9.6.08/未知版本（null）仍走 legacy。
+     */
     static boolean use9613FullScreen(TargetProfile profile) {
-        return profile != null && profile.versionCode == Profile9613.VERSION_CODE;
+        return profile != null && profile.versionCode >= Profile9613.VERSION_CODE;
     }
 
     // ------------------------------------------------------------ content mask
@@ -1179,6 +1290,27 @@ public final class MineBackgroundHooks {
             return method.invoke(target, args);
         } catch (Throwable t) {
             return null;
+        }
+    }
+
+    /**
+     * 需要区分成功/失败的反射调用：方法缺失或调用异常返回 false。
+     * 用于写属性/初始化等「结果必须确认」的位置；{@link #invoke} 保持静默。
+     */
+    private static boolean invokeOk(Object target, String name, Class<?>[] types, Object... args) {
+        if (target == null) {
+            return false;
+        }
+        Method method = findMethod(target.getClass(), name, types);
+        if (method == null) {
+            return false;
+        }
+        try {
+            method.setAccessible(true);
+            method.invoke(target, args);
+            return true;
+        } catch (Throwable t) {
+            return false;
         }
     }
 

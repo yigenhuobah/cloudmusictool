@@ -21,8 +21,10 @@ import java.io.InputStream;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.zip.ZipEntry;
@@ -47,12 +49,17 @@ public final class DexKitLocator {
     // 值必须是弱引用：DexKitBridge 和 Class 都会反向强引用 ClassLoader，
     // 用强 value 会让 WeakHashMap 的弱键永远无法回收（Tinker 热修 loader 泄漏）。
     private static final Map<ClassLoader, WeakReference<DexKitBridge>> sBridgeCache = new WeakHashMap<>();
-    private static final Map<ClassLoader, Map<String, WeakReference<Class<?>>>> sClassCache = new WeakHashMap<>();
-    private static final Map<String, Boolean> sWarmUpKeys = new ConcurrentHashMap<>();
+    private static final Map<ClassLoader, Map<String, CachedClass>> sClassCache = new WeakHashMap<>();
+    /** 扫描失败负缓存：key 含查询身份与 anchor 集合，按 ClassLoader 隔离。 */
+    private static final Map<ClassLoader, Map<String, Boolean>> sMissCache = new WeakHashMap<>();
+    /** 预热去重：按 ClassLoader 隔离的 anchor key 集合（弱键，随 loader 回收）。 */
+    private static final Map<ClassLoader, Set<String>> sWarmUpKeys = new WeakHashMap<>();
 
     private static volatile String sModuleNativeDir;
     private static volatile String sModuleApkPath;
     private static volatile boolean sNativeLoaded;
+    /** 整条 native 加载链失败后不再重试，避免每次兜底查询重复解压/ dlopen。 */
+    private static volatile boolean sNativeLoadFailed;
     private static volatile String sLoadFailure = "not attempted";
 
     private DexKitLocator() {
@@ -96,6 +103,10 @@ public final class DexKitLocator {
         if (sNativeLoaded) {
             return true;
         }
+        if (sNativeLoadFailed) {
+            // 加载链已整体失败：直接短路，不再重复 loadLibrary/解压 so。
+            return false;
+        }
         // 1. 模块 nativeLibraryDir（useLegacyPackaging=true 时存在）
         String dir = sModuleNativeDir;
         if (dir != null && !dir.isEmpty()) {
@@ -119,6 +130,14 @@ public final class DexKitLocator {
             sLoadFailure = "libdexkit.so not found (nativeDir=" + dir
                     + ", apk=" + sModuleApkPath + ")";
         }
+        if (sModuleApkPath != null && !sModuleApkPath.isEmpty()
+                && TargetProcessPublisher.targetContext() == null) {
+            // Context 未就绪是可恢复的环境问题（解压路径尚未真正执行），不写死失败。
+            Log.w(TAG, "DexKit native load deferred: target context unavailable");
+            return false;
+        }
+        sNativeLoadFailed = true;
+        Log.w(TAG, "DexKit native load failed permanently for this process: " + sLoadFailure);
         return false;
     }
 
@@ -230,20 +249,30 @@ public final class DexKitLocator {
         if (anchors == null || anchors.length == 0) {
             return null;
         }
-        String key = anchorKey(anchors);
-        if (key == null) {
+        String anchorsKey = anchorKey(anchors);
+        if (anchorsKey == null) {
             return null;
         }
-        Map<String, WeakReference<Class<?>>> cache = classCache(cl);
+        // 缓存 key 必须带上 className：同一 anchor 集合可能被不同目标 hint 复用。
+        String key = "c\u0002" + (className == null ? "" : className) + "\u0002" + anchorsKey;
+        String wantedSimple = simpleName(className);
+        Map<String, CachedClass> cache = classCache(cl);
         if (cache != null) {
-            WeakReference<Class<?>> ref = cache.get(key);
-            Class<?> cached = ref == null ? null : ref.get();
-            if (cached != null) {
-                return cached;
-            }
-            if (ref != null) {
+            CachedClass entry = cache.get(key);
+            if (entry != null) {
+                Class<?> cached = entry.ref.get();
+                // 命中仍复核：包归属 + 简名与写入时判定一致，避免脏 entry 被静默返回。
+                if (cached != null && isTargetClass(cached, cl)
+                        && (wantedSimple == null
+                        || entry.simpleNameMatched == wantedSimple.equals(cached.getSimpleName()))) {
+                    return cached;
+                }
                 cache.remove(key);
             }
+        }
+        Map<String, Boolean> missCache = missCache(cl);
+        if (missCache != null && missCache.containsKey(key)) {
+            return null;
         }
 
         DexKitBridge bridge = getBridge(cl);
@@ -265,10 +294,10 @@ public final class DexKitLocator {
             if (list == null || list.isEmpty()) {
                 Log.w(TAG, "DexKit findClass: 0 candidates found for targetHint=" + className
                         + " (elapsed=" + elapsed + "ms)");
+                recordMiss(missCache, key);
                 return null;
             }
 
-            String wantedSimple = simpleName(className);
             List<Class<?>> targetCandidates = new ArrayList<>();
             List<Class<?>> exactCandidates = new ArrayList<>();
             for (int i = 0; i < list.size(); i++) {
@@ -294,20 +323,24 @@ public final class DexKitLocator {
                 Log.w(TAG, "DexKit findClass ambiguous: " + exactCandidates.size()
                         + " candidates match simple name '" + wantedSimple + "' for " + className
                         + "; refusing to guess");
+                recordMiss(missCache, key);
                 return null;
             } else if (targetCandidates.size() == 1) {
                 chosen = targetCandidates.get(0);
             } else if (targetCandidates.size() > 1) {
                 Log.w(TAG, "DexKit findClass ambiguous: " + targetCandidates.size()
                         + " target-package candidates for " + className + "; refusing to guess");
+                recordMiss(missCache, key);
                 return null;
             } else {
                 Log.w(TAG, "DexKit findClass: no candidate in target package/classloader for " + className);
+                recordMiss(missCache, key);
                 return null;
             }
 
             if (cache != null) {
-                cache.put(key, new WeakReference<>(chosen));
+                cache.put(key, new CachedClass(chosen,
+                        wantedSimple != null && wantedSimple.equals(chosen.getSimpleName())));
             }
             Log.i(TAG, "DexKit fallback found class (candidates=" + targetCandidates.size()
                     + ", chosen=" + chosen.getName() + ", targetHint=" + className
@@ -318,6 +351,7 @@ public final class DexKitLocator {
             return chosen;
         } catch (Throwable t) {
             Log.w(TAG, "DexKit findClass error for " + className + ": " + t.getMessage());
+            recordMiss(missCache, key);
         }
         return null;
     }
@@ -356,7 +390,10 @@ public final class DexKitLocator {
      * 兜底查找方法：
      * 分两次尝试：
      *  第一次：declaredClass(actualClassName) + name(methodName) + anchors；
-     *  第二次（第一次无结果或未通过校验时）：只按 anchors 查询，不限制类名/方法名/返回类型/参数类型。
+     *  第二次仅在第一次查询抛异常时执行：只按 anchors 查询，不限制类名/方法名/返回类型/参数类型，
+     *  结果仍需通过类名/方法名/参数/返回类型校验。
+     *  第一次正常返回但未命中时不再执行第二次：第二次查询仍带同样的类名/方法名过滤，
+     *  不可能产出新候选，只会多付一次范围更大的全量扫描。
      *  命中后如果调用方提供了 returnType，做一次返回类型 sanity check（不一致就丢弃并记录日志）；参数类型不做强约束。
      */
     public static Method findMethod(ClassLoader cl, String actualClassName, String methodName,
@@ -375,6 +412,16 @@ public final class DexKitLocator {
             return null;
         }
 
+        // 失败负缓存：同一次查询（类/方法/签名/anchor 集合）未命中后不再重复全量扫描。
+        String key = "m\u0002" + (actualClassName == null ? "" : actualClassName) + "\u0002"
+                + (methodName == null ? "" : methodName) + "\u0002"
+                + (returnType == null ? "" : returnType.getName()) + "\u0002"
+                + paramSignature(paramTypes) + "\u0002" + anchorKey(anchors);
+        Map<String, Boolean> missCache = missCache(cl);
+        if (missCache != null && missCache.containsKey(key)) {
+            return null;
+        }
+
         DexKitBridge bridge = getBridge(cl);
         if (bridge == null) {
             return null;
@@ -382,6 +429,7 @@ public final class DexKitLocator {
         long start = System.currentTimeMillis();
 
         // 第一次尝试：declaredClass(actualClassName) + name(methodName) + anchors
+        boolean attempt1Threw = false;
         try {
             FindMethod query1 = FindMethod.create();
             MethodMatcher matcher1 = MethodMatcher.create();
@@ -407,10 +455,18 @@ public final class DexKitLocator {
                 }
             }
         } catch (Throwable t) {
+            attempt1Threw = true;
             Log.w(TAG, "DexKit findMethod attempt 1 error: " + t.getMessage());
         }
 
-        // 第二次尝试（第一次无结果或未通过校验时）：仍按 anchors 查询，
+        if (!attempt1Threw) {
+            // 第一次查询正常结束（0 结果或未通过校验）：同样的类名/方法名过滤下第二次不会产出新候选。
+            logQueryTime("findMethod (miss)", start);
+            recordMiss(missCache, key);
+            return null;
+        }
+
+        // 第二次尝试（仅第一次查询抛异常时）：仍按 anchors 查询，
         // 但结果必须通过类名/方法名/参数/返回类型校验，不能直接取第一个候选。
         try {
             FindMethod query2 = FindMethod.create();
@@ -437,6 +493,7 @@ public final class DexKitLocator {
             Log.w(TAG, "DexKit findMethod attempt 2 error: " + t.getMessage());
         }
         logQueryTime("findMethod (miss)", start);
+        recordMiss(missCache, key);
         return null;
     }
 
@@ -451,18 +508,28 @@ public final class DexKitLocator {
 
     /**
      * 异步预热：避免首次兜底查询落在主线程导致 ANR。
-     * 同一 ClassLoader + anchor 组合只执行一次。
+     * 同一 ClassLoader + className + anchor 组合只执行一次。
      */
     public static void warmUpAsync(final ClassLoader cl, final String className, final String... anchors) {
         if (cl == null || anchors == null || anchors.length == 0) {
             return;
         }
-        final String key = anchorKey(anchors);
-        if (key == null) {
+        final String anchorsKey = anchorKey(anchors);
+        if (anchorsKey == null) {
             return;
         }
-        if (sWarmUpKeys.putIfAbsent(cl.hashCode() + ":" + key, Boolean.TRUE) != null) {
-            return;
+        // 与 findClass 缓存身份保持一致：同一 anchor 集合、不同 className hint 需要各自预热。
+        final String key = (className == null ? "" : className) + "\u0002" + anchorsKey;
+        synchronized (sWarmUpKeys) {
+            // 按 loader 身份去重（弱键），不再依赖 identity hash，避免碰撞与无界增长。
+            Set<String> keys = sWarmUpKeys.get(cl);
+            if (keys == null) {
+                keys = new HashSet<>();
+                sWarmUpKeys.put(cl, keys);
+            }
+            if (!keys.add(key)) {
+                return;
+            }
         }
         Thread t = new Thread(() -> {
             try {
@@ -474,18 +541,52 @@ public final class DexKitLocator {
         t.start();
     }
 
-    private static Map<String, WeakReference<Class<?>>> classCache(ClassLoader cl) {
+    private static Map<String, CachedClass> classCache(ClassLoader cl) {
         if (cl == null) {
             return null;
         }
         synchronized (sClassCache) {
-            Map<String, WeakReference<Class<?>>> map = sClassCache.get(cl);
+            Map<String, CachedClass> map = sClassCache.get(cl);
             if (map == null) {
                 map = new ConcurrentHashMap<>();
                 sClassCache.put(cl, map);
             }
             return map;
         }
+    }
+
+    private static Map<String, Boolean> missCache(ClassLoader cl) {
+        if (cl == null) {
+            return null;
+        }
+        synchronized (sMissCache) {
+            Map<String, Boolean> map = sMissCache.get(cl);
+            if (map == null) {
+                map = new ConcurrentHashMap<>();
+                sMissCache.put(cl, map);
+            }
+            return map;
+        }
+    }
+
+    private static void recordMiss(Map<String, Boolean> missCache, String key) {
+        if (missCache != null) {
+            missCache.put(key, Boolean.TRUE);
+        }
+    }
+
+    private static String paramSignature(Class<?>[] paramTypes) {
+        if (paramTypes == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Class<?> type : paramTypes) {
+            if (sb.length() > 0) {
+                sb.append(',');
+            }
+            sb.append(type == null ? "?" : type.getName());
+        }
+        return sb.toString();
     }
 
     private static String anchorKey(String... anchors) {
@@ -578,5 +679,16 @@ public final class DexKitLocator {
         if (expected == Long.class && actual == long.class) return true;
         if (expected == void.class && actual == Void.class) return true;
         return false;
+    }
+
+    /** 类缓存条目：弱引用 Class + 写入时简名是否命中 hint，命中复核用。 */
+    private static final class CachedClass {
+        private final WeakReference<Class<?>> ref;
+        private final boolean simpleNameMatched;
+
+        private CachedClass(Class<?> cls, boolean simpleNameMatched) {
+            this.ref = new WeakReference<>(cls);
+            this.simpleNameMatched = simpleNameMatched;
+        }
     }
 }

@@ -4,7 +4,6 @@ import com.cloudmusictool.app.Config;
 import com.cloudmusictool.app.Feature;
 import com.cloudmusictool.app.HookState;
 import com.cloudmusictool.app.dexkit.DexKitAnchors;
-import com.cloudmusictool.app.profile.Profile9613;
 import com.cloudmusictool.app.profile.ProfileRegistry;
 import com.cloudmusictool.app.profile.TargetProfile;
 
@@ -46,12 +45,15 @@ public final class BottomTabHooks {
     }
 
     /**
-     * 9.6.13 专属 tab 列表构建点；9.6.08 / 未知版本返回 null，
+     * 9.6.13/9.6.15 的 tab 列表构建点；9.6.08 / 未知版本返回 null，
      * 调用方不得执行查找，避免 {@code 类未找到 tf0.o$a} 误报。
      * 包私有便于 JVM 单测做版本门控断言。
+     *
+     * 门控按活动 Profile 是否收录该挂载点判断，而不是比较 versionCode：
+     * 9.6.15（9006015）复用 9.6.13 的挂载表，同样包含 tf0.o$a#y。
      */
     static String tabListBuildClass(TargetProfile profile) {
-        return profile != null && profile.versionCode == Profile9613.VERSION_CODE
+        return profile != null && profile.findClassSpec("tf0.o$a") != null
                 ? "tf0.o$a" : null;
     }
 
@@ -88,7 +90,7 @@ public final class BottomTabHooks {
             HookKit.error(module, f.id + " SettingActivity hook failed", t);
         }
 
-        // 2. 9.6.13 唯一的 tab 列表构建点：tf0.o$a.y(List<BottomTabInfoVO>, Z)。
+        // 2. 9.6.13/9.6.15 唯一的 tab 列表构建点：tf0.o$a.y(List<BottomTabInfoVO>, Z)。
         //    首次数据更新（U）与主题刷新（z）都经过这里；在 proceed 前过滤入参，
         //    state 和 drawable 列表一起变短。9.6.08 没有这个类，按 Profile 门控
         //    直接跳过查找（连 findClass 都不调用），不会登记「类未找到」。

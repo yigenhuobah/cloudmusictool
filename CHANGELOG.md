@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.4.7 - 2026-11-01
+
+四模块深度审查修复轮（130 项发现，本模块 53 项中 52 项修复、1 项经实跑证伪豁免）。全量明细见 `_internal/fix-2611/fix-report.md`。
+
+### 修复
+
+- **9.6.15 版本门控失配（high）**：`BottomTabHooks`/`MineBackgroundHooks` 不再用 `versionCode == 9006013` 判等，9.6.15 恢复 UI-05 底栏过滤与 EN-01 全屏链路；`TargetProfile.findMethodSpec` 修正改名后挂载点的 critical 判定。
+- **会话协议**：session 改为身份比较（带进程随机后缀），时钟回拨不再整批丢弃回传；未来时间戳超过 5 分钟判过期。
+- **诊断口径**：installer 异常计入 failed/criticalFailed，失败横幅不再漏报整体失效；DexKit native 加载与扫描失败增加负缓存，未适配版本不再主线程全盘扫描。
+- **hook 语义**：`chain.proceed()` 恢复单次调用（移出 try，禁止 catch 内二次 proceed）；配置写回补 generation 回滚；hit 限流键收敛、hookNull 返回类型校验。
+- 其余：JSON 过滤支持对象级 blockCode、搜索广告卡隐藏、启动延迟重复投递修复，以及测试质量与死代码清理。
+
 ## 2.4.6 - 2026-10-31
 
 UI-03 首页定制新增两个可勾选项。

@@ -25,7 +25,10 @@ public final class ApmHooks {
                 if (mLogApm == null) {
                     mLogApm = HookKit.findByNameQuiet(statCls, "logApm");
                 }
-                if (mLogApm != null) {
+                if (mLogApm == null) {
+                    // quiet 定位失败必须显式记账，否则该挂载点既不进 expected 也不进 failed。
+                    HookKit.markMountMissing(module, f, "StatisticImpl#logApm");
+                } else {
                     HookKit.install(module, f, "StatisticImpl#logApm", mLogApm,
                             HookKit.skipVoid(module, f, "StatisticImpl.logApm"));
                 }
@@ -37,7 +40,9 @@ public final class ApmHooks {
                 if (mForceApmUpload == null) {
                     mForceApmUpload = HookKit.findByNameQuiet(statCls, "forceApmUpload");
                 }
-                if (mForceApmUpload != null) {
+                if (mForceApmUpload == null) {
+                    HookKit.markMountMissing(module, f, "StatisticImpl#forceApmUpload");
+                } else {
                     HookKit.install(module, f, "StatisticImpl#forceApmUpload", mForceApmUpload,
                             HookKit.skipVoid(module, f, "StatisticImpl.forceApmUpload"));
                 }

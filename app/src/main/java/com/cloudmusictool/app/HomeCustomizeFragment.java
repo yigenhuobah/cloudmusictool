@@ -13,7 +13,9 @@ import androidx.preference.PreferenceFragmentCompat;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -31,6 +33,8 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
     private ConfigStore mStore;
     /** 丢弃过期的后台读取结果，避免旧快照覆盖新一次 refresh。 */
     private int mRefreshGeneration;
+    /** 每个多选项的写回令牌与最近确认值：旧回调不能覆盖更新的选择。 */
+    private final WriteGate<Set<String>> mWriteGate = new WriteGate<>();
 
     // 9.6.13 新增 6 项（BANNER_0 / GREETING / NOTE / PODCAST_NARROW_SCENE /
     // SEARCH_TOP_BANNER / SECONDARY_TAB）与旧 30 项并存；疑似改名项保留旧 code，
@@ -162,10 +166,20 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
                 .setTitle(R.string.mine_bg_clear_title)
                 .setMessage(R.string.mine_bg_clear_summary)
                 .setPositiveButton(android.R.string.ok, (dialog, which) -> {
-                    MineBackgroundStore.clear(requireContext());
-                    Toast.makeText(requireContext(), R.string.mine_bg_cleared,
-                            Toast.LENGTH_SHORT).show();
-                    refresh();
+                    if (getContext() == null) {
+                        return;
+                    }
+                    // 删除完成后回调：此时刷新读到的 hasImage 才是删除后的真实状态。
+                    MineBackgroundStore.clear(requireContext(), cleared -> {
+                        if (!isAdded()) {
+                            return;
+                        }
+                        Toast.makeText(requireContext(),
+                                cleared ? R.string.mine_bg_cleared
+                                        : R.string.setting_save_failed,
+                                Toast.LENGTH_SHORT).show();
+                        refresh();
+                    });
                 })
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
@@ -222,12 +236,27 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
             Set<String> before = new HashSet<>(pref.getValues());
             // 用户已产生更新的选择：作废在途读取，避免旧快照回写覆盖本次修改。
             mRefreshGeneration++;
-            boolean enqueued = mStore.putStringSet(key, next, saved -> {
-                if (saved || !isAdded()) {
+            final String writeKey = key;
+            final Set<String> attempted = new HashSet<>(next);
+            final long token = mWriteGate.begin(writeKey);
+            boolean enqueued = mStore.putStringSet(writeKey, attempted, saved -> {
+                // 成功也要记录确认值：即使已被更新的写入取代，它仍是最近落盘的值。
+                boolean latest = mWriteGate.onResult(writeKey, token, saved, attempted);
+                if (!isAdded() || !latest) {
+                    // 已有更新的写入：旧结果只记确认值，不能改界面。
                     return;
                 }
-                // commit 被远端拒绝：回到保存前的选择并提示，不假装已保存。
-                pref.setValues(before);
+                Preference current = findPreference(writeKey);
+                if (!(current instanceof MultiSelectPreference)) {
+                    return;
+                }
+                MultiSelectPreference target = (MultiSelectPreference) current;
+                if (saved) {
+                    target.setValues(attempted);
+                    return;
+                }
+                // commit 被远端拒绝：回到最近一次确认落盘的值，不用乐观更新后的选择。
+                target.setValues(mWriteGate.rollback(writeKey, before));
                 toast(R.string.home_customize_save_failed);
             });
             if (!enqueued) {
@@ -299,6 +328,8 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
         if (pref == null) {
             return;
         }
+        // 快照值只作为“还没有确认值”时的回滚基线，不覆盖已确认落盘的值。
+        mWriteGate.seed(key, new HashSet<>(values));
         pref.setValues(values);
         pref.setEnabled(remote);
     }
@@ -307,6 +338,65 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
         Context context = getContext();
         if (context != null) {
             Toast.makeText(context, resId, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * 单个 key 的写回状态机：令牌标识最新一次写入，确认值只由 commit 成功更新。
+     *
+     * <p>纯逻辑、不引用 Android 类型；设置页（功能开关/桌面图标）与首页定制页共用，
+     * 由 JVM 单测固定“旧结果不覆盖新选择、失败回到最近确认值”的语义。
+     */
+    static final class WriteGate<T> {
+        private final Map<String, Long> mLatest = new HashMap<>();
+        private final Map<String, T> mConfirmed = new HashMap<>();
+        private final Map<String, T> mBaseline = new HashMap<>();
+        private long mCounter;
+
+        /** 记录一次新写入并返回其令牌（单调递增，不依赖系统时钟）。 */
+        long begin(String key) {
+            long token = ++mCounter;
+            mLatest.put(key, token);
+            return token;
+        }
+
+        /** 快照读到的值：只作为“还没有确认值”时的基线，不覆盖已确认的值。 */
+        void seed(String key, T value) {
+            if (value != null && !mConfirmed.containsKey(key)) {
+                mBaseline.put(key, value);
+            }
+        }
+
+        /**
+         * 记录一次写入结果。
+         *
+         * @return true 表示该结果仍是最新一次写入，调用方需要据此更新界面；
+         *         false 表示已有更新的写入，旧结果不能覆盖界面
+         *         （成功仍然记入确认值，后续失败可回滚到它）。
+         */
+        boolean onResult(String key, long token, boolean saved, T value) {
+            if (saved && value != null) {
+                mConfirmed.put(key, value);
+            }
+            Long latest = mLatest.get(key);
+            return latest != null && latest.longValue() == token;
+        }
+
+        /** 失败回滚值：最近一次确认落盘的值 → 快照基线 → 调用方兜底值。 */
+        T rollback(String key, T fallback) {
+            T confirmed = mConfirmed.get(key);
+            if (confirmed != null) {
+                return confirmed;
+            }
+            T baseline = mBaseline.get(key);
+            return baseline != null ? baseline : fallback;
+        }
+
+        /** Fragment 销毁时丢弃在途结果。 */
+        void clear() {
+            mLatest.clear();
+            mConfirmed.clear();
+            mBaseline.clear();
         }
     }
 }

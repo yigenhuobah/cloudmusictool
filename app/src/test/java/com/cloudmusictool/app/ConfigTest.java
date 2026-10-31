@@ -116,8 +116,12 @@ public class ConfigTest {
     }
 
     @Test
-    public void prefsSetCodec_toCsvEmptySetIsEmptyString() {
-        assertEquals("", PrefsSetCodec.toCsv(new HashSet<String>()));
+    public void prefsSetCodec_toCsvEmptySetRoundTripsAsEmptySet() {
+        // 空集是有效值（见 getStringSet 契约）：兜底字符串不能编码成空串，
+        // 否则读取侧会把空串当“未设置”回退默认值。
+        FakePrefs prefs = new FakePrefs();
+        prefs.values.put("k", PrefsSetCodec.toCsv(new HashSet<String>()));
+        assertEquals(Collections.emptySet(), PrefsSetCodec.read(prefs, "k"));
     }
 
     @Test

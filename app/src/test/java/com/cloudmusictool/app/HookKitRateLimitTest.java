@@ -10,6 +10,7 @@ import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
@@ -22,13 +23,14 @@ import static org.junit.Assert.assertTrue;
  *
  * HookKit 是 com.cloudmusictool.app.hooks 包私有 final class，按仓库既有做法
  * （HookKitKeepFilterTest）用反射驱动，不为测试放宽生产代码可见性；日志经
- * XposedModule 的匿名子类 + attachFramework(动态代理) 承接。HIT_STATE 为静态，
- * @Before 里清表，用例之间互不依赖执行顺序。
+ * XposedModule 的匿名子类 + attachFramework(动态代理) 承接。HIT_STATE 与清表告警标志均为静态，
+ * @Before 里重置，用例之间互不依赖执行顺序。
  *
- * 覆盖三点：
+ * 覆盖四点：
  * 1) 限流键 = label：同一 label 不同 detail 不增 entry，打日志时仍完整拼 detail；
- * 2) 快速路径：窗口内第二次 hit 不进 map 写路径、不触碰日志通道；
- * 3) 无界治理：entry 超 512 整表清空重建，清空告警 warning-once。
+ * 2) 旧 3 参签名取 detail 首个稳定 token 作键，动态计数/标题不再拆键；
+ * 3) 快速路径：窗口内第二次 hit 不进 map 写路径、不触碰日志通道；
+ * 4) 无界治理：entry 超 512 整表清空重建，清空告警 warning-once。
  */
 public class HookKitRateLimitTest {
 
@@ -53,8 +55,20 @@ public class HookKitRateLimitTest {
     public void setUp() throws Exception {
         mState = hitState();
         mState.clear();
+        resetClearWarnedFlag();
         mLogged = new CopyOnWriteArrayList<>();
         mModule = loggingModule(mLogged);
+    }
+
+    /**
+     * HIT_STATE_CLEAR_WARNED 是进程级 once 标志，全仓无生产入口可重置；用例内显式重置，
+     * 使「恰好一次清表告警」不依赖本进程里哪个测试类先触发过清表。
+     */
+    private static void resetClearWarnedFlag() throws Exception {
+        Class<?> kit = Class.forName("com.cloudmusictool.app.hooks.HookKit");
+        Field f = kit.getDeclaredField("HIT_STATE_CLEAR_WARNED");
+        f.setAccessible(true);
+        ((AtomicBoolean) f.get(null)).set(false);
     }
 
     @SuppressWarnings("unchecked")
@@ -112,6 +126,9 @@ public class HookKitRateLimitTest {
     @Test
     public void sameLabelDifferentDetailSharesEntry() throws Exception {
         hit(mModule, "feed", "blockCodeOrderList filtered 3/10");
+        // 生产用 System.currentTimeMillis() 判窗口：第二次 hit 前把窗口起点钉到当前时刻，
+        // 避免两次 hit 之间的真实停顿超过 5 秒时误走慢路径。
+        mState.get(FEATURE_ID + "|feed")[0] = System.currentTimeMillis();
         hit(mModule, "feed", "blockCodeOrderList filtered 5/12");
         assertEquals(1, mState.size());
         assertEquals(1, mLogged.size());
@@ -127,6 +144,8 @@ public class HookKitRateLimitTest {
     public void secondHitInWindowTakesFastPath() throws Exception {
         hit(mModule, "fast", "d1");
         long[] state = mState.get(FEATURE_ID + "|fast");
+        // 窗口判定读真实时钟：在第二次 hit 前钉住窗口起点，不再依赖两次调用之间的耗时。
+        state[0] = System.currentTimeMillis();
         long lastLoggedAt = state[0];
 
         hit(mModule, "fast", "d2");
@@ -157,15 +176,34 @@ public class HookKitRateLimitTest {
         assertEquals(2L, state[1]);
     }
 
-    /** 旧签名（清单外调用方）：限流键缺省取 detail，键形与重构前一致。 */
+    /** 旧签名（只有 detail）：限流键取 detail 的首个稳定 token，动态 payload 不再拆键。 */
     @Test
-    public void legacySignatureKeysByDetail() throws Exception {
-        hitLegacy(mModule, "legacy one");
-        hitLegacy(mModule, "legacy two");
+    public void legacySignatureUsesStableDetailPrefix() throws Exception {
+        hitLegacy(mModule, "blockCodeOrderList filtered 3/10");
+        hitLegacy(mModule, "blockCodeOrderList filtered 5/12");
+        assertEquals(1, mState.size());
+        assertTrue(mState.containsKey(FEATURE_ID + "|blockCodeOrderList"));
+        assertEquals(1, mLogged.size());
+        // 打日志时仍完整保留 detail（只压缩限流键，不裁剪日志）。
+        assertEquals(FEATURE_ID + " hit blockCodeOrderList filtered 3/10",
+                mLogged.get(0).msg);
+
+        // 不同挂载点的首 token 不同：各自成键、各自首次必打。
+        hitLegacy(mModule, "resources filtered 1/10");
         assertEquals(2, mState.size());
-        assertTrue(mState.containsKey(FEATURE_ID + "|legacy one"));
-        assertTrue(mState.containsKey(FEATURE_ID + "|legacy two"));
+        assertTrue(mState.containsKey(FEATURE_ID + "|resources"));
         assertEquals(2, mLogged.size());
+    }
+
+    /** Feature 为 null（ABTest / 引导钩子路径）：hit 不再解引用 f.id。 */
+    @Test
+    public void nullFeatureHitUsesAbTestPrefix() throws Exception {
+        Method m = hookKitMethod("hit",
+                XposedModule.class, Feature.class, String.class, String.class);
+        m.invoke(null, mModule, null, "label", "detail");
+        assertEquals(1, mState.size());
+        assertTrue(mState.containsKey("ABTEST|label"));
+        assertEquals("ABTEST hit detail", mLogged.get(0).msg);
     }
 
     /** 无界治理：entry 超 512 整表清空重建，清空 WARN 只打一次。 */

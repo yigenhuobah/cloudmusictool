@@ -201,9 +201,29 @@ public class ConfigStoreWriteTest {
 
         assertTrue(saved.get());
         Object stored = remote.values.get("k");
-        assertTrue("StringSet 不支持时必须回退 CSV 字符串", stored instanceof String);
-        assertEquals("a,b", stored);
+        assertTrue("StringSet 不支持时必须回退字符串", stored instanceof String);
+        assertEquals("简单值仍沿用旧版 CSV，旧读取侧可兼容", "a,b", stored);
         assertEquals("读取侧必须能解析回同一集合",
+                value, PrefsSetCodec.read(remote, "k"));
+    }
+
+    @Test
+    public void putStringSet_fallbackPreservesCommasSpacesAndEmptyItems() throws Exception {
+        FakePrefs remote = new FakePrefs();
+        remote.stringSetThrows = true;
+        ConfigStore store = new ConfigStore(remote, null);
+        Set<String> value = new LinkedHashSet<>(Arrays.asList("a,b", " c ", "", "d"));
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicBoolean saved = new AtomicBoolean(false);
+
+        assertTrue(store.putStringSet("k", value, ok -> {
+            saved.set(ok);
+            latch.countDown();
+        }));
+        assertTrue("回调未执行", latch.await(5, TimeUnit.SECONDS));
+
+        assertTrue(saved.get());
+        assertEquals("含逗号/首尾空格/空串的元素必须无损往返",
                 value, PrefsSetCodec.read(remote, "k"));
     }
 

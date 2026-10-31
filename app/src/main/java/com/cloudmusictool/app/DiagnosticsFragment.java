@@ -18,16 +18,36 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * 诊断页：逐功能展示目标进程回传的 registered / hit / skip。
  *
  * 进入页面与 onResume 时刷新，不自动轮询；无数据显示 “—”，blocked 显示原因。
+ * hook_status 读取与 JSON 解析全部在后台单线程完成，只把渲染回主线程：
+ * 首次读取会同步加载磁盘，不能占用 UI 线程。
  */
 public class DiagnosticsFragment extends PreferenceFragmentCompat {
 
+    private ExecutorService mStatusExecutor;
+    /** 丢弃过期的后台读取结果，避免旧快照覆盖新一次刷新。 */
+    private final AtomicInteger mRefreshGeneration = new AtomicInteger();
+    private final AtomicInteger mCopyGeneration = new AtomicInteger();
+
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
+        if (mStatusExecutor == null) {
+            mStatusExecutor = Executors.newSingleThreadExecutor(r -> {
+                Thread thread = new Thread(r, "CloudMusicTool-Diagnostics");
+                thread.setDaemon(true);
+                return thread;
+            });
+        }
         refresh();
     }
 
@@ -37,13 +57,37 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
         refresh();
     }
 
-    /** 重新读取 StatusProvider 落盘的状态并重建页面。 */
+    @Override
+    public void onDestroy() {
+        mRefreshGeneration.incrementAndGet();
+        mCopyGeneration.incrementAndGet();
+        if (mStatusExecutor != null) {
+            mStatusExecutor.shutdownNow();
+            mStatusExecutor = null;
+        }
+        super.onDestroy();
+    }
+
+    /** 重新读取 StatusProvider 落盘的状态并在主线程重建页面。 */
     void refresh() {
         if (getContext() == null) {
             return;
         }
         Context context = requireContext();
-        JSONObject root = readStatus();
+        Context appContext = context.getApplicationContext();
+        final Context readContext = appContext != null ? appContext : context;
+        loadAsync(mStatusExecutor, ConfigStore::postToMain,
+                () -> readStatus(readContext),
+                root -> {
+                    if (isAdded()) {
+                        render(root);
+                    }
+                },
+                mRefreshGeneration);
+    }
+
+    private void render(JSONObject root) {
+        Context context = requireContext();
         JSONObject features = root == null ? null : root.optJSONObject("features");
 
         PreferenceScreen screen = getPreferenceManager().createPreferenceScreen(context);
@@ -180,7 +224,24 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
     }
 
     private void copyDiagnostics() {
-        JSONObject root = readStatus();
+        if (getContext() == null) {
+            return;
+        }
+        Context context = requireContext();
+        Context appContext = context.getApplicationContext();
+        final Context readContext = appContext != null ? appContext : context;
+        // 复制也要先在后台读完再回主线程拼文本（getString 只能在主线程）。
+        loadAsync(mStatusExecutor, ConfigStore::postToMain,
+                () -> readStatus(readContext),
+                root -> {
+                    if (isAdded()) {
+                        copyDiagnosticsToClipboard(buildDiagnosticsText(root));
+                    }
+                },
+                mCopyGeneration);
+    }
+
+    private String buildDiagnosticsText(JSONObject root) {
         JSONObject features = root == null ? null : root.optJSONObject("features");
         StringBuilder text = new StringBuilder();
         text.append(getString(R.string.diag_source_title)).append(": ")
@@ -189,11 +250,15 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
             text.append(f.id).append(' ').append(getString(f.titleRes))
                     .append(' ').append(featureSummary(f, features)).append('\n');
         }
+        return text.toString();
+    }
+
+    private void copyDiagnosticsToClipboard(String text) {
         try {
             ClipboardManager clipboard = (ClipboardManager) requireContext()
                     .getSystemService(Context.CLIPBOARD_SERVICE);
             clipboard.setPrimaryClip(ClipData.newPlainText(
-                    getString(R.string.page_diagnostics), text.toString()));
+                    getString(R.string.page_diagnostics), text));
             Toast.makeText(requireContext(), R.string.diag_copied,
                     Toast.LENGTH_SHORT).show();
         } catch (Throwable t) {
@@ -202,8 +267,9 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
         }
     }
 
-    private JSONObject readStatus() {
-        String json = StatusProvider.readState(requireContext());
+    /** 只能在后台线程调用：首次 getSharedPreferences 会同步加载磁盘。 */
+    private static JSONObject readStatus(Context context) {
+        String json = StatusProvider.readState(context);
         if (json == null || json.isEmpty()) {
             return null;
         }
@@ -211,6 +277,37 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
             return new JSONObject(json);
         } catch (Throwable t) {
             return null;
+        }
+    }
+
+    /**
+     * 后台读取 → 主线程渲染的两段式加载。
+     *
+     * <p>读取不会发生在调用线程；渲染只经 mainSink 投递，且代次不是最新时丢弃，
+     * 避免旧快照覆盖新一次刷新。抽成静态方法便于纯 JVM 单测固定这两条语义。
+     *
+     * @return false 表示执行器不可用/已关闭，本次加载没有提交。
+     */
+    static <T> boolean loadAsync(Executor background, Consumer<Runnable> mainSink,
+                                 Supplier<T> reader, Consumer<T> renderer,
+                                 AtomicInteger generation) {
+        if (background == null || mainSink == null || reader == null
+                || renderer == null || generation == null) {
+            return false;
+        }
+        final int token = generation.incrementAndGet();
+        try {
+            background.execute(() -> {
+                final T value = reader.get();
+                mainSink.accept(() -> {
+                    if (generation.get() == token) {
+                        renderer.accept(value);
+                    }
+                });
+            });
+            return true;
+        } catch (Throwable t) {
+            return false;
         }
     }
 }

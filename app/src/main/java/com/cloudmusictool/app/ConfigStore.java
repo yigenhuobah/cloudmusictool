@@ -126,26 +126,36 @@ final class ConfigStore {
      * 解析 remote prefs。首次调用是同步 binder，只允许在后台线程执行；
      * 已解析且 service 未换绑时直接返回，不产生 binder 调用。
      *
-     * <p>service 断开时清空缓存，让 {@link #remote()} 如实变为 false；
+     * <p>service 断开或重新解析失败时清空缓存，让 {@link #remote()} 如实变为 false；
      * service 换绑时重新解析，避免继续使用旧 service 的 prefs 代理。
      */
     boolean resolveRemote() {
         XposedService service = ServiceBridge.get();
         if (service == null) {
-            mRemote = null;
-            mRemoteService = null;
-            return false;
+            return applyRemote(null, null);
         }
         if (mRemote != null && service == mRemoteService) {
             return true;
         }
-        SharedPreferences remote = ServiceBridge.remotePreferences(Config.GROUP);
-        if (remote != null) {
-            mRemote = remote;
-            mRemoteService = service;
-            return true;
+        return applyRemote(service, ServiceBridge.remotePreferences(Config.GROUP));
+    }
+
+    /**
+     * 合并一次 remote 解析结果。remote 为 null 表示本次解析失败，必须同时清空
+     * 旧代理与旧 service：否则 {@link #remote()} 仍返回 true、读取继续走已失效的
+     * service 代理，与 {@link #resolveRemote()} 的返回值不一致。
+     *
+     * @return remote 是否可用
+     */
+    boolean applyRemote(XposedService service, SharedPreferences remote) {
+        if (remote == null) {
+            mRemote = null;
+            mRemoteService = null;
+            return false;
         }
-        return false;
+        mRemote = remote;
+        mRemoteService = service;
+        return true;
     }
 
     boolean remote() {
@@ -235,7 +245,7 @@ final class ConfigStore {
             try {
                 editor.putStringSet(key, value);
             } catch (Throwable t) {
-                // remote prefs 不支持 StringSet 时回退 CSV，读取侧 PrefsSetCodec 兼容两种格式。
+                // remote prefs 不支持 StringSet 时回退字符串编码，读取侧 PrefsSetCodec 兼容新旧格式。
                 editor.putString(key, PrefsSetCodec.toCsv(value));
             }
         }, callback);

@@ -3,6 +3,7 @@ package com.cloudmusictool.app;
 import com.cloudmusictool.app.profile.MountSpec;
 import com.cloudmusictool.app.profile.Profile9608;
 import com.cloudmusictool.app.profile.Profile9613;
+import com.cloudmusictool.app.profile.Profile9615;
 import com.cloudmusictool.app.profile.TargetProfile;
 
 import org.junit.Test;
@@ -76,6 +77,46 @@ public class ProfileMethodMappingTest {
         assertEquals("c", mapped(Profile9613.PROFILE, "mt0.j", "e").methodName);
         // q60.w0 -> l40.x0（类改名、方法 g 不变）：命中 spec 且 methodName 相同。
         assertEquals("g", mapped(Profile9613.PROFILE, "l40.x0", "g").methodName);
+    }
+
+    @Test
+    public void findMethodSpec_resolvesRenamedRequestNames() {
+        // HookKit.isCriticalMount 用 hook 请求的旧名查询；9.6.13 覆盖里 methodName
+        // 已改名但 logicalName 保留旧名，必须回退到 logicalName 才能拿到 critical。
+        MountSpec e = Profile9613.PROFILE.findMethodSpec(LOADING_AD_MANAGER, "E");
+        assertNotNull("旧名 E 未映射到 9.6.13 的 H，critical 失败会被误判为非 critical", e);
+        assertEquals("H", e.methodName);
+        assertTrue(e.critical);
+        MountSpec data = Profile9613.PROFILE.findMethodSpec(LOADING_AD_MANAGER, "o");
+        assertNotNull(data);
+        assertEquals("p", data.methodName);
+        assertTrue(data.critical);
+        MountSpec k = Profile9613.PROFILE.findMethodSpec(PLAYER_AD_DELEGATE, "k");
+        assertNotNull(k);
+        assertEquals("j", k.methodName);
+        assertTrue(k.critical);
+    }
+
+    @Test
+    public void findMethodSpec_sameBehaviourFor9615And9608() {
+        // 9.6.15 复用 9.6.13 挂载表，必须得到同样的 critical 判定。
+        MountSpec e = Profile9615.PROFILE.findMethodSpec(LOADING_AD_MANAGER, "E");
+        assertNotNull(e);
+        assertEquals("H", e.methodName);
+        assertTrue(e.critical);
+        // 9.6.08 没有改名覆盖，精确名直接命中。
+        MountSpec legacy = Profile9608.PROFILE.findMethodSpec(LOADING_AD_MANAGER, "E");
+        assertNotNull(legacy);
+        assertEquals("E", legacy.methodName);
+        assertTrue(legacy.critical);
+    }
+
+    @Test
+    public void findMethodSpec_unknownReturnsNull() {
+        assertNull(Profile9613.PROFILE.findMethodSpec(LOADING_AD_MANAGER, "NoSuchMethod"));
+        assertNull(Profile9613.PROFILE.findMethodSpec("com.example.Missing", "E"));
+        assertNull(Profile9613.PROFILE.findMethodSpec(null, "E"));
+        assertNull(Profile9613.PROFILE.findMethodSpec(LOADING_AD_MANAGER, null));
     }
 
     @Test

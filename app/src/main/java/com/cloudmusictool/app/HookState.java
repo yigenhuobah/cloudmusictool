@@ -7,6 +7,7 @@ import org.json.JSONObject;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -32,10 +33,16 @@ public final class HookState {
     private static final int MAX_FAILURE_CHARS = 160;
 
     /**
-     * 进程级会话标识：目标进程启动时刻（epoch ms）。
+     * 进程级会话标识："s" + 目标进程启动时刻（epoch ms）+ "-" + 8 位随机 hex。
      *
-     * 目标进程重启后 session 单调变大，StatusProvider 据此丢弃迟到的旧会话整包回写；
-     * 新会话直接整段覆盖。读取侧以根级 updatedAt 作为 report_time，超过
+     * 读取侧按字符串身份比较（{@link ReportProtocol#isNewSession}）：不同即新会话、
+     * 相同即同进程，不再按毫秒大小排序——设备时钟回拨后新进程的毫秒值更小，
+     * 按大小比较会把该进程整个生命周期的回传误判为旧会话整包丢弃。
+     * 随机后缀还保证同一毫秒内重启的两个进程不会撞号。
+     *
+     * 目标进程重启后 session 必变，StatusProvider 据此把上一会话的过期数据（含
+     * experiments 快照）作废；同一会话内的回写按整包覆盖。
+     * 读取侧以根级 updatedAt 作为 report_time，超过
      * {@link ReportProtocol#DEFAULT_TTL_MS}（10 分钟）没有新回写即视为过期（未知），
      * 诊断页显示“数据已过期”。
      *
@@ -43,7 +50,12 @@ public final class HookState {
      * 可数执行器（只支持 execute/schedule，scheduleAtFixedRate 直接抛异常）语义冲突；
      * 空闲但健康的目标进程会随 TTL 自然过期，属于设计内的“未知”状态。
      */
-    static final String SESSION = String.valueOf(System.currentTimeMillis());
+    static final String SESSION = newSessionId();
+
+    private static String newSessionId() {
+        return "s" + System.currentTimeMillis() + "-"
+                + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+    }
 
     private static final Map<Feature, State> sStates = new ConcurrentHashMap<>();
 

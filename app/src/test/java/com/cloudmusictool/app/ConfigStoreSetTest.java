@@ -59,6 +59,17 @@ public class ConfigStoreSetTest {
     }
 
     @Test
+    public void getStringSet_parsesEncodedFormatWithSpecialItems() {
+        FakePrefs prefs = new FakePrefs();
+        prefs.values.put("k", PrefsSetCodec.toCsv(
+                new HashSet<>(Arrays.asList("a,b", " c ", ""))));
+        ConfigStore store = new ConfigStore(prefs);
+        assertEquals("含逗号/首尾空格/空串的元素必须无损读回",
+                new HashSet<>(Arrays.asList("a,b", " c ", "")),
+                store.getStringSet("k", Collections.singleton("默认")));
+    }
+
+    @Test
     public void getStringSet_storedEmptySetWinsOverDefault() {
         // StringSet 分支两侧一致：显式写入的空 Set 是有效值，覆盖默认值（与空串不同）。
         FakePrefs prefs = new FakePrefs();

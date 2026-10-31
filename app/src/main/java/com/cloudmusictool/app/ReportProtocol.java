@@ -24,14 +24,18 @@ import java.util.Set;
  *   process 为空（旧版兼容）或主进程名；features 的键必须是 Feature 枚举名，
  *   每个 feature 对象的键 ⊆ {@link #FEATURE_KEYS}。
  * - experiments 通道（ExperimentState.buildJson 产出）：根键白名单
- *   {updatedAt, process, items}；items 至多 {@link #MAX_ENTRIES} 条，每条为对象。
+ *   {updatedAt, session, process, items}；items 至多 {@link #MAX_ENTRIES} 条，每条为对象。
+ *   session 为可选键：新版本生产者写入进程会话标识，旧生产者不写同样合法。
  * - 公共上限：任意字符串值 ≤ {@link #MAX_VALUE_CHARS} 字符；
  *   payload 总量 ≤ {@link #MAX_PAYLOAD_CHARS}（isValidPayload）。
  *
- * 会话与新鲜度（读取侧，与 QB 对齐）：
- * - session = 目标进程启动毫秒字符串，用来丢弃迟到的旧会话整包回写；
- * - report_time 复用根级 updatedAt（epoch ms）；超过 {@link #DEFAULT_TTL_MS}
- *   或 updatedAt <= 0 视为过期，失败计数返回 0（未知）。
+ * 会话与新鲜度（读取侧，四模块统一约定）：
+ * - session = 目标进程会话标识 "s&lt;启动毫秒&gt;-&lt;8 位随机 hex&gt;"，按身份比较：
+ *   字符串不同即新会话（上一会话数据随之重置），相同即同进程。不按毫秒大小排序——
+ *   设备时钟回拨会让新进程的毫秒值更小，按大小比较会把整批回写误判为旧会话丢弃；
+ * - report_time 复用根级 updatedAt（epoch ms）；超过 {@link #DEFAULT_TTL_MS}、
+ *   updatedAt <= 0，或领先本机时钟超过 {@link #MAX_FUTURE_SKEW_MS}（回拨/未来时间戳）
+ *   视为过期，失败计数返回 0（未知）。
  */
 public final class ReportProtocol {
 
@@ -41,6 +45,12 @@ public final class ReportProtocol {
 
     /** 超过 10 分钟没有新回传就视为过期，失败计数按“未知”处理（0）。 */
     public static final long DEFAULT_TTL_MS = 10 * 60 * 1000L;
+
+    /**
+     * 允许的时钟偏差：updatedAt 领先本机时间超过 5 分钟视为时间戳不可信（过期）。
+     * 设备时钟回拨后，旧快照的 updatedAt 会落在“未来”，不设上限就会一直被当作新鲜数据。
+     */
+    public static final long MAX_FUTURE_SKEW_MS = 5 * 60 * 1000L;
 
     /** 主进程名；子进程回传不计入失败功能数，避免未装 hook 的子进程误报。 */
     public static final String MAIN_PROCESS = "com.netease.cloudmusic";
@@ -56,9 +66,9 @@ public final class ReportProtocol {
             "id", "enabled", "expected", "installed", "failed", "criticalFailed",
             "entryCount", "hit", "hitCount", "degraded", "unavailable", "lastFailure"));
 
-    /** experiments 通道根键白名单（与 ExperimentState.buildJson 的字段面一致）。 */
+    /** experiments 通道根键白名单（ExperimentState.buildJson 字段面 + 新版本可选的 session）。 */
     private static final Set<String> EXPERIMENTS_ROOT_KEYS = new HashSet<>(Arrays.asList(
-            "updatedAt", "process", "items"));
+            "updatedAt", "session", "process", "items"));
 
     /** Feature 枚举名集合；features 的键必须是其中之一。 */
     private static final Set<String> FEATURE_NAMES = featureNames();
@@ -210,48 +220,33 @@ public final class ReportProtocol {
 
     /**
      * 回传数据是否仍新鲜。updatedAt <= 0 表示从未回传或旧版本没有时间戳；
-     * ttlMs <= 0 视为没有可用 TTL（过期）；now < updatedAt（设备时钟回拨）
-     * 按新鲜处理，避免误伤。
+     * ttlMs <= 0 视为没有可用 TTL（过期）；updatedAt 领先本机时间超过
+     * {@link #MAX_FUTURE_SKEW_MS}（设备时钟回拨/未来时间戳）同样视为过期——
+     * 否则回拨后旧快照会因 updatedAt 落在“未来”而被长期当作新鲜数据。
      */
     public static boolean isFresh(long updatedAt, long now, long ttlMs) {
         if (updatedAt <= 0L || ttlMs <= 0L) {
+            return false;
+        }
+        if (updatedAt > now + MAX_FUTURE_SKEW_MS) {
             return false;
         }
         return now - updatedAt <= ttlMs;
     }
 
     /**
-     * 迟到的旧会话写入：已存会话存在，而本次没有会话标识（更早版本的回传）
-     * 或会话启动时间更早，整包必须丢弃，不能覆盖新会话的数据。
+     * 会话身份比较：session 字符串不同即新会话（上一会话数据必须重置），
+     * 相同即同进程。旧格式（纯数字启动毫秒）同样按字符串比较，不做大小比较——
+     * 设备时钟回拨会让新进程的毫秒值更小，按大小比较会把整批回写误判为旧会话丢弃。
+     *
+     * 旧版目标进程没有 session 字段（incoming 为空）：无从比较，按同会话兼容，
+     * 保证模块 App 与目标进程可各自升级；首个带 session 的回传仍会重置旧数据。
      */
-    public static boolean isStaleSession(String storedSession, String incomingSession) {
-        long stored = parseLong(storedSession);
-        if (stored <= 0L) {
-            return false;
-        }
-        long incoming = parseLong(incomingSession);
-        return incoming <= 0L || incoming < stored;
-    }
-
-    /** 新会话：本次会话启动时间更晚（或首次带 session 回传），应整段覆盖旧会话数据。 */
     public static boolean isNewSession(String storedSession, String incomingSession) {
-        long incoming = parseLong(incomingSession);
-        if (incoming <= 0L) {
+        if (incomingSession == null || incomingSession.isEmpty()) {
             return false;
         }
-        long stored = parseLong(storedSession);
-        return stored <= 0L || incoming > stored;
-    }
-
-    private static long parseLong(String s) {
-        if (s == null || s.isEmpty()) {
-            return 0L;
-        }
-        try {
-            return Long.parseLong(s);
-        } catch (NumberFormatException e) {
-            return 0L;
-        }
+        return !incomingSession.equals(storedSession);
     }
 
     /**

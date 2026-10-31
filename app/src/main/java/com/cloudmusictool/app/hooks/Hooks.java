@@ -181,6 +181,9 @@ public final class Hooks {
             installer.install(module, cl, config, f);
         } catch (Throwable t) {
             module.log(Log.ERROR, TAG, f.id + " install threw", t);
+            // 安装异常按 critical 失败记账：否则 failed/expected 都为 0，
+            // 整功能失败既进不了诊断卡也进不了 App 的失败横幅。
+            HookState.markNotFound(f, "安装异常", true);
             HookState.note(f, "安装异常");
         }
     }

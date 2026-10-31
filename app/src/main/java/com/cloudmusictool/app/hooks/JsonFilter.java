@@ -18,8 +18,9 @@ final class JsonFilter {
 
     /**
      * blockCodeOrderList 是形如 ["PAGE_RECOMMEND_X", ...] 的 JSON 数组字符串。
-     * 只按当前 hideSet 过滤（不跨请求保留状态）；返回过滤后的字符串，
-     * removedOut[0] 写入删除数量。hideSet 为空时原样返回；解析失败 fail-open。
+     * 只按当前 hideSet 过滤（不跨请求保留状态）；只有字符串元素才当 code 比较，
+     * 其它元素（对象/数字/布尔/null）按原 JSON 值保留，不做字符串化改写。
+     * 返回过滤后的字符串，removedOut[0] 写入删除数量。hideSet 为空时原样返回；解析失败 fail-open。
      */
     static String filterCodeListString(String json, Set<String> hideSet, int[] removedOut) {
         if (hideSet == null || hideSet.isEmpty() || json == null || json.isEmpty()) {
@@ -30,12 +31,14 @@ final class JsonFilter {
             JSONArray out = new JSONArray();
             int removed = 0;
             for (int i = 0; i < arr.length(); i++) {
-                String code = arr.optString(i, "");
-                if (code != null && hideSet.contains(code)) {
+                Object item = arr.opt(i);
+                // optString 会把对象转成 JSON 文本、数字变字符串、JSON null 变 "null"；
+                // 只在整串确实有删除时才会回写，那会把非字符串元素永久改写，故按原值保留。
+                if (item instanceof String && hideSet.contains((String) item)) {
                     removed++;
                     continue;
                 }
-                out.put(code);
+                out.put(item);
             }
             if (removedOut != null) {
                 removedOut[0] = removed;
@@ -48,6 +51,8 @@ final class JsonFilter {
 
     /**
      * 递归过滤 JSON 树：删除 blockCode 命中 hideSet 的对象。
+     * 数组元素、对象值、以及「对象值里的嵌套 JSON 字符串」的根对象都按同一语义删除；
+     * 顶层根节点是响应容器，自身命中时保留（删除整份响应没有意义）。
      * 原地修改 JSONObject/JSONArray；removed[0] 累计删除数。
      * 零删除子树不产生任何变更，按原引用/原串返回，避免无产出的拷贝与重序列化。
      */
@@ -64,6 +69,15 @@ final class JsonFilter {
             }
             for (String key : keys) {
                 Object val = obj.opt(key);
+                // 对象值自身的 blockCode 命中即删除该键：此前只递归子值，对象形态的 block 永不删除
+                if (val instanceof JSONObject && isBlocked((JSONObject) val, hideSet)) {
+                    try {
+                        obj.remove(key);
+                        removed[0]++;
+                    } catch (Throwable ignored) {
+                    }
+                    continue;
+                }
                 if (val instanceof JSONObject || val instanceof JSONArray) {
                     try {
                         Object filtered = filterValue(val, hideSet, removed, depth + 1);
@@ -80,7 +94,12 @@ final class JsonFilter {
                         Object nested = filterNestedString(s, hideSet, removed, depth + 1);
                         if (removed[0] > before) {
                             try {
-                                obj.put(key, nested);
+                                if (nested == null) {
+                                    // 嵌套串的根对象整体命中：键一并删除
+                                    obj.remove(key);
+                                } else {
+                                    obj.put(key, nested);
+                                }
                             } catch (Throwable ignored) {
                             }
                         }
@@ -96,8 +115,7 @@ final class JsonFilter {
             for (int i = 0; i < arr.length(); i++) {
                 Object item = arr.opt(i);
                 if (item instanceof JSONObject) {
-                    String code = ((JSONObject) item).optString("blockCode", null);
-                    if (code != null && hideSet.contains(code)) {
+                    if (isBlocked((JSONObject) item, hideSet)) {
                         removed[0]++;
                         continue;
                     }
@@ -110,7 +128,12 @@ final class JsonFilter {
                     int before = removed[0];
                     if (t.startsWith("{") || t.startsWith("[")) {
                         Object nested = filterNestedString(s, hideSet, removed, depth + 1);
-                        out.put(removed[0] > before ? nested : item);
+                        if (removed[0] <= before) {
+                            out.put(item);
+                        } else if (nested != null) {
+                            out.put(nested);
+                        }
+                        // nested == null：嵌套串的根对象整体命中，数组元素删除
                     } else {
                         out.put(item);
                     }
@@ -127,6 +150,7 @@ final class JsonFilter {
     /**
      * 嵌套 JSON 字符串过滤。hideSet 任一值都未出现的串解析后不可能有删除，
      * 先行快门原样返回；确有删除才重序列化，零删除返回原串。
+     * 串的根对象自身命中 blockCode 时返回 null（整串被删除），由上层删除宿主字段/元素。
      * 包私有便于 JVM 单测直接断言零命中路径不重序列化。
      */
     static Object filterNestedString(String s, Set<String> hideSet, int[] removed, int depth) {
@@ -137,11 +161,22 @@ final class JsonFilter {
             int before = removed[0];
             String t = s.trim();
             Object root = t.startsWith("{") ? new JSONObject(t) : new JSONArray(t);
+            // 深度上限与 filterValue 一致：depth > 6 不再做任何删除
+            if (depth <= 6 && root instanceof JSONObject && isBlocked((JSONObject) root, hideSet)) {
+                removed[0]++;
+                return null;
+            }
             Object filtered = filterValue(root, hideSet, removed, depth);
             return removed[0] > before ? filtered.toString() : s;
         } catch (Throwable ignored) {
             return s;
         }
+    }
+
+    /** obj 自身的 blockCode 是否命中 hideSet（对象形态与数组元素同语义）。 */
+    private static boolean isBlocked(JSONObject obj, Set<String> hideSet) {
+        String code = obj.optString("blockCode", null);
+        return code != null && hideSet.contains(code);
     }
 
     /**

@@ -8,7 +8,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * PV-05 统计数据上报观测（只观测，不拦截）：限流记录统计 key，并关闭 LogMonitorConfigManager 监控开关。
+ * PV-05 统计数据上报抑制：两类挂载点语义不同，不要把本功能当成纯只读观测。
+ *
+ * 1. StatisticImpl#log / #logJSON（只观测，不拦截）：限流记录统计 key 后放行宿主；
+ * 2. LogMonitorConfigManager#b/c/d/e（拦截改写）：constBool(false) 强制关闭监控开关，
+ *    直接改写宿主返回值。
  */
 public final class StatisticHooks {
 
@@ -37,7 +41,10 @@ public final class StatisticHooks {
                 if (mLog == null) {
                     mLog = HookKit.findByNameAndArity(statCls, "log", 2);
                 }
-                if (mLog != null) {
+                if (mLog == null) {
+                    // quiet 定位失败必须显式记账，否则该挂载点既不进 expected 也不进 failed。
+                    HookKit.markMountMissing(module, f, "StatisticImpl#log");
+                } else {
                     HookKit.install(module, f, "StatisticImpl#log", mLog, chain -> {
                         Object res = chain.proceed();
                         try {
@@ -60,7 +67,9 @@ public final class StatisticHooks {
                 if (mLogJson == null) {
                     mLogJson = HookKit.findByNameQuiet(statCls, "logJSON");
                 }
-                if (mLogJson != null) {
+                if (mLogJson == null) {
+                    HookKit.markMountMissing(module, f, "StatisticImpl#logJSON");
+                } else {
                     HookKit.install(module, f, "StatisticImpl#logJSON", mLogJson, chain -> {
                         Object res = chain.proceed();
                         try {
@@ -91,7 +100,9 @@ public final class StatisticHooks {
                 String[] methods = {"b", "c", "d", "e"};
                 for (String mName : methods) {
                     Method m = HookKit.findByNameQuiet(monitorCls, mName);
-                    if (m != null) {
+                    if (m == null) {
+                        HookKit.markMountMissing(module, f, "LogMonitorConfigManager#" + mName);
+                    } else {
                         HookKit.install(module, f, "LogMonitorConfigManager#" + mName, m,
                                 HookKit.constBool(module, f, "LogMonitorConfigManager." + mName + " -> false", false));
                     }

@@ -28,7 +28,8 @@ import io.github.libxposed.api.XposedModule;
  * 约束：
  * 1) 先走硬编码 Class.forName / getDeclaredMethod；失败则调用 DexKitLocator 进行特征锚点兜底。
  * 2) 定位/hook 失败只记日志并返回 null/false，绝不向外抛异常。
- * 3) 每个 intercept 体整段包在 try/catch(Throwable) 内，catch 后记日志并 proceed 原逻辑。
+ * 3) 替换型 hook（skipVoid/constBool/null）不调用 proceed，记账异常只记日志并保持替换值；
+ *    需要放行的 hook 在 try 外恰好 proceed 一次，catch 不补 proceed、异常原样抛出。
  * 4) 命中日志固定 "<功能id> hit ..."，tag 固定 CloudMusicTool；按 feature 限流（5 秒 1 条，首次必打）。
  * 5) 严格禁止引用任何 androidx 类型。
  */
@@ -46,8 +47,9 @@ final class HookKit {
     private static final AtomicBoolean HIT_STATE_CLEAR_WARNED = new AtomicBoolean(false);
 
     /**
-     * Feature 可空路径的固定日志前缀：目前仅 ABTest 通道使用（ABTEST 不是 Feature，
+     * Feature 可空路径的默认日志前缀：ABTest 通道使用（ABTEST 不是 Feature，
      * 不参与 HookState 的 Feature 级计数），取值与 Profile 的 ABTEST 特征列一致。
+     * 无 Feature 归属的引导钩子用 {@link #installUnscoped} 显式前缀，不得复用本值。
      */
     private static final String NULL_FEATURE_PREFIX = "ABTEST";
 
@@ -89,29 +91,35 @@ final class HookKit {
             }
         }
         if (anchors != null && anchors.length > 0) {
-            if (!selftest) {
-                // 精确类名与活动 Profile 都未命中才走 DexKit：耗时明显更高，
-                // 单独标记便于真机定位挂载点漂移。
-                warn(module, logPrefix(f) + " slow path: class " + name
-                        + " via DexKit (exact/profile miss)");
-            }
-            try {
-                long start = System.currentTimeMillis();
-                Class<?> fallback = DexKitLocator.findClass(cl, name, anchors);
-                long elapsed = System.currentTimeMillis() - start;
-                if (fallback != null) {
-                    if (selftest) {
-                        info(module, "DexKit selftest located=" + fallback.getName()
-                                + " elapsed=" + elapsed + "ms");
+            if (ProfileRegistry.active() == null && !selftest) {
+                // 未适配版本没有 Profile 坐标：运行时 installer 在首个 Activity#onCreate
+                // 的主线程上执行，DexKit 首次全盘扫描会卡住冷启动，这里只保留硬编码类名。
+                warn(module, logPrefix(f) + " skip DexKit (no active profile) for class " + name);
+            } else {
+                if (!selftest) {
+                    // 精确类名与活动 Profile 都未命中才走 DexKit：耗时明显更高，
+                    // 单独标记便于真机定位挂载点漂移。
+                    warn(module, logPrefix(f) + " slow path: class " + name
+                            + " via DexKit (exact/profile miss)");
+                }
+                try {
+                    long start = System.currentTimeMillis();
+                    Class<?> fallback = DexKitLocator.findClass(cl, name, anchors);
+                    long elapsed = System.currentTimeMillis() - start;
+                    if (fallback != null) {
+                        if (selftest) {
+                            info(module, "DexKit selftest located=" + fallback.getName()
+                                    + " elapsed=" + elapsed + "ms");
+                        }
+                        info(module, logPrefix(f) + " DexKit fallback located class " + name + " -> " + fallback.getName());
+                        return fallback;
                     }
-                    info(module, logPrefix(f) + " DexKit fallback located class " + name + " -> " + fallback.getName());
-                    return fallback;
+                    if (selftest) {
+                        info(module, "DexKit selftest located=null elapsed=" + elapsed + "ms");
+                    }
+                } catch (Throwable dexT) {
+                    warn(module, logPrefix(f) + " DexKit class query failed for " + name + ": " + dexT.getMessage());
                 }
-                if (selftest) {
-                    info(module, "DexKit selftest located=null elapsed=" + elapsed + "ms");
-                }
-            } catch (Throwable dexT) {
-                warn(module, logPrefix(f) + " DexKit class query failed for " + name + ": " + dexT.getMessage());
             }
         } else if (selftest) {
             warn(module, "DexKit selftest requested but no anchors for " + name);
@@ -402,15 +410,21 @@ final class HookKit {
             m = findMethodQuiet(cls, name, params);
         }
         if (m == null && cls != null && anchors != null && anchors.length > 0) {
-            try {
-                ClassLoader cl = cls.getClassLoader();
-                m = DexKitLocator.findMethod(cl, cls.getName(), name, returnType, params, anchors);
-                if (m != null) {
-                    info(module, logPrefix(f) + " DexKit fallback located method " + cls.getName() + "#" + name);
-                    return m;
+            if (ProfileRegistry.active() == null) {
+                // 与 findClass 同一约束：未适配版本不做 DexKit 兜底（主线程全盘扫描风险）。
+                warn(module, logPrefix(f) + " skip DexKit (no active profile) for method "
+                        + cls.getName() + "#" + name);
+            } else {
+                try {
+                    ClassLoader cl = cls.getClassLoader();
+                    m = DexKitLocator.findMethod(cl, cls.getName(), name, returnType, params, anchors);
+                    if (m != null) {
+                        info(module, logPrefix(f) + " DexKit fallback located method " + cls.getName() + "#" + name);
+                        return m;
+                    }
+                } catch (Throwable dexT) {
+                    warn(module, logPrefix(f) + " DexKit method query failed: " + dexT.getMessage());
                 }
-            } catch (Throwable dexT) {
-                warn(module, logPrefix(f) + " DexKit method query failed: " + dexT.getMessage());
             }
         }
         if (m == null) {
@@ -437,10 +451,12 @@ final class HookKit {
         }
         if (m == null) {
             String clsName = cls == null ? "?" : cls.getName();
-            warn(module, f.id + " skip: method not found " + clsName + "#" + name);
-            HookState.markNotFound(f, "method:" + clsName + "#" + name,
-                    isCriticalMount(cls == null ? null : clsName, name));
-            HookState.note(f, "方法未找到 " + name);
+            warn(module, logPrefix(f) + " skip: method not found " + clsName + "#" + name);
+            if (f != null) {
+                HookState.markNotFound(f, "method:" + clsName + "#" + name,
+                        isCriticalMount(cls == null ? null : clsName, name));
+                HookState.note(f, "方法未找到 " + name);
+            }
         }
         return m;
     }
@@ -452,20 +468,26 @@ final class HookKit {
             m = findByNameQuiet(cls, name);
         }
         if (m == null && cls != null && anchors != null && anchors.length > 0) {
-            try {
-                ClassLoader cl = cls.getClassLoader();
-                m = DexKitLocator.findMethod(cl, cls.getName(), name, null, null, anchors);
-                if (m != null) {
-                    info(module, f.id + " DexKit fallback located method " + cls.getName() + "#" + name);
-                    return m;
+            if (ProfileRegistry.active() == null) {
+                // 与 findClass 同一约束：未适配版本不做 DexKit 兜底（主线程全盘扫描风险）。
+                warn(module, logPrefix(f) + " skip DexKit (no active profile) for method "
+                        + cls.getName() + "#" + name);
+            } else {
+                try {
+                    ClassLoader cl = cls.getClassLoader();
+                    m = DexKitLocator.findMethod(cl, cls.getName(), name, null, null, anchors);
+                    if (m != null) {
+                        info(module, logPrefix(f) + " DexKit fallback located method " + cls.getName() + "#" + name);
+                        return m;
+                    }
+                } catch (Throwable dexT) {
+                    warn(module, logPrefix(f) + " DexKit method query failed: " + dexT.getMessage());
                 }
-            } catch (Throwable dexT) {
-                warn(module, f.id + " DexKit method query failed: " + dexT.getMessage());
             }
         }
         if (m == null) {
             String clsName = cls == null ? "?" : cls.getName();
-            warn(module, f.id + " skip: method not found " + clsName + "#" + name);
+            warn(module, logPrefix(f) + " skip: method not found " + clsName + "#" + name);
             HookState.markNotFound(f, "method:" + clsName + "#" + name,
                     isCriticalMount(cls == null ? null : clsName, name));
             HookState.note(f, "方法未找到 " + name);
@@ -593,30 +615,47 @@ final class HookKit {
     static boolean install(XposedModule module, Feature f, String label,
                            Executable m,
                            XposedInterface.Hooker hooker) {
-        return install(module, f, label, m, hooker, true);
+        return install(module, f, logPrefix(f), label, m, hooker, true);
+    }
+
+    /**
+     * 无 Feature 归属的引导钩子（如 Activity#onCreate 引导）：日志与 hook id 使用调用方
+     * 显式前缀，不占用 ABTEST，也不计入任何 Feature 的 installed/failed。
+     */
+    static boolean installUnscoped(XposedModule module, String prefix, String label,
+                                   Executable m, XposedInterface.Hooker hooker) {
+        return install(module, null,
+                prefix == null || prefix.isEmpty() ? NULL_FEATURE_PREFIX : prefix,
+                label, m, hooker, false);
     }
 
     private static boolean install(XposedModule module, Feature f, String label,
                                    Executable m, XposedInterface.Hooker hooker,
                                    boolean countState) {
+        return install(module, f, logPrefix(f), label, m, hooker, countState);
+    }
+
+    private static boolean install(XposedModule module, Feature f, String prefix, String label,
+                                   Executable m, XposedInterface.Hooker hooker,
+                                   boolean countState) {
         if (m == null) {
             return false;
         }
-        if (!validateReturnType(module, f, label, m, hooker, countState)) {
+        if (!validateReturnType(module, f, prefix, label, m, hooker, countState)) {
             return false;
         }
         try {
             module.hook(m)
-                    .setId(logPrefix(f) + "#" + label)
+                    .setId(prefix + "#" + label)
                     .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
                     .intercept(hooker);
             if (countState && f != null) {
                 HookState.installed(f, label);
             }
-            info(module, logPrefix(f) + " registered " + label);
+            info(module, prefix + " registered " + label);
             return true;
         } catch (Throwable t) {
-            error(module, logPrefix(f) + " hook failed " + label, t);
+            error(module, prefix + " hook failed " + label, t);
             if (countState && f != null) {
                 HookState.markNotFound(f, "hook:" + label, isCriticalExecutable(m));
                 HookState.note(f, "hook 失败 " + label);
@@ -626,11 +665,13 @@ final class HookKit {
     }
 
     /**
-     * 安装前校验返回值：constBool 只能挂 boolean/Boolean，skipVoid 只能挂 void 方法。
+     * 安装前校验返回值：constBool 只能挂 boolean/Boolean，skipVoid 只能挂 void 方法，
+     * hookNull 只能挂引用类型/void（返回 null 给基本类型会让宿主拆箱崩溃）。
      * 不匹配时拒绝安装并 WARN，避免“hook 静默不生效”或返回 null 导致宿主 NPE。
      */
-    private static boolean validateReturnType(XposedModule module, Feature f, String label,
-                                              Executable m, XposedInterface.Hooker hooker,
+    private static boolean validateReturnType(XposedModule module, Feature f, String prefix,
+                                              String label, Executable m,
+                                              XposedInterface.Hooker hooker,
                                               boolean countState) {
         if (!(m instanceof Method)) {
             return true;
@@ -638,7 +679,7 @@ final class HookKit {
         Class<?> rt = ((Method) m).getReturnType();
         if (hooker instanceof ConstBoolHooker) {
             if (rt != boolean.class && rt != Boolean.class) {
-                warn(module, logPrefix(f) + " return type mismatch: " + label + " -> "
+                warn(module, prefix + " return type mismatch: " + label + " -> "
                         + rt.getName() + " (constBool requires boolean); not installed");
                 if (countState && f != null) {
                     HookState.markNotFound(f, "rettype:" + label, isCriticalExecutable(m));
@@ -648,8 +689,18 @@ final class HookKit {
             }
         } else if (hooker instanceof SkipVoidHooker) {
             if (rt != void.class) {
-                warn(module, logPrefix(f) + " return type mismatch: " + label + " -> "
+                warn(module, prefix + " return type mismatch: " + label + " -> "
                         + rt.getName() + " (skipVoid requires void); not installed");
+                if (countState && f != null) {
+                    HookState.markNotFound(f, "rettype:" + label, isCriticalExecutable(m));
+                    HookState.note(f, "返回类型不匹配 " + label);
+                }
+                return false;
+            }
+        } else if (hooker instanceof NullHooker) {
+            if (rt.isPrimitive() && rt != void.class) {
+                warn(module, prefix + " return type mismatch: " + label + " -> "
+                        + rt.getName() + " (nullReturn requires reference or void); not installed");
                 if (countState && f != null) {
                     HookState.markNotFound(f, "rettype:" + label, isCriticalExecutable(m));
                     HookState.note(f, "返回类型不匹配 " + label);
@@ -670,8 +721,24 @@ final class HookKit {
     }
 
     static void hit(XposedModule module, Feature f, String detail) {
-        // 旧签名：限流键缺省取 detail，键形与重构前完全一致，清单外调用方行为不变。
-        hit(module, f, detail, detail);
+        // 旧签名只有 detail：限流键取 detail 的首个稳定 token（挂载点标识），
+        // 忽略其后拼接的运行期计数/标题，避免 detail 变化把 5 秒限流拆成无限多的键。
+        // 需要按挂载点精确限流时改用 4 参重载并显式传 label。
+        hit(module, f, stableHitLabel(detail), detail);
+    }
+
+    /** detail 首个空白前的前缀；null 归一到空串。 */
+    private static String stableHitLabel(String detail) {
+        if (detail == null) {
+            return "";
+        }
+        String text = detail.trim();
+        for (int i = 0; i < text.length(); i++) {
+            if (Character.isWhitespace(text.charAt(i))) {
+                return text.substring(0, i);
+            }
+        }
+        return text;
     }
 
     /**
@@ -683,7 +750,8 @@ final class HookKit {
      */
     static void hit(XposedModule module, Feature f, String label, String detail) {
         long now = System.currentTimeMillis();
-        String key = f.id + "|" + label;
+        String prefix = logPrefix(f);
+        String key = prefix + "|" + label;
         long[] state = HIT_STATE.get(key);
         if (state != null && state[1] != 0L && now - state[0] < HIT_WINDOW_MS) {
             // 快速路径：本次不打日志，只记 Feature 级命中数。
@@ -707,7 +775,7 @@ final class HookKit {
         }
         HookState.hit(f);
         if (log) {
-            module.log(Log.INFO, TAG, f.id + " hit " + detail);
+            module.log(Log.INFO, TAG, prefix + " hit " + detail);
         }
     }
 
@@ -755,11 +823,11 @@ final class HookKit {
         public Object intercept(XposedInterface.Chain chain) throws Throwable {
             try {
                 hit(module, feature, detail);
-                return null;
             } catch (Throwable t) {
-                error(module, feature.id + " intercept error " + detail, t);
-                return chain.proceed();
+                error(module, logPrefix(feature) + " intercept error " + detail, t);
             }
+            // 替换型 hook：不 proceed；记账异常时仍按 skip 语义返回 null。
+            return null;
         }
     }
 
@@ -780,11 +848,34 @@ final class HookKit {
         public Object intercept(XposedInterface.Chain chain) throws Throwable {
             try {
                 hit(module, feature, detail);
-                return value ? Boolean.TRUE : Boolean.FALSE;
             } catch (Throwable t) {
-                error(module, feature.id + " intercept error " + detail, t);
-                return chain.proceed();
+                error(module, logPrefix(feature) + " intercept error " + detail, t);
             }
+            // 替换型 hook：不 proceed；记账异常时仍返回常量。
+            return value ? Boolean.TRUE : Boolean.FALSE;
+        }
+    }
+
+    private static final class NullHooker implements XposedInterface.Hooker {
+        private final XposedModule module;
+        private final Feature feature;
+        private final String detail;
+
+        NullHooker(XposedModule module, Feature feature, String detail) {
+            this.module = module;
+            this.feature = feature;
+            this.detail = detail;
+        }
+
+        @Override
+        public Object intercept(XposedInterface.Chain chain) throws Throwable {
+            try {
+                hit(module, feature, detail);
+            } catch (Throwable t) {
+                error(module, logPrefix(feature) + " intercept error " + detail, t);
+            }
+            // 替换型 hook：不 proceed；记账异常时仍返回 null。
+            return null;
         }
     }
 
@@ -862,13 +953,20 @@ final class HookKit {
 
     static void hookNull(XposedModule module, Feature f, Class<?> cls, String name) {
         Method m = findMethod(module, f, cls, name);
-        install(module, f, cls.getSimpleName() + "#" + name, m, chain -> {
-            try {
-                hit(module, f, cls.getSimpleName() + "." + name + " -> null");
-                return null;
-            } catch (Throwable t) {
-                return chain.proceed();
-            }
-        });
+        install(module, f, cls.getSimpleName() + "#" + name, m,
+                new NullHooker(module, f, cls.getSimpleName() + "." + name + " -> null"));
+    }
+
+    /**
+     * 可选挂载点缺失的统一记账：WARN + HookState.markNotFound（非 critical）。
+     * 供 quiet 定位（findMethodQuiet/findByNameQuiet）失败时使用——这类路径不阻塞功能，
+     * 但必须让 expected/failed 与诊断页看到缺失项。
+     */
+    static void markMountMissing(XposedModule module, Feature f, String label) {
+        warn(module, logPrefix(f) + " skip: mount not found " + label);
+        if (f != null) {
+            HookState.markNotFound(f, "mount:" + label, false);
+            HookState.note(f, "挂载点未找到 " + label);
+        }
     }
 }
