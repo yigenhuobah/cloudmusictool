@@ -1,5 +1,6 @@
 package com.cloudmusictool.app;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.Test;
 
@@ -188,6 +189,7 @@ public class HookStateJsonContractTest {
         Feature f = Feature.SPLASH_AD;
         HookState.enable(f);
         HookState.installed(f, "m1");
+        HookState.recordCrash(1_700_000_000_000L, "main", "java.lang.Error CompactMarker");
 
         JSONObject compact = new JSONObject(HookState.buildJson(0));
         assertTrue("超限必须回退为摘要", compact.getBoolean("truncated"));
@@ -197,5 +199,69 @@ public class HookStateJsonContractTest {
         assertTrue(compact.getLong("updatedAt") > 0L);
         assertEquals("main", compact.getString("process"));
         assertFalse("摘要不携带逐功能明细", compact.has("features"));
+        assertTrue("摘要分支同样保留崩溃证据（体积极小，≤3×240 字符）",
+                compact.has("crashes"));
+        assertTrue(compact.getJSONArray("crashes").getString(0).contains("CompactMarker"));
+    }
+
+    // ---------------------------------------------------------- crashes 通道（内置诊断）
+
+    /**
+     * crashes 通道：进程内只保留最近 {@code ReportProtocol.MAX_CRASH_ENTRIES} 条，
+     * buildJson 根级数组 [0] 为最新。连录 4 条（多于上限）保证旧 residue 一并被顶掉，
+     * 用例不依赖 JUnit 方法顺序。
+     */
+    @Test
+    public void crashesChannel_keepsLatestThreeNewestFirst() throws Exception {
+        HookState.init("com.example.module", "main");
+        long base = 1_700_000_000_000L;
+        HookState.recordCrash(base, "main", "java.lang.IllegalStateException CrashA");
+        HookState.recordCrash(base + 1, "pool-1", "java.lang.IllegalStateException CrashB");
+        HookState.recordCrash(base + 2, "main", "java.lang.IllegalStateException CrashC");
+        HookState.recordCrash(base + 3, "glow", "java.lang.IllegalStateException CrashD");
+
+        JSONArray crashes = new JSONObject(buildJson()).getJSONArray("crashes");
+        assertEquals("至多保留 MAX_CRASH_ENTRIES 条",
+                ReportProtocol.MAX_CRASH_ENTRIES, crashes.length());
+        assertTrue("crashes[0] 必须是最新一条（新的顶掉最旧的）",
+                crashes.getString(0).contains("CrashD"));
+        assertTrue(crashes.getString(1).contains("CrashC"));
+        assertTrue(crashes.getString(2).contains("CrashB"));
+        // 条目必须携带线程名与异常类名（时间前缀由格式化保证，不做本地化脆弱断言）。
+        assertTrue(crashes.getString(0).contains("glow"));
+        assertTrue(crashes.getString(0).contains("java.lang.IllegalStateException"));
+    }
+
+    /** 单条截断 ≤ HookState.MAX_CRASH_CHARS（240），空摘要整条忽略（不能顶掉已有条目）。 */
+    @Test
+    public void crashEntry_truncatesTo240AndIgnoresEmptySummary() throws Exception {
+        HookState.init("com.example.module", "main");
+        HookState.recordCrash(1_700_000_000_000L, "main", "x".repeat(400));
+        HookState.recordCrash(1_700_000_000_001L, "main", null);
+        HookState.recordCrash(1_700_000_000_002L, "main", "");
+
+        JSONArray crashes = new JSONObject(buildJson()).getJSONArray("crashes");
+        String newest = crashes.getString(0);
+        assertEquals("单条截断 ≤ 240 字符", HookState.MAX_CRASH_CHARS, newest.length());
+        assertTrue("截断以省略号收尾", newest.endsWith("…"));
+        assertTrue("空摘要必须整条忽略：最新位仍是 x 条目", newest.contains("xxx"));
+    }
+
+    /** crashSummary = 异常类名 + 栈前 2 帧；第 3 帧起截掉，null 兜底空串。 */
+    @Test
+    public void crashSummary_classNameAndAtMostTwoFrames() {
+        RuntimeException e = new RuntimeException("boom");
+        e.setStackTrace(new StackTraceElement[]{
+                new StackTraceElement("com.a.B", "run", "B.java", 10),
+                new StackTraceElement("com.a.C", "go", "C.java", 20),
+                new StackTraceElement("com.a.D", "loop", "D.java", 30)});
+
+        String summary = HookState.crashSummary(e);
+        assertTrue("以异常类名开头", summary.startsWith("java.lang.RuntimeException"));
+        assertTrue("包含第 1 帧", summary.contains("com.a.B.run(B.java:10)"));
+        assertTrue("包含第 2 帧", summary.contains("com.a.C.go(C.java:20)"));
+        assertFalse("第 3 帧起截掉", summary.contains("com.a.D"));
+        assertEquals("null 兜底空串（recordCrash 会整条忽略）",
+                "", HookState.crashSummary(null));
     }
 }

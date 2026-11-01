@@ -20,9 +20,11 @@ import java.util.Set;
  * - mounts 通道（HookState.buildJson 产出）：根键白名单
  *   {updatedAt, session, process, enabledFeatures, installed, expected, failed,
  *   noHitFeatures, degradedFeatures, unavailableFeatures, truncated, features,
- *   abtest}（允许集，缺省键合法；session 为本版本新增的进程会话标识）；
+ *   abtest, crashes}（允许集，缺省键合法；session 为进程会话标识）；
  *   process 为空（旧版兼容）或主进程名；features 的键必须是 Feature 枚举名，
- *   每个 feature 对象的键 ⊆ {@link #FEATURE_KEYS}。
+ *   每个 feature 对象的键 ⊆ {@link #FEATURE_KEYS}；
+ *   crashes 为最近崩溃摘要字符串数组（内置诊断），至多 {@link #MAX_CRASH_ENTRIES}
+ *   条、每条受 MAX_VALUE_CHARS 约束。
  * - experiments 通道（ExperimentState.buildJson 产出）：根键白名单
  *   {updatedAt, session, process, items}；items 至多 {@link #MAX_ENTRIES} 条，每条为对象。
  *   session 为可选键：新版本生产者写入进程会话标识，旧生产者不写同样合法。
@@ -43,6 +45,12 @@ public final class ReportProtocol {
     public static final int MAX_ENTRIES = 800;
     public static final int MAX_PAYLOAD_CHARS = 64 * 1024;
 
+    /**
+     * crashes 通道（mounts 根级数组）至多保留的条数；HookState 的进程内环形缓冲
+     * 同用此常量，保证生产端保留量与接收端计数门禁不会漂移。
+     */
+    public static final int MAX_CRASH_ENTRIES = 3;
+
     /** 超过 10 分钟没有新回传就视为过期，失败计数按“未知”处理（0）。 */
     public static final long DEFAULT_TTL_MS = 10 * 60 * 1000L;
 
@@ -59,7 +67,7 @@ public final class ReportProtocol {
     private static final Set<String> MOUNTS_ROOT_KEYS = new HashSet<>(Arrays.asList(
             "updatedAt", "session", "process", "enabledFeatures", "installed", "expected",
             "failed", "noHitFeatures", "degradedFeatures", "unavailableFeatures",
-            "truncated", "features", "abtest"));
+            "truncated", "features", "abtest", "crashes"));
 
     /** 单个 feature 对象的字段白名单。 */
     private static final Set<String> FEATURE_KEYS = new HashSet<>(Arrays.asList(
@@ -122,6 +130,23 @@ public final class ReportProtocol {
                     if (!FEATURE_KEYS.contains(field)) {
                         return "unknown feature field: " + name + "." + field;
                     }
+                }
+            }
+        }
+        // crashes（内置诊断最近崩溃）：字符串数组，条数受 MAX_CRASH_ENTRIES 约束；
+        // 每条字符串的长度上限由 checkStringValues 的 MAX_VALUE_CHARS 统一执行。
+        Object crashes = root.opt("crashes");
+        if (!(crashes == null || crashes instanceof JSONArray)) {
+            return "crashes is not an array";
+        }
+        if (crashes != null) {
+            JSONArray array = (JSONArray) crashes;
+            if (array.length() > MAX_CRASH_ENTRIES) {
+                return "too many crashes: " + array.length();
+            }
+            for (int i = 0; i < array.length(); i++) {
+                if (!(array.opt(i) instanceof String)) {
+                    return "crash entry is not a string: index " + i;
                 }
             }
         }

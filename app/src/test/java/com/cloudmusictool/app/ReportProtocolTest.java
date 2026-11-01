@@ -86,6 +86,61 @@ public class ReportProtocolTest {
     }
 
     @Test
+    public void mountsPayloadAcceptsCrashesRootKey() throws Exception {
+        // crashes = 内置诊断最近崩溃（HookState crashes 通道），字符串数组、[0] 为最新。
+        JSONObject root = mountsRoot();
+        root.put("crashes", new JSONArray()
+                .put("2026-11-01 12:00:00 main java.lang.NullPointerException "
+                        + "at com.a.b(C.java:10); com.a.d(D.java:22)")
+                .put("2026-11-01 11:59:00 main java.lang.Error at com.x.y(E.java:1)"));
+
+        assertNull("crashes 根键必须在 mounts 白名单内",
+                ReportProtocol.validateMountsPayload(root));
+    }
+
+    @Test
+    public void mountsPayloadRejectsMoreThanThreeCrashes() throws Exception {
+        JSONObject root = mountsRoot();
+        JSONArray crashes = new JSONArray();
+        for (int i = 0; i <= ReportProtocol.MAX_CRASH_ENTRIES; i++) {
+            crashes.put("crash " + i);
+        }
+        root.put("crashes", crashes);
+
+        assertNotNull("crashes 超过 MAX_CRASH_ENTRIES 必须整体拒绝",
+                ReportProtocol.validateMountsPayload(root));
+    }
+
+    @Test
+    public void mountsPayloadRejectsOverlongCrashEntry() throws Exception {
+        // MAX_VALUE_CHARS=256 对 crashes 的每个元素单独生效。
+        JSONObject root = mountsRoot();
+        root.put("crashes", new JSONArray()
+                .put(repeat('x', ReportProtocol.MAX_VALUE_CHARS + 1)));
+
+        assertNotNull("崩溃条目超过 MAX_VALUE_CHARS 必须拒绝",
+                ReportProtocol.validateMountsPayload(root));
+    }
+
+    @Test
+    public void mountsPayloadRejectsNonStringCrashEntry() throws Exception {
+        JSONObject root = mountsRoot();
+        root.put("crashes", new JSONArray().put(new JSONObject().put("time", 1)));
+
+        assertNotNull("崩溃条目必须是字符串",
+                ReportProtocol.validateMountsPayload(root));
+    }
+
+    @Test
+    public void mountsPayloadRejectsNonArrayCrashes() throws Exception {
+        JSONObject root = mountsRoot();
+        root.put("crashes", "not-an-array");
+
+        assertNotNull("crashes 必须是数组",
+                ReportProtocol.validateMountsPayload(root));
+    }
+
+    @Test
     public void mountsPayloadAcceptsStringAtLengthBoundary() throws Exception {
         JSONObject root = mountsRoot();
         root.getJSONObject("features").put("SPLASH_AD",

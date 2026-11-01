@@ -23,8 +23,8 @@ android {
         applicationId "io.github.yigenhuobah.cloudmusictool"
         minSdk 29
         targetSdk 36
-        versionCode 17
-        versionName "2.4.7"
+        versionCode 18
+        versionName "2.4.8"
     }
 
     signingConfigs {

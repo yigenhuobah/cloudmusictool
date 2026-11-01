@@ -2,9 +2,15 @@ package com.cloudmusictool.app;
 
 import android.util.Log;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.text.SimpleDateFormat;
+import java.util.ArrayDeque;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -31,6 +37,16 @@ public final class HookState {
     private static final String TAG = "CloudMusicTool";
     private static final int MAX_JSON_CHARS = 64 * 1024;
     private static final int MAX_FAILURE_CHARS = 160;
+
+    /**
+     * crashes 通道（内置诊断）单条摘要的最大长度：240，给 ReportProtocol
+     * MAX_VALUE_CHARS=256 的通道校验留出余量（时间 + 线程名 + 异常摘要拼成一条）。
+     */
+    static final int MAX_CRASH_CHARS = 240;
+
+    // 最近崩溃：最新在队尾，超过 MAX_CRASH_ENTRIES 条顶掉最旧的；只在 recordCrash/
+    // crashesArray 内同步访问，publish 在锁外调用。
+    private static final ArrayDeque<String> sCrashes = new ArrayDeque<>();
 
     /**
      * 进程级会话标识："s" + 目标进程启动时刻（epoch ms）+ "-" + 8 位随机 hex。
@@ -272,6 +288,80 @@ public final class HookState {
         publish();
     }
 
+    // ------------------------------------------------------------------
+    // crashes 通道（内置诊断：目标进程内未捕获异常）
+    // ------------------------------------------------------------------
+
+    /**
+     * 记录一条未捕获异常摘要（由 CloudMusicToolModule 的 UEH 包装调用）。
+     *
+     * 条目格式："<时间> <线程名> <异常类名+栈前 2 帧>"（{@link #crashSummary}），
+     * 单条截断 ≤ {@link #MAX_CRASH_CHARS}；进程内只保留最近
+     * {@link ReportProtocol#MAX_CRASH_ENTRIES} 条（新的顶掉最旧的），buildJson 在
+     * 根级 "crashes" 数组输出（[0] 为最新）。自身全程吞掉异常：崩溃记录绝不能再抛。
+     *
+     * @param at         崩溃时间（epoch ms）
+     * @param threadName 崩溃线程名（可空，按空串处理）
+     * @param summary    异常摘要（{@link #crashSummary} 产出）；null/空忽略
+     */
+    public static void recordCrash(long at, String threadName, String summary) {
+        try {
+            String entry = formatCrashEntry(at, threadName, summary);
+            if (entry == null) {
+                return;
+            }
+            synchronized (sCrashes) {
+                sCrashes.addLast(entry);
+                while (sCrashes.size() > ReportProtocol.MAX_CRASH_ENTRIES) {
+                    sCrashes.pollFirst();
+                }
+            }
+            publish();
+        } catch (Throwable ignored) {
+            // 崩溃记录失败只静默放弃。
+        }
+    }
+
+    /** 异常类名 + 栈前 2 帧的摘要；无栈帧时只有类名，t 为 null 返回空串。 */
+    static String crashSummary(Throwable t) {
+        if (t == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(t.getClass().getName());
+        StackTraceElement[] frames = t.getStackTrace();
+        for (int i = 0; i < frames.length && i < 2; i++) {
+            sb.append(i == 0 ? " at " : "; ").append(frames[i]);
+        }
+        return sb.toString();
+    }
+
+    /** "<时间> <线程名> <异常摘要>"；summary 为空返回 null（不记），超长截断到 240（含省略号）。 */
+    private static String formatCrashEntry(long at, String threadName, String summary) {
+        if (summary == null || summary.isEmpty()) {
+            return null;
+        }
+        String time = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                .format(new Date(at));
+        String line = time + " " + (threadName == null ? "" : threadName) + " " + summary;
+        return line.length() <= MAX_CRASH_CHARS
+                ? line : line.substring(0, MAX_CRASH_CHARS - 1) + "…";
+    }
+
+    /** 最近崩溃数组（[0] 为最新）；无记录返回 null（buildJson 不输出该键）。 */
+    private static JSONArray crashesArray() {
+        synchronized (sCrashes) {
+            if (sCrashes.isEmpty()) {
+                return null;
+            }
+            JSONArray array = new JSONArray();
+            Iterator<String> it = sCrashes.descendingIterator();
+            while (it.hasNext()) {
+                array.put(it.next());
+            }
+            return array;
+        }
+    }
+
     /**
      * 记录 Feature 入口调用次数。与 {@link #hit(Feature)} 区分：
      * entry 只表示 hook 入口被调用，hit 表示过滤/改写真正生效。
@@ -367,6 +457,7 @@ public final class HookState {
                 }
             }
             JSONObject abtest = abTestSummary();
+            JSONArray crashes = crashesArray();
             root.put("updatedAt", System.currentTimeMillis());
             root.put("session", SESSION);
             if (sProcessName != null) {
@@ -381,6 +472,9 @@ public final class HookState {
             root.put("unavailableFeatures", unavailableCount);
             if (abtest != null) {
                 root.put("abtest", abtest);
+            }
+            if (crashes != null) {
+                root.put("crashes", crashes);
             }
             root.put("features", features);
             String json = root.toString();
@@ -401,6 +495,11 @@ public final class HookState {
                 compact.put("unavailableFeatures", unavailableCount);
                 if (abtest != null) {
                     compact.put("abtest", abtest);
+                }
+                // 崩溃摘要体积极小（≤3×240 字符），摘要分支同样保留：
+                // 超限时丢失的应是逐功能明细而不是崩溃证据。
+                if (crashes != null) {
+                    compact.put("crashes", crashes);
                 }
                 compact.put("truncated", true);
                 return compact.toString();

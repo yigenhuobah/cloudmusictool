@@ -3,6 +3,9 @@ package com.cloudmusictool.app;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.os.Build;
 import android.os.Bundle;
 import android.widget.Toast;
 
@@ -11,7 +14,10 @@ import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceScreen;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
+
+import io.github.libxposed.service.XposedService;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -34,10 +40,14 @@ import java.util.function.Supplier;
  */
 public class DiagnosticsFragment extends PreferenceFragmentCompat {
 
+    /** 导出诊断包文本里「最近命中」段最多列出的观测条数。 */
+    private static final int MAX_EXPORT_HITS = 20;
+
     private ExecutorService mStatusExecutor;
     /** 丢弃过期的后台读取结果，避免旧快照覆盖新一次刷新。 */
     private final AtomicInteger mRefreshGeneration = new AtomicInteger();
     private final AtomicInteger mCopyGeneration = new AtomicInteger();
+    private final AtomicInteger mExportGeneration = new AtomicInteger();
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -61,6 +71,7 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
     public void onDestroy() {
         mRefreshGeneration.incrementAndGet();
         mCopyGeneration.incrementAndGet();
+        mExportGeneration.incrementAndGet();
         if (mStatusExecutor != null) {
             mStatusExecutor.shutdownNow();
             mStatusExecutor = null;
@@ -119,6 +130,25 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
             category.addPreference(row);
         }
 
+        // 最近崩溃（内置诊断 crashes 通道，[0] 为最新）：无崩溃时不显示。
+        // strings.xml 不在本簇清单内，卡片文案沿用本文件 abtest 段的字面量先例。
+        JSONArray crashes = root == null ? null : root.optJSONArray("crashes");
+        if (crashes != null && crashes.length() > 0) {
+            PreferenceCategory crashCategory = new PreferenceCategory(context);
+            crashCategory.setTitle("最近崩溃");
+            crashCategory.setPersistent(false);
+            screen.addPreference(crashCategory);
+            for (int i = 0; i < crashes.length(); i++) {
+                Preference crash = new Preference(context);
+                crash.setKey("diag_crash_" + i);
+                crash.setTitle(i == 0 ? "最新" : "#" + (i + 1));
+                crash.setSummary(crashes.optString(i, ""));
+                crash.setSelectable(false);
+                crash.setPersistent(false);
+                crashCategory.addPreference(crash);
+            }
+        }
+
         PreferenceCategory actions = new PreferenceCategory(context);
         actions.setTitle(R.string.diag_actions_title);
         actions.setPersistent(false);
@@ -147,6 +177,17 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
             return true;
         });
         actions.addPreference(copy);
+
+        Preference export = new Preference(context);
+        export.setKey("diag_export");
+        export.setTitle("导出诊断包");
+        export.setSummary("以纯文本分享：模块版本/系统/框架 API/目标版本/功能状态/最近命中/最近崩溃");
+        export.setPersistent(false);
+        export.setOnPreferenceClickListener(pref -> {
+            exportDiagnosticsPackage();
+            return true;
+        });
+        actions.addPreference(export);
 
         setPreferenceScreen(screen);
     }
@@ -269,7 +310,10 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
 
     /** 只能在后台线程调用：首次 getSharedPreferences 会同步加载磁盘。 */
     private static JSONObject readStatus(Context context) {
-        String json = StatusProvider.readState(context);
+        return readJson(StatusProvider.readState(context));
+    }
+
+    private static JSONObject readJson(String json) {
         if (json == null || json.isEmpty()) {
             return null;
         }
@@ -278,6 +322,152 @@ public class DiagnosticsFragment extends PreferenceFragmentCompat {
         } catch (Throwable t) {
             return null;
         }
+    }
+
+    // ------------------------------------------------------------- 导出诊断包
+
+    /** 导出诊断包需要的全部输入；字段在后台线程填充，主线程只消费。 */
+    private static final class ExportPayload {
+        JSONObject state;
+        JSONObject experiments;
+        String moduleVersion;
+        String systemVersion;
+        String frameworkApi;
+        String targetVersion;
+    }
+
+    /** 「导出诊断包」入口：后台读取全部输入，回主线程拼文本并经系统分享。 */
+    private void exportDiagnosticsPackage() {
+        if (getContext() == null) {
+            return;
+        }
+        Context context = requireContext();
+        Context appContext = context.getApplicationContext();
+        final Context readContext = appContext != null ? appContext : context;
+        loadAsync(mStatusExecutor, ConfigStore::postToMain,
+                () -> readExportPayload(readContext),
+                payload -> {
+                    if (isAdded()) {
+                        shareDiagnosticsPackage(payload);
+                    }
+                },
+                mExportGeneration);
+    }
+
+    /** 只能在后台线程调用：binder/SharedPreferences 读取都不占用主线程。 */
+    private static ExportPayload readExportPayload(Context context) {
+        ExportPayload payload = new ExportPayload();
+        payload.state = readStatus(context);
+        payload.experiments = readJson(StatusProvider.readExperiments(context));
+        payload.moduleVersion = packageVersion(context, context.getPackageName());
+        payload.targetVersion = packageVersion(context, Config.TARGET_PACKAGE);
+        payload.systemVersion = "Android " + Build.VERSION.RELEASE
+                + " (API " + Build.VERSION.SDK_INT + ")";
+        XposedService service = ServiceBridge.get();
+        String api;
+        try {
+            api = service == null ? null : String.valueOf(service.getApiVersion());
+        } catch (Throwable t) {
+            api = null;
+        }
+        payload.frameworkApi = api;
+        return payload;
+    }
+
+    private static String packageVersion(Context context, String packageName) {
+        try {
+            PackageInfo info = context.getPackageManager().getPackageInfo(packageName, 0);
+            return info.versionName == null ? "?" : info.versionName;
+        } catch (Throwable t) {
+            return "?";
+        }
+    }
+
+    /**
+     * 拼装导出文本并经 ACTION_SEND text/plain 系统分享：不写文件、不依赖 FileProvider。
+     * 拼装（{@link #buildExportPackage}）放在 try 外也安全（纯字符串操作），
+     * 分享目标缺失时只提示失败。
+     */
+    private void shareDiagnosticsPackage(ExportPayload payload) {
+        String text = buildExportPackage(payload.moduleVersion, payload.systemVersion,
+                payload.frameworkApi, payload.targetVersion,
+                buildDiagnosticsText(payload.state), payload.state, payload.experiments);
+        try {
+            Intent intent = new Intent(Intent.ACTION_SEND);
+            intent.setType("text/plain");
+            intent.putExtra(Intent.EXTRA_TEXT, text);
+            startActivity(Intent.createChooser(intent, getString(R.string.page_diagnostics)));
+        } catch (Throwable t) {
+            Toast.makeText(requireContext(), "导出诊断包失败", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * 纯 JVM：拼装导出诊断包文本（模块版本/系统版本/框架 API/目标版本/各功能状态/
+     * 最近命中/最近崩溃，段顺序固定），便于单测锁定关键段与顺序。
+     *
+     * @param featureSection 各功能状态段（buildDiagnosticsText，含数据来源摘要；可空）
+     * @param state          mounts 通道快照（可空，无崩溃时不输出最近崩溃段）
+     * @param experiments    experiments 通道快照（可空，无观测时不输出最近命中段）
+     */
+    static String buildExportPackage(String moduleVersion, String systemVersion,
+            String frameworkApi, String targetVersion, String featureSection,
+            JSONObject state, JSONObject experiments) {
+        StringBuilder text = new StringBuilder();
+        text.append("模块版本: ").append(orDash(moduleVersion)).append('\n');
+        text.append("系统版本: ").append(orDash(systemVersion)).append('\n');
+        text.append("框架 API: ").append(orDash(frameworkApi)).append('\n');
+        text.append("目标版本: ").append(orDash(targetVersion)).append('\n');
+        if (featureSection != null) {
+            text.append(featureSection);
+        }
+        text.append(recentHitsSection(experiments));
+        text.append(crashesSection(state));
+        return text.toString();
+    }
+
+    private static String orDash(String s) {
+        return s == null || s.isEmpty() ? "—" : s;
+    }
+
+    /** 最近命中段：experiments 观测按 lastAt 降序最多 {@link #MAX_EXPORT_HITS} 条；无观测返回空串。 */
+    static String recentHitsSection(JSONObject experiments) {
+        JSONArray items = experiments == null ? null : experiments.optJSONArray("items");
+        if (items == null || items.length() == 0) {
+            return "";
+        }
+        List<JSONObject> hits = new ArrayList<>();
+        for (int i = 0; i < items.length(); i++) {
+            JSONObject item = items.optJSONObject(i);
+            if (item != null && !item.optString("key", "").isEmpty()) {
+                hits.add(item);
+            }
+        }
+        if (hits.isEmpty()) {
+            return "";
+        }
+        hits.sort((a, b) -> Long.compare(b.optLong("lastAt", 0L), a.optLong("lastAt", 0L)));
+        StringBuilder section = new StringBuilder("最近命中:\n");
+        for (int i = 0; i < hits.size() && i < MAX_EXPORT_HITS; i++) {
+            JSONObject item = hits.get(i);
+            section.append("  ").append(item.optString("key", ""))
+                    .append(' ').append(orDash(item.optString("group", "")))
+                    .append(" ×").append(item.optInt("count", 0)).append('\n');
+        }
+        return section.toString();
+    }
+
+    /** 最近崩溃段（[0] 为最新）；无崩溃返回空串（与诊断页卡片一致的「无崩溃不显示」）。 */
+    static String crashesSection(JSONObject state) {
+        JSONArray crashes = state == null ? null : state.optJSONArray("crashes");
+        if (crashes == null || crashes.length() == 0) {
+            return "";
+        }
+        StringBuilder section = new StringBuilder("最近崩溃:\n");
+        for (int i = 0; i < crashes.length(); i++) {
+            section.append("  ").append(crashes.optString(i, "")).append('\n');
+        }
+        return section.toString();
     }
 
     /**

@@ -16,6 +16,7 @@ import android.util.Log;
 import java.io.File;
 import java.io.FileNotFoundException;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
@@ -233,6 +234,25 @@ public class StatusProvider extends ContentProvider {
         try {
             return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                     .getString(KEY_EXPERIMENTS, null);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * 读取最近崩溃（mounts 通道根级 crashes 数组，[0] 为最新）。
+     *
+     * crashes 随 mounts 整包经 validateMountsPayload 校验后落盘（KEY_STATE，
+     * 与功能状态同路径同会话语义），这里只做读取侧解析；无回传、旧版生产者
+     * （无该键）或 JSON 损坏时返回 null（诊断页按「无崩溃」处理，不展示卡片）。
+     */
+    public static JSONArray readCrashes(Context context) {
+        String json = readState(context);
+        if (json == null || json.isEmpty()) {
+            return null;
+        }
+        try {
+            return new JSONObject(json).optJSONArray("crashes");
         } catch (Throwable t) {
             return null;
         }

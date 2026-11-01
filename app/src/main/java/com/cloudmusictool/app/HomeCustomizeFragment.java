@@ -113,6 +113,15 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
         refresh();
     }
 
+    @Override
+    public void onDestroy() {
+        // 对照 SettingsFragment.onDestroy：销毁时作废在途写回结果，
+        // 迟到的 saved 回调不能再改界面或成为回滚目标。
+        mRefreshGeneration++;
+        mWriteGate.clear();
+        super.onDestroy();
+    }
+
     private void setupPreferences() {
         bindMultiSelect(Config.KEY_HOME_BLOCKS_FILTER,
                 getResources().getStringArray(R.array.home_block_titles), BLOCK_KEYS);
