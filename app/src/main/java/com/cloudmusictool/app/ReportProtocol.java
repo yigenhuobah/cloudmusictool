@@ -63,7 +63,15 @@ public final class ReportProtocol {
     /** 主进程名；子进程回传不计入失败功能数，避免未装 hook 的子进程误报。 */
     public static final String MAIN_PROCESS = "com.netease.cloudmusic";
 
-    /** mounts 通道根键白名单（与 HookState.buildJson 的字段面一致）。 */
+    /**
+     * mounts 通道根键白名单（与 HookState.buildJson 的字段面一致）。
+     *
+     * 有意豁免（不是遗漏，勿改齐）：崩溃摘要的载体在各模块间不同——
+     * CMT 用 JSON 根级 crashes 数组（本白名单中的 "crashes"，数组序即时序），
+     * QB/QM/TB 用键值通道的 crash0/1/2 平铺键。两者载体不同、语义同构
+     * （都是「最近 N 条崩溃摘要，最新在前」），是各模块回传协议的既有形态，
+     * 后续维护时不要把其中一方「统一」成另一方。
+     */
     private static final Set<String> MOUNTS_ROOT_KEYS = new HashSet<>(Arrays.asList(
             "updatedAt", "session", "process", "enabledFeatures", "installed", "expected",
             "failed", "noHitFeatures", "degradedFeatures", "unavailableFeatures",

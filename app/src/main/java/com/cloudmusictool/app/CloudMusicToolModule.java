@@ -23,8 +23,8 @@ public class CloudMusicToolModule extends XposedModule {
 
     private String mProcessName;
 
-    /** UEH 幂等位：只包一次（重载/重复 onPackageReady 不重复包装）。 */
-    private static boolean sCrashGuardInstalled;
+    /** UEH 幂等位：只包一次（重载/重复 onPackageReady 不重复包装）。volatile 保证并发可见。 */
+    private static volatile boolean sCrashGuardInstalled;
 
     @Override
     public void onModuleLoaded(ModuleLoadedParam param) {
@@ -74,7 +74,7 @@ public class CloudMusicToolModule extends XposedModule {
 
         // 内置诊断：进程安装阶段包 UEH（早于任何 hook 安装，Activity 时机过晚捕不到
         // 早期崩溃），把宿主内 hook 相关闪退（GitHub issue #5）记入 crashes 通道。
-        installCrashGuard();
+        installCrashGuard(this);
 
         try {
             Config config = Config.load(this);
@@ -107,10 +107,12 @@ public class CloudMusicToolModule extends XposedModule {
      * 安全约束：
      * - 先保存 previous，自定义 handler 先记录崩溃（时间、线程名、异常类名+栈前 2 帧，
      *   单条 ≤ HookState.MAX_CRASH_CHARS）再调用 previous（非空时）；
-     * - handler 内全程 try/catch：绝不因记录抛出、绝不改变目标 App 原有异常处理行为；
-     * - 静态幂等位保证只包一次。
+     * - handler 内记录步骤全程 try/catch：绝不因记录抛出；previous 的透传不捕获，
+     *   保持宿主原有的异常传播行为（与 QB/QM/TB 的 UEH 一致）；
+     * - volatile 幂等位 + 类锁（static synchronized）双检保证只包一次：
+     *   并发的 onPackageReady（框架热重载/重复回调）不会重复包装。
      */
-    private void installCrashGuard() {
+    private static synchronized void installCrashGuard(CloudMusicToolModule module) {
         if (sCrashGuardInstalled) {
             return;
         }
@@ -121,11 +123,14 @@ public class CloudMusicToolModule extends XposedModule {
             sCrashGuardInstalled = true;
         } catch (Throwable t) {
             // 包装失败只放弃诊断，绝不影响安装流程。
-            log(Log.WARN, TAG, "crash guard unavailable", t);
+            module.log(Log.WARN, TAG, "crash guard unavailable", t);
         }
     }
 
-    /** 先记录崩溃再转交 previous；自身任何一步都不抛出。 */
+    /**
+     * 先记录崩溃再转交 previous。记录步骤不抛出；previous 的调用不在 try/catch
+     * 内——previous 自己抛错时按宿主原有行为继续传播，不做二次处理。
+     */
     private static final class CrashRecordingHandler
             implements Thread.UncaughtExceptionHandler {
 
@@ -146,11 +151,8 @@ public class CloudMusicToolModule extends XposedModule {
             }
             Thread.UncaughtExceptionHandler previous = mPrevious;
             if (previous != null) {
-                try {
-                    previous.uncaughtException(thread, throwable);
-                } catch (Throwable ignored) {
-                    // 全程 try/catch：previous 自己抛错也不在此二次引爆。
-                }
+                // 故意不 try/catch：与 QB/QM/TB 一致，保持 previous 的异常原样传播。
+                previous.uncaughtException(thread, throwable);
             }
         }
     }
