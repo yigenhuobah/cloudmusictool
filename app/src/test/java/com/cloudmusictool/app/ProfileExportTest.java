@@ -3,6 +3,7 @@ package com.cloudmusictool.app;
 import com.cloudmusictool.app.profile.MountSpec;
 import com.cloudmusictool.app.profile.Profile9608;
 import com.cloudmusictool.app.profile.Profile9613;
+import com.cloudmusictool.app.profile.Profile9615;
 import com.cloudmusictool.app.profile.ProfileRegistry;
 import com.cloudmusictool.app.profile.TargetProfile;
 
@@ -47,6 +48,11 @@ public class ProfileExportTest {
     @Test
     public void exportProfile9613() throws Exception {
         exportAndVerify(Profile9613.PROFILE, "profile9613.json");
+    }
+
+    @Test
+    public void exportProfile9615() throws Exception {
+        exportAndVerify(Profile9615.PROFILE, "profile9615.json");
     }
 
     @Test

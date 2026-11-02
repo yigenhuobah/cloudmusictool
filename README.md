@@ -124,11 +124,15 @@ tab 切换用 hide/show 保留各自滚动位置；非设置 tab 按返回先回
 环境：JDK 21（构建用；Java source/target 仍为 17）、Android SDK Platform 37、Gradle wrapper 8.13、AGP 8.13.2。
 
 ```bash
-# 单元测试（含 ProfileExportTest，导出 app/build/profile9608.json 与 profile9613.json）
+# 单元测试（含 ProfileExportTest，导出 app/build/profile9608.json、profile9613.json 与 profile9615.json）
 ./gradlew :app:testDebugUnitTest
 
-# 挂载点体检（默认 APK/dexsql 见脚本头部；输出 OK/GONE/ERROR）
-bash tools/check-mounts.sh
+# 挂载点体检（按 APK versionCode 自动选择 9608/9613/9615 profile；
+# 输出 OK/GONE/ERROR，并校验 DexKitAnchors；--skip-anchors 可跳过锚点）
+bash tools/check-mounts.sh --apk /path/to/base.apk --dexsql /path/to/dexsql
+
+# 发版（挂载点门禁需要宿主 APK + dexsql；缺失会阻断，--skip-mounts 可显式跳过）
+bash tools/release.sh --host-apk /path/to/base.apk --dexsql /path/to/dexsql
 
 # debug
 ./gradlew :app:assembleDebug
@@ -148,7 +152,7 @@ bash tools/check-mounts.sh
 - `implementation io.github.libxposed:service:102.0.0`
 - `implementation org.luckypray:dexkit:2.3.0`（硬编码失败时兜底，已启用 legacy JNI 打包）
 - AppCompat / Material / androidx.preference
-- 单测：JUnit 4.13.2 + `org.json:json`；当前 **399 个用例**（`:app:testDebugUnitTest`）
+- 单测：JUnit 4.13.2 + `org.json:json`；当前 **400 个用例**（`:app:testDebugUnitTest`）
 
 ## 已知限制
 
