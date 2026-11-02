@@ -9,7 +9,7 @@ import java.util.List;
  * 界面（UI-01~UI-15）与增强/实验（EN-01、EX-01）的挂载点分片。
  *
  * 坐标全部来自 9.6.08 现有 hook 文件，并用 dexsql 在
- * {@code E:/download/base(2).apk}（versionCode 9006008）上逐条核对过
+ * {@code base.apk}（versionCode 9006008）上逐条核对过
  * class descriptor、方法参数与返回类型。UI-06 没有可靠挂载点，按计划跳过。
  *
  * critical=true 表示该挂载点缺失时对应功能应降级；每个有挂载点的 Feature
