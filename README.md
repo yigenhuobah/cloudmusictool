@@ -7,6 +7,8 @@
 
 **仓库**：<https://github.com/yigenhuobah/cloudmusictool> ｜ **下载**：[Releases](https://github.com/yigenhuobah/cloudmusictool/releases) ｜ **反馈**：[Issues](https://github.com/yigenhuobah/cloudmusictool/issues/new/choose)
 
+更新日志见 [CHANGELOG.md](CHANGELOG.md)。
+
 ## 兼容性
 
 | 项 | 值 |
@@ -123,16 +125,16 @@ tab 切换用 hide/show 保留各自滚动位置；非设置 tab 按返回先回
 
 ```bash
 # 单元测试（含 ProfileExportTest，导出 app/build/profile9608.json 与 profile9613.json）
-gradlew.bat :app:testDebugUnitTest
+./gradlew :app:testDebugUnitTest
 
 # 挂载点体检（默认 APK/dexsql 见脚本头部；输出 OK/GONE/ERROR）
 bash tools/check-mounts.sh
 
 # debug
-gradlew.bat :app:assembleDebug
+./gradlew :app:assembleDebug
 
 # release（需要根目录 keystore.properties 与 .jks）
-gradlew.bat :app:assembleRelease
+./gradlew :app:assembleRelease
 ```
 
 产物：
@@ -146,7 +148,7 @@ gradlew.bat :app:assembleRelease
 - `implementation io.github.libxposed:service:102.0.0`
 - `implementation org.luckypray:dexkit:2.3.0`（硬编码失败时兜底，已启用 legacy JNI 打包）
 - AppCompat / Material / androidx.preference
-- 单测：JUnit 4.13.2 + `org.json:json`；当前 **252 个用例**（`:app:testDebugUnitTest`）
+- 单测：JUnit 4.13.2 + `org.json:json`；当前 **399 个用例**（`:app:testDebugUnitTest`）
 
 ## 已知限制
 
