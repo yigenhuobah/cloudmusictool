@@ -27,7 +27,7 @@ import static org.junit.Assert.fail;
  *
  * 1) 替换入参的挂载点（dr.h#T0 / Tc·Lc·hc / refreshAdapterData）只 proceed 一次，
  *    宿主方法抛异常时原样抛回，不再用第二次 proceed 覆盖；
- * 2) 数据层回退全量时（配置为空 / 无匹配 / 无变化）必须清掉上一轮的保留标题，
+ * 2) 数据层回退全量时（配置为空 / 无匹配 / 无变化）必须清掉上一轮的删除标题，
  *    否则 addTab 兜底会按旧标题删 tab，tab 栏与 ViewPager2 页数不一致；
  * 3) removeTab / removeTabView 必须报告是否真的移除，日志不能再无条件记成 removed。
  */
@@ -106,13 +106,18 @@ public class TopTabHooksTest {
     // ---------------------------------------------------------------- id 24
 
     @Test
-    public void decideFilter_recordsKeptTitlesWhenItemsRemoved() throws Exception {
+    public void decideFilter_recordsRemovedTitlesWhenItemsRemoved() throws Exception {
         TopTabHooks.FilterDecision decision = TopTabHooks.decideFilter(
                 Arrays.asList(new Item("home"), new Item("mine")), set("mine"));
 
         assertEquals(1, decision.filtered.size());
         assertTrue(dataLayerFiltered());
-        assertEquals(Collections.singleton("mine"), keptTitles());
+        assertEquals(Collections.singleton("home"), removedTitles());
+        assertTrue(TopTabHooks.shouldRemoveTab("home"));
+        assertFalse("保留的标题不能被 addTab 兜底移除", TopTabHooks.shouldRemoveTab("mine"));
+        assertFalse("其它页面的 tab（如我的音乐「声音」）必须放行",
+                TopTabHooks.shouldRemoveTab("声音"));
+        assertFalse(TopTabHooks.shouldRemoveTab(null));
     }
 
     @Test
@@ -127,7 +132,8 @@ public class TopTabHooksTest {
         assertNull(decision.filtered);
         assertTrue(decision.noMatch);
         assertFalse("数据层已回退全量，addTab 兜底必须失效", dataLayerFiltered());
-        assertTrue("上一轮的保留标题必须清空", keptTitles().isEmpty());
+        assertTrue("上一轮记录的删除标题必须清空", removedTitles().isEmpty());
+        assertFalse(TopTabHooks.shouldRemoveTab("home"));
     }
 
     @Test
@@ -140,7 +146,7 @@ public class TopTabHooksTest {
         assertNull(decision.filtered);
         assertTrue(decision.emptyConfig);
         assertFalse(dataLayerFiltered());
-        assertTrue(keptTitles().isEmpty());
+        assertTrue(removedTitles().isEmpty());
     }
 
     @Test
@@ -152,7 +158,18 @@ public class TopTabHooksTest {
 
         assertNull(decision.filtered);
         assertFalse("没有删掉任何项时数据层不算过滤过", dataLayerFiltered());
-        assertTrue(keptTitles().isEmpty());
+        assertTrue(removedTitles().isEmpty());
+    }
+
+    @Test
+    public void homeTabLayoutScope_onlyRememberedInstanceIsEligible() throws Exception {
+        Object home = new FakeMusicTabLayout();
+        rememberHomeTabLayout(Collections.<Object>singletonList(home));
+
+        assertTrue(TopTabHooks.isHomeTabLayout(home));
+        assertFalse("其它页面的 MusicTabLayout 不能被当成首页",
+                TopTabHooks.isHomeTabLayout(new FakeMusicTabLayout()));
+        assertFalse(TopTabHooks.isHomeTabLayout(null));
     }
 
     // ---------------------------------------------------------------- id 50
@@ -206,8 +223,8 @@ public class TopTabHooksTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static Set<String> keptTitles() throws Exception {
-        Field field = TopTabHooks.class.getDeclaredField("sKeptTitles");
+    private static Set<String> removedTitles() throws Exception {
+        Field field = TopTabHooks.class.getDeclaredField("sRemovedTitles");
         field.setAccessible(true);
         Set<String> titles = (Set<String>) field.get(null);
         synchronized (titles) {
@@ -220,6 +237,12 @@ public class TopTabHooksTest {
                 "removeTab", Object.class, Object.class);
         method.setAccessible(true);
         return (Boolean) method.invoke(null, layout, tab);
+    }
+
+    private static void rememberHomeTabLayout(List<Object> args) throws Exception {
+        Method method = TopTabHooks.class.getDeclaredMethod("rememberHomeTabLayout", List.class);
+        method.setAccessible(true);
+        method.invoke(null, args);
     }
 
     private static boolean removeTabView(Object tab) throws Exception {
@@ -248,5 +271,9 @@ public class TopTabHooksTest {
         public String getTitle() {
             return title;
         }
+    }
+
+    /** 类名必须以 MusicTabLayout 结尾：rememberHomeTabLayout 按类名识别首页容器。 */
+    public static final class FakeMusicTabLayout {
     }
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.4.9 - 2026-11-02
+
+### 修复
+
+- **UI-04 顶部频道过滤导致「我的 → 最近」闪退**（issue #5）：`MusicTabLayout.addTab` 兜底原先按「不在保留清单里」删 tab，但该类被「我的音乐 / 最近播放」等页面复用；误删后 TabLayout 子 View 数与 PagerAdapter 页数不一致，`populateFromPagerAdapter` 抛 `IndexOutOfBoundsException: index=2 count=1`。现在兜底只作用于首页 tab 容器实例，并且只移除本次数据层真正过滤掉的标题。
+- 新增 `TopTabHooksTest` 回归用例：记录删除标题、非首页 `MusicTabLayout` 一律放行。
+
 ## 2.4.8 - 2026-11-01
 
 诊断轮（内置诊断 + 对齐，27 项工作项全修）。明细见 `_internal/fix-2612/fix-report.md`。

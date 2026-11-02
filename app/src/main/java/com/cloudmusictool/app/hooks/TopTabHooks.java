@@ -9,6 +9,7 @@ import com.cloudmusictool.app.Feature;
 import com.cloudmusictool.app.HookState;
 import com.cloudmusictool.app.dexkit.DexKitAnchors;
 
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -42,8 +43,22 @@ public final class TopTabHooks {
      * 避免“keepSet 非空但没有任何标题匹配 → 数据层回退全量 → 兜底把 tab 删光”。
      */
     private static volatile boolean sDataLayerFiltered;
-    private static final Set<String> sKeptTitles =
+    /**
+     * 数据层本次真正删掉的频道标题。addTab 兜底只允许移除这些标题，不能按
+     * 「不在保留清单里」一刀切：「我的音乐」等页面也共用 MusicTabLayout，
+     * 误删它们的 tab 会让 TabLayout 子 View 数与 PagerAdapter 页数不一致，
+     * populateFromPagerAdapter 里会抛 IndexOutOfBoundsException（issue #5）。
+     */
+    private static final Set<String> sRemovedTitles =
             Collections.synchronizedSet(new HashSet<>());
+
+    /**
+     * 首页顶部 tab 容器实例。MusicTabLayout 是全局共用类，「我的音乐」等页面
+     * 也会用它装配自己的 tab；addTab 兜底必须只作用于首页这一个实例，
+     * 否则会把其它页面的 tab 删掉，导致 TabLayout 与 PagerAdapter 数量不一致。
+     */
+    private static volatile WeakReference<Object> sHomeTabLayout =
+            new WeakReference<>(null);
     private static final AtomicBoolean sEmptyConfigLogged = new AtomicBoolean();
     private static final AtomicBoolean sNoMatchLogged = new AtomicBoolean();
     /** tab 移除失败的 warning-once：removeTab / removeTabView 都是 void，失败必须留痕。 */
@@ -236,10 +251,16 @@ public final class TopTabHooks {
                     }
                     m.setAccessible(true);
                     final String label = mName + "(" + pts.length + ")";
-                    HookKit.install(module, f, "BaseArkV3Fragment#" + label, m, chain ->
-                            interceptFilteredArgs(module, f,
-                                    config.getFilterSet(Config.KEY_TOP_CHANNELS_KEEP), chain,
-                                    "BaseArkV3Fragment#" + label));
+                    HookKit.install(module, f, "BaseArkV3Fragment#" + label, m, chain -> {
+                        // hc(list, pager, tabLayout) 是首页 tab 容器的唯一装配点：
+                        // 记下这个 MusicTabLayout 实例，addTab 兜底只允许作用于它。
+                        if ("hc".equals(mName)) {
+                            rememberHomeTabLayout(chain.getArgs());
+                        }
+                        return interceptFilteredArgs(module, f,
+                                config.getFilterSet(Config.KEY_TOP_CHANNELS_KEEP), chain,
+                                "BaseArkV3Fragment#" + label);
+                    });
                 }
             }
         } catch (Throwable t) {
@@ -376,17 +397,14 @@ public final class TopTabHooks {
                     }
                     Object tab = args.get(0);
                     String title = tabTitle(tab);
-                    if (title == null) {
-                        return res;
-                    }
-                    boolean kept;
-                    synchronized (sKeptTitles) {
-                        kept = sKeptTitles.isEmpty() || sKeptTitles.contains(title);
-                    }
-                    if (kept) {
+                    if (!shouldRemoveTab(title)) {
                         return res;
                     }
                     Object layout = chain.getThisObject();
+                    // 只处理首页 tab 容器：MusicTabLayout 也被「我的音乐」等页面复用。
+                    if (!isHomeTabLayout(layout)) {
+                        return res;
+                    }
                     // 任何情况下都不移除最后一个 tab。
                     if (getTabCount(layout) <= 1) {
                         return res;
@@ -512,7 +530,7 @@ public final class TopTabHooks {
      * 数据层过滤决策（包内可见，便于单测）。
      *
      * filtered == null 表示本次不改变数据层，调用方沿用原列表。只要本次没有真正删掉
-     * 任何项（配置为空 / 空列表 / 无匹配 / 无变化），就必须清掉上一轮记录的保留标题与
+     * 任何项（配置为空 / 空列表 / 无匹配 / 无变化），就必须清掉上一轮记录的删除标题与
      * sDataLayerFiltered：否则宿主回退全量数据后，addTab 兜底仍按旧标题删 tab，
      * tab 栏与 ViewPager2 的页数/下标不再一致。
      */
@@ -523,9 +541,15 @@ public final class TopTabHooks {
             return new FilterDecision(null, false, emptyConfig);
         }
         List<Object> out = new ArrayList<>(list.size());
+        Set<String> removed = new HashSet<>();
         for (Object item : list) {
             if (HookKit.shouldKeepItem(item, keepSet)) {
                 out.add(item);
+            } else {
+                String title = HookKit.firstStringGetter(item);
+                if (title != null) {
+                    removed.add(title);
+                }
             }
         }
         if (out.isEmpty()) {
@@ -536,17 +560,10 @@ public final class TopTabHooks {
             resetFilterState();
             return new FilterDecision(null, false, false);
         }
-        // 记录“数据层确实过滤过”以及保留标题；addTab 兜底只在此基础上工作。
-        Set<String> kept = new HashSet<>();
-        for (Object item : out) {
-            String title = HookKit.firstStringGetter(item);
-            if (title != null) {
-                kept.add(title);
-            }
-        }
-        synchronized (sKeptTitles) {
-            sKeptTitles.clear();
-            sKeptTitles.addAll(kept);
+        // 记录“数据层确实过滤过”以及真正删掉的标题；addTab 兜底只在此基础上工作。
+        synchronized (sRemovedTitles) {
+            sRemovedTitles.clear();
+            sRemovedTitles.addAll(removed);
         }
         sDataLayerFiltered = true;
         return new FilterDecision(out, false, false);
@@ -568,9 +585,41 @@ public final class TopTabHooks {
     /** 数据层本次没有过滤：清掉上一轮的兜底状态，避免 addTab 按旧标题继续删 tab。 */
     private static void resetFilterState() {
         sDataLayerFiltered = false;
-        synchronized (sKeptTitles) {
-            sKeptTitles.clear();
+        synchronized (sRemovedTitles) {
+            sRemovedTitles.clear();
         }
+    }
+
+    /**
+     * addTab 兜底是否应该移除这个 tab：只认本次数据层真正删掉的标题。
+     * 不能用「不在保留清单里」判断——其它页面（我的音乐等）的 tab 标题
+     * 本来就不在清单里，误删会导致 TabLayout 与 PagerAdapter 数量不一致。
+     */
+    static boolean shouldRemoveTab(String title) {
+        if (!sDataLayerFiltered || title == null) {
+            return false;
+        }
+        synchronized (sRemovedTitles) {
+            return sRemovedTitles.contains(title);
+        }
+    }
+
+    /** 从 hc(list, pager, tabLayout) 的入参里记下首页 MusicTabLayout 实例。 */
+    private static void rememberHomeTabLayout(List<Object> args) {
+        if (args == null) {
+            return;
+        }
+        for (Object arg : args) {
+            if (arg != null && arg.getClass().getName().endsWith("MusicTabLayout")) {
+                sHomeTabLayout = new WeakReference<>(arg);
+                return;
+            }
+        }
+    }
+
+    /** addTab 兜底只允许作用于首页 tab 容器，其它页面的 MusicTabLayout 一律放行。 */
+    static boolean isHomeTabLayout(Object layout) {
+        return layout != null && sHomeTabLayout.get() == layout;
     }
 
     /**
