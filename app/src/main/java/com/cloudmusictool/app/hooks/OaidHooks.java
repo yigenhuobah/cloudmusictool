@@ -22,14 +22,13 @@ public final class OaidHooks {
             Class<?> managerCls = HookKit.findClass(module, f, cl,
                     "com.netease.cloudmusic.oaid.MusicOaidUploadManager");
             if (managerCls != null) {
-                Method mo = HookKit.findMethodQuiet(managerCls, "o", String.class);
+                Method mo = HookKit.findMethodQuiet(module, f, "MusicOaidUploadManager#o",
+                        managerCls, "o", String.class);
                 if (mo == null) {
-                    mo = HookKit.findByNameQuiet(managerCls, "o");
+                    mo = HookKit.findByNameQuiet(module, f, "MusicOaidUploadManager#o",
+                            managerCls, "o");
                 }
-                if (mo == null) {
-                    // quiet 定位失败必须显式记账，否则该挂载点既不进 expected 也不进 failed。
-                    HookKit.markMountMissing(module, f, "MusicOaidUploadManager#o");
-                } else {
+                if (mo != null) {
                     HookKit.install(module, f, "MusicOaidUploadManager#o", mo,
                             HookKit.skipVoid(module, f, "MusicOaidUploadManager.o"));
                 }
@@ -43,10 +42,9 @@ public final class OaidHooks {
             Class<?> taskCls = HookKit.findClass(module, f, cl,
                     "com.netease.cloudmusic.process.task.app.create.AdOaidUploadTask");
             if (taskCls != null) {
-                Method mInit = HookKit.findMethodQuiet(taskCls, "init");
-                if (mInit == null) {
-                    HookKit.markMountMissing(module, f, "AdOaidUploadTask#init");
-                } else {
+                Method mInit = HookKit.findMethodQuiet(module, f, "AdOaidUploadTask#init",
+                        taskCls, "init");
+                if (mInit != null) {
                     HookKit.install(module, f, "AdOaidUploadTask#init", mInit,
                             HookKit.skipVoid(module, f, "AdOaidUploadTask.init"));
                 }

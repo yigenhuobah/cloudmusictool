@@ -33,7 +33,8 @@ public final class HintHooks {
                 String simpleName = clsName.substring(clsName.lastIndexOf('.') + 1);
                 Class<?> cls = HookKit.findClass(module, f, cl, clsName);
                 if (cls != null) {
-                    Method m = HookKit.findByNameQuiet(cls, "maybeDisplayHint");
+                    Method m = HookKit.findByNameQuiet(module, f,
+                            simpleName + "#maybeDisplayHint", cls, "maybeDisplayHint");
                     if (m != null) {
                         HookKit.install(module, f, simpleName + "#maybeDisplayHint", m, chain -> {
                             try {
@@ -59,9 +60,11 @@ public final class HintHooks {
         try {
             Class<?> nr2c = HookKit.findClass(module, f, cl, "nr2.c");
             if (nr2c != null) {
-                Method mYouth = HookKit.findMethodQuiet(nr2c, "checkAndShowYouthDialog", Context.class);
+                Method mYouth = HookKit.findMethodQuiet(module, f,
+                        "nr2.c#checkAndShowYouthDialog", nr2c, "checkAndShowYouthDialog", Context.class);
                 if (mYouth == null) {
-                    mYouth = HookKit.findByNameQuiet(nr2c, "checkAndShowYouthDialog");
+                    mYouth = HookKit.findByNameQuiet(module, f,
+                            "nr2.c#checkAndShowYouthDialog", nr2c, "checkAndShowYouthDialog");
                 }
                 if (mYouth != null) {
                     HookKit.install(module, f, "nr2.c#checkAndShowYouthDialog", mYouth,

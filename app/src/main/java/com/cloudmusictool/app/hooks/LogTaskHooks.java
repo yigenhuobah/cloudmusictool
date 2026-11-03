@@ -22,11 +22,9 @@ public final class LogTaskHooks {
             Class<?> needLogCls = HookKit.findClass(module, f, cl,
                     "com.netease.cloudmusic.process.task.app.create.NeedLogToFileTask");
             if (needLogCls != null) {
-                Method mInit = HookKit.findMethodQuiet(needLogCls, "init");
-                if (mInit == null) {
-                    // quiet 定位失败必须显式记账，否则该挂载点既不进 expected 也不进 failed。
-                    HookKit.markMountMissing(module, f, "NeedLogToFileTask#init");
-                } else {
+                Method mInit = HookKit.findMethodQuiet(module, f, "NeedLogToFileTask#init",
+                        needLogCls, "init");
+                if (mInit != null) {
                     HookKit.install(module, f, "NeedLogToFileTask#init", mInit,
                             HookKit.skipVoid(module, f, "NeedLogToFileTask.init"));
                 }
@@ -40,10 +38,9 @@ public final class LogTaskHooks {
             Class<?> nbLogCls = HookKit.findClass(module, f, cl,
                     "com.netease.cloudmusic.process.task.app.create.NBLogTask");
             if (nbLogCls != null) {
-                Method mInit = HookKit.findMethodQuiet(nbLogCls, "init");
-                if (mInit == null) {
-                    HookKit.markMountMissing(module, f, "NBLogTask#init");
-                } else {
+                Method mInit = HookKit.findMethodQuiet(module, f, "NBLogTask#init",
+                        nbLogCls, "init");
+                if (mInit != null) {
                     HookKit.install(module, f, "NBLogTask#init", mInit,
                             HookKit.skipVoid(module, f, "NBLogTask.init"));
                 }

@@ -91,7 +91,8 @@ public final class HomeBlockHooks {
                 return;
             }
 
-            Method order = HookKit.findMethodQuiet(dataCls, "getBlockCodeOrderList");
+            Method order = HookKit.findMethodQuiet(module, f,
+                    "MixContainerData#getBlockCodeOrderList", dataCls, "getBlockCodeOrderList");
             if (order != null) {
                 HookKit.install(module, f, "MixContainerData#getBlockCodeOrderList", order, chain -> {
                     HookState.entry(f);
@@ -107,7 +108,8 @@ public final class HomeBlockHooks {
                 });
             }
 
-            Method resources = HookKit.findMethodQuiet(dataCls, "getResources");
+            Method resources = HookKit.findMethodQuiet(module, f,
+                    "MixContainerData#getResources", dataCls, "getResources");
             if (resources != null) {
                 HookKit.install(module, f, "MixContainerData#getResources", resources, chain -> {
                     HookState.entry(f);
@@ -554,11 +556,11 @@ public final class HomeBlockHooks {
 
     private static void hookMmkvReader(XposedModule module, Feature f, Config config, Class<?> mmkvCls,
                                        Method mmapIdMethod, String name, Class<?>[] sig) {
-        Method m = HookKit.findMethodQuiet(mmkvCls, name, sig);
+        String label = "MMKV#" + name + "(" + sig.length + ")";
+        Method m = HookKit.findMethodQuiet(module, f, label, mmkvCls, name, sig);
         if (m == null) {
             return;
         }
-        String label = "MMKV#" + name + "(" + sig.length + ")";
         HookKit.install(module, f, label, m, chain -> {
             Object res = chain.proceed();
             try {

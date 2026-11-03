@@ -74,6 +74,21 @@ final class HookKit {
     }
 
     static Class<?> findClass(XposedModule module, Feature f, ClassLoader cl, String name, String... anchors) {
+        return findClass(module, f, cl, name, true, anchors);
+    }
+
+    /**
+     * 只读探针的类定位：与 {@link #findClass} 相同的查找路径，但失败不记账，
+     * 与 {@link #installProbe} 的 countState=false 对齐。探针缺失不能污染
+     * 主 hook 的 expected/failed 与诊断页。
+     */
+    static Class<?> findClassProbe(XposedModule module, Feature f, ClassLoader cl, String name,
+                                   String... anchors) {
+        return findClass(module, f, cl, name, false, anchors);
+    }
+
+    private static Class<?> findClass(XposedModule module, Feature f, ClassLoader cl, String name,
+                                      boolean account, String... anchors) {
         boolean selftest = Config.dexKitSelfTest()
                 && f == Feature.SPLASH_AD
                 && LOADING_AD_MANAGER.equals(name);
@@ -124,10 +139,14 @@ final class HookKit {
         } else if (selftest) {
             warn(module, "DexKit selftest requested but no anchors for " + name);
         }
-        warn(module, logPrefix(f) + " skip: class not found " + name);
-        if (f != null) {
-            HookState.markNotFound(f, "class:" + name, isCriticalMount(name, null));
-            HookState.note(f, "类未找到 " + name);
+        if (account) {
+            warn(module, logPrefix(f) + " skip: class not found " + name);
+            if (f != null) {
+                HookState.markNotFound(f, "class:" + name, isCriticalMount(name, null));
+                HookState.note(f, "类未找到 " + name);
+            }
+        } else {
+            warn(module, logPrefix(f) + " probe miss: class not found " + name);
         }
         return null;
     }
@@ -407,7 +426,7 @@ final class HookKit {
                              Class<?> returnType, Class<?>[] params, String... anchors) {
         Method m = resolveProfileMethod(module, f, cls, name, returnType, params);
         if (m == null) {
-            m = findMethodQuiet(cls, name, params);
+            m = findMethodQuietRaw(cls, name, params);
         }
         if (m == null && cls != null && anchors != null && anchors.length > 0) {
             if (ProfileRegistry.active() == null) {
@@ -447,7 +466,7 @@ final class HookKit {
     static Method findMethod(XposedModule module, Feature f, Class<?> cls, String name) {
         Method m = resolveProfileMethod(module, f, cls, name, null, null);
         if (m == null) {
-            m = findByNameQuiet(cls, name);
+            m = findByNameQuietRaw(cls, name);
         }
         if (m == null) {
             String clsName = cls == null ? "?" : cls.getName();
@@ -465,7 +484,7 @@ final class HookKit {
                                         String... anchors) {
         Method m = resolveProfileMethod(module, f, cls, name, null, null);
         if (m == null) {
-            m = findByNameQuiet(cls, name);
+            m = findByNameQuietRaw(cls, name);
         }
         if (m == null && cls != null && anchors != null && anchors.length > 0) {
             if (ProfileRegistry.active() == null) {
@@ -495,7 +514,29 @@ final class HookKit {
         return m;
     }
 
+    /**
+     * @deprecated 无 Feature 上下文，失败不会记账；改用
+     * {@link #findByNameQuiet(XposedModule, Feature, String, Class, String)}。
+     */
+    @Deprecated
     static Method findByNameQuiet(Class<?> cls, String name) {
+        return findByNameQuiet(null, null, null, cls, name);
+    }
+
+    /**
+     * 带 Feature/label 的 quiet 定位：失败时 WARN 并登记非 critical 挂载点缺失，
+     * 让可选挂载点进入 expected/failed 与诊断页；命中/未命中结果与原方法一致。
+     */
+    static Method findByNameQuiet(XposedModule module, Feature f, String label,
+                                  Class<?> cls, String name) {
+        Method found = findByNameQuietRaw(cls, name);
+        if (found == null) {
+            markQuietMissing(module, f, label, cls, name);
+        }
+        return found;
+    }
+
+    private static Method findByNameQuietRaw(Class<?> cls, String name) {
         if (cls == null) {
             return null;
         }
@@ -520,7 +561,26 @@ final class HookKit {
         }
     }
 
+    /**
+     * @deprecated 无 Feature 上下文，失败不会记账；改用
+     * {@link #findByShape(XposedModule, Feature, String, Class, String, Class[])}。
+     */
+    @Deprecated
     static Method findByShape(Class<?> cls, String name, Class<?>... leading) {
+        return findByShape(null, null, null, cls, name, leading);
+    }
+
+    /** 带 Feature/label 的 {@link #findByShape(Class, String, Class[])}，失败会记账。 */
+    static Method findByShape(XposedModule module, Feature f, String label,
+                              Class<?> cls, String name, Class<?>... leading) {
+        Method found = findByShapeRaw(cls, name, leading);
+        if (found == null) {
+            markQuietMissing(module, f, label, cls, name);
+        }
+        return found;
+    }
+
+    private static Method findByShapeRaw(Class<?> cls, String name, Class<?>... leading) {
         if (cls == null) {
             return null;
         }
@@ -555,7 +615,26 @@ final class HookKit {
         }
     }
 
+    /**
+     * @deprecated 无 Feature 上下文，失败不会记账；改用
+     * {@link #findByNameAndArity(XposedModule, Feature, String, Class, String, int)}。
+     */
+    @Deprecated
     static Method findByNameAndArity(Class<?> cls, String name, int arity) {
+        return findByNameAndArity(null, null, null, cls, name, arity);
+    }
+
+    /** 带 Feature/label 的 {@link #findByNameAndArity(Class, String, int)}，失败会记账。 */
+    static Method findByNameAndArity(XposedModule module, Feature f, String label,
+                                     Class<?> cls, String name, int arity) {
+        Method found = findByNameAndArityRaw(cls, name, arity);
+        if (found == null) {
+            markQuietMissing(module, f, label, cls, name);
+        }
+        return found;
+    }
+
+    private static Method findByNameAndArityRaw(Class<?> cls, String name, int arity) {
         if (cls == null) {
             return null;
         }
@@ -576,7 +655,64 @@ final class HookKit {
         }
     }
 
+    /**
+     * @deprecated 无 Feature 上下文，失败不会记账；改用
+     * {@link #findMethodQuiet(XposedModule, Feature, String, Class, String, Class[])}。
+     */
+    @Deprecated
     static Method findMethodQuiet(Class<?> cls, String name, Class<?>... params) {
+        return findMethodQuiet(null, null, null, cls, name, params);
+    }
+
+    /** 带 Feature/label 的 {@link #findMethodQuiet(Class, String, Class[])}，失败会记账。 */
+    static Method findMethodQuiet(XposedModule module, Feature f, String label,
+                                  Class<?> cls, String name, Class<?>... params) {
+        Method found = findMethodQuietRaw(cls, name, params);
+        if (found == null) {
+            markQuietMissing(module, f, label, cls, name);
+        }
+        return found;
+    }
+
+    /**
+     * 只读探针的方法定位：与 {@link #findMethodQuiet(XposedModule, Feature, String,
+     * Class, String, Class[])} 相同的查找路径，但失败只 WARN、不写 HookState，
+     * 与 {@link #installProbe} 的 countState=false 对齐。
+     */
+    static Method findMethodQuietProbe(XposedModule module, Feature f, String label,
+                                       Class<?> cls, String name, Class<?>... params) {
+        Method found = findMethodQuietRaw(cls, name, params);
+        if (found == null) {
+            warnProbeMissing(module, f, label, cls, name);
+        }
+        return found;
+    }
+
+    /**
+     * 只读探针的按名+参数个数定位：失败只 WARN、不写 HookState。
+     * 供 EN-01 的 hc(probe) 等探针使用。
+     */
+    static Method findByNameAndArityProbe(XposedModule module, Feature f, String label,
+                                          Class<?> cls, String name, int arity) {
+        Method found = findByNameAndArityRaw(cls, name, arity);
+        if (found == null) {
+            warnProbeMissing(module, f, label, cls, name);
+        }
+        return found;
+    }
+
+    private static void warnProbeMissing(XposedModule module, Feature f, String label,
+                                         Class<?> cls, String name) {
+        if (module == null) {
+            return;
+        }
+        String clsName = cls == null ? "?" : cls.getName();
+        String mount = label == null || label.isEmpty() ? clsName + "#" + name : label;
+        warn(module, logPrefix(f) + " probe miss: method not found " + clsName + "#" + name
+                + " (" + mount + ")");
+    }
+
+    private static Method findMethodQuietRaw(Class<?> cls, String name, Class<?>... params) {
         if (cls == null) {
             return null;
         }
@@ -591,11 +727,56 @@ final class HookKit {
         }
     }
 
-    static boolean install(XposedModule module, Feature f, String label, Method m,
-                           XposedInterface.Hooker hooker) {
-        if (m == null) {
+    /**
+     * quiet 定位失败的统一记账：WARN + 按 Profile 标记 critical 的 markNotFound + note。
+     * label 为空时退回 {@code clsName#name}，保证每个挂载点都有可读的失败原因。
+     *
+     * <p>critical 必须与 Profile 坐标一致：Profile 标记 critical 的挂载点缺失要计入
+     * criticalFailed，否则诊断页横幅不会报降级。
+     */
+    private static void markQuietMissing(XposedModule module, Feature f, String label,
+                                         Class<?> cls, String name) {
+        String clsName = cls == null ? "?" : cls.getName();
+        String mount = label == null || label.isEmpty() ? clsName + "#" + name : label;
+        if (module != null) {
+            warn(module, logPrefix(f) + " skip: method not found " + clsName + "#" + name
+                    + " (" + mount + ")");
+        }
+        if (f != null) {
+            boolean critical = isCriticalMount(cls == null ? null : clsName, name)
+                    || isCriticalMountLabel(mount);
+            HookState.markNotFound(f, "method:" + clsName + "#" + name + " (" + mount + ")",
+                    critical, mount);
+            HookState.noteMount(f, mount, "挂载点未找到 " + mount);
+        }
+    }
+
+    /**
+     * 按挂载点逻辑名判断 critical：类名被 DexKit 兜底/混淆别名改写、不再等于
+     * Profile classCandidates 时，仍能按 logicalName 识别 critical 挂载点。
+     */
+    private static boolean isCriticalMountLabel(String label) {
+        if (label == null || label.isEmpty()) {
             return false;
         }
+        try {
+            TargetProfile profile = ProfileRegistry.active();
+            if (profile == null) {
+                return false;
+            }
+            for (MountSpec spec : profile.mounts) {
+                if (spec.critical && label.equals(spec.logicalName)) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    static boolean install(XposedModule module, Feature f, String label, Method m,
+                           XposedInterface.Hooker hooker) {
         return install(module, f, label, (Executable) m, hooker, true);
     }
 
@@ -639,6 +820,12 @@ final class HookKit {
                                    Executable m, XposedInterface.Hooker hooker,
                                    boolean countState) {
         if (m == null) {
+            // 定位失败的调用方可能直接把 null 交给 install：显式记账，避免“hook 静默不生效”。
+            if (countState && f != null) {
+                warn(module, prefix + " skip: method null " + label);
+                HookState.markNotFound(f, label + ": method null", false, label);
+                HookState.noteMount(f, label, "方法为空 " + label);
+            }
             return false;
         }
         if (!validateReturnType(module, f, prefix, label, m, hooker, countState)) {
@@ -657,8 +844,8 @@ final class HookKit {
         } catch (Throwable t) {
             error(module, prefix + " hook failed " + label, t);
             if (countState && f != null) {
-                HookState.markNotFound(f, "hook:" + label, isCriticalExecutable(m));
-                HookState.note(f, "hook 失败 " + label);
+                HookState.markNotFound(f, "hook:" + label, isCriticalExecutable(m), label);
+                HookState.noteMount(f, label, "hook 失败 " + label);
             }
             return false;
         }
@@ -682,8 +869,8 @@ final class HookKit {
                 warn(module, prefix + " return type mismatch: " + label + " -> "
                         + rt.getName() + " (constBool requires boolean); not installed");
                 if (countState && f != null) {
-                    HookState.markNotFound(f, "rettype:" + label, isCriticalExecutable(m));
-                    HookState.note(f, "返回类型不匹配 " + label);
+                    HookState.markNotFound(f, "rettype:" + label, isCriticalExecutable(m), label);
+                    HookState.noteMount(f, label, "返回类型不匹配 " + label);
                 }
                 return false;
             }
@@ -692,8 +879,8 @@ final class HookKit {
                 warn(module, prefix + " return type mismatch: " + label + " -> "
                         + rt.getName() + " (skipVoid requires void); not installed");
                 if (countState && f != null) {
-                    HookState.markNotFound(f, "rettype:" + label, isCriticalExecutable(m));
-                    HookState.note(f, "返回类型不匹配 " + label);
+                    HookState.markNotFound(f, "rettype:" + label, isCriticalExecutable(m), label);
+                    HookState.noteMount(f, label, "返回类型不匹配 " + label);
                 }
                 return false;
             }
@@ -702,8 +889,8 @@ final class HookKit {
                 warn(module, prefix + " return type mismatch: " + label + " -> "
                         + rt.getName() + " (nullReturn requires reference or void); not installed");
                 if (countState && f != null) {
-                    HookState.markNotFound(f, "rettype:" + label, isCriticalExecutable(m));
-                    HookState.note(f, "返回类型不匹配 " + label);
+                    HookState.markNotFound(f, "rettype:" + label, isCriticalExecutable(m), label);
+                    HookState.noteMount(f, label, "返回类型不匹配 " + label);
                 }
                 return false;
             }
@@ -711,12 +898,28 @@ final class HookKit {
         return true;
     }
 
-    /** hook 安装失败时判断该 Executable 是否对应 Profile 中的 critical 坐标。 */
+    /**
+     * hook 安装失败时判断该 Executable 是否对应 Profile 中的 critical 坐标。
+     *
+     * <p>同名重载（如 LivePromotion#listFromJson(JSONObject) / (JSONArray)）的
+     * critical 标记可以不同，必须按参数类型精确匹配 spec；只按 (class, method)
+     * 取第一个同名坐标会把非 critical 重载的失败误记为 critical（或反之）。
+     * 无精确参数匹配时 findBestMethodSpec 仍返回第一个同名坐标，与旧判定一致。
+     */
     private static boolean isCriticalExecutable(Executable m) {
         if (!(m instanceof Method)) {
             return false;
         }
         Method method = (Method) m;
+        try {
+            MountSpec spec = findBestMethodSpec(method.getDeclaringClass(),
+                    method.getName(), method.getParameterTypes());
+            if (spec != null) {
+                return spec.critical;
+            }
+        } catch (Throwable ignored) {
+            // Profile 解析异常时按旧路径判定，不能影响 hook 安装主流程。
+        }
         return isCriticalMount(method.getDeclaringClass().getName(), method.getName());
     }
 
@@ -958,15 +1161,16 @@ final class HookKit {
     }
 
     /**
-     * 可选挂载点缺失的统一记账：WARN + HookState.markNotFound（非 critical）。
-     * 供 quiet 定位（findMethodQuiet/findByNameQuiet）失败时使用——这类路径不阻塞功能，
-     * 但必须让 expected/failed 与诊断页看到缺失项。
+     * 可选挂载点缺失的手工记账：WARN + HookState.markNotFound（非 critical）。
+     * quiet 定位的新重载已内置同样的 WARN + 记账；本方法保留给需要按自定义
+     * label 记账的调用方与测试，这类路径不阻塞功能，但必须让 expected/failed
+     * 与诊断页看到缺失项。
      */
     static void markMountMissing(XposedModule module, Feature f, String label) {
         warn(module, logPrefix(f) + " skip: mount not found " + label);
         if (f != null) {
-            HookState.markNotFound(f, "mount:" + label, false);
-            HookState.note(f, "挂载点未找到 " + label);
+            HookState.markNotFound(f, "mount:" + label, false, label);
+            HookState.noteMount(f, label, "挂载点未找到 " + label);
         }
     }
 }

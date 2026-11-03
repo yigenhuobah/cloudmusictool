@@ -88,8 +88,8 @@ public final class PlayerAdHooks {
                                Class<?> returnType, Class<?>[] leading, int arity, String label) {
         String actual = HookKit.mappedMethodName(cls, name);
         Method m = leading != null
-                ? HookKit.findByShape(cls, actual, leading)
-                : HookKit.findByNameAndArity(cls, actual, arity);
+                ? HookKit.findByShape(module, f, label, cls, actual, leading)
+                : HookKit.findByNameAndArity(module, f, label, cls, actual, arity);
         if (m != null && m.getParameterTypes().length != arity) {
             m = null;
         }

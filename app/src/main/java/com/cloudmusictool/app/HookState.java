@@ -135,6 +135,11 @@ public final class HookState {
         final AtomicInteger hitCount = new AtomicInteger();
         final Set<String> failedKeys = ConcurrentHashMap.newKeySet();
         final Set<String> criticalFailedKeys = ConcurrentHashMap.newKeySet();
+        /**
+         * 失败键 -> 挂载点 label。同一挂载点先 quiet miss、后经 fallback 找到并
+         * 安装成功时，按这个映射撤销此前的失败记录，避免诊断页出现假 failed。
+         */
+        final Map<String, String> failedKeyMounts = new ConcurrentHashMap<>();
         volatile boolean hit;
         /** critical 挂载点失败 -> 功能降级。 */
         volatile boolean degraded;
@@ -142,6 +147,8 @@ public final class HookState {
         volatile boolean unavailable;
         volatile String lastFailure;
         volatile long lastFailureAt;
+        /** lastFailure 对应的挂载点；note 未带挂载点时置空，避免误清无关失败。 */
+        volatile String lastFailureMount;
 
         synchronized void attempted() {
             int total = installed.get() + failed.get();
@@ -193,13 +200,18 @@ public final class HookState {
             return;
         }
         State s = state(f);
-        s.installed.incrementAndGet();
-        // 启动阶段可能已 finish 过（installed=0 -> unavailable=true）；运行时
-        // ClassLoader 安装成功后必须立即清除，不能等下一次 finish。
-        if (s.installed.get() > 0) {
+        synchronized (s) {
+            s.installed.incrementAndGet();
+            // 启动阶段可能已 finish 过（installed=0 -> unavailable=true）；运行时
+            // ClassLoader 安装成功后必须立即清除，不能等下一次 finish。
             s.unavailable = false;
+            // 同一挂载点可能先 quiet miss、再经 fallback 定位成功：安装成功后
+            // 撤销该挂载点的失败记录，否则诊断页会同时显示 installed 与 failed。
+            clearFailuresLocked(s, label);
+            // expected 是 installed + failed 的派生值；撤销失败后重新对齐。
+            s.expected.set(s.installed.get() + s.failed.get());
+            s.degraded = s.criticalFailed.get() > 0;
         }
-        s.attempted();
         publish();
     }
 
@@ -207,7 +219,8 @@ public final class HookState {
      * 安装结束后结算健康状态。
      * - unavailable：一个挂载点都没装上；
      * - degraded：Profile 中标记为 critical 的挂载点有失败。
-     * expected 始终由 attempted() 维护（installed + failed），保证诊断卡比例自洽。
+     * expected 始终与 installed + failed 对齐（markNotFound/installed 维护），
+     * 保证诊断卡比例自洽。
      */
     public static void finish(Feature f) {
         if (f == null) {
@@ -223,36 +236,162 @@ public final class HookState {
      * 同一 Feature 的同一 mount label 只记一次失败，避免 findClass/findMethod 两步查找重复计数，
      * 并标记该挂载点是否为 Profile 中的 critical。
      * critical 标记单独去重：即使 failed 已计过，也只在首次标记 critical 时累加。
+     *
+     * <p>挂载点信息从 key 的既有格式推导（见 {@link #mountLabelFromKey(String)}）；
+     * 需要精确挂载点时改用
+     * {@link #markNotFound(Feature, String, boolean, String)}。
      */
     public static void markNotFound(Feature f, String label, boolean critical) {
+        markNotFound(f, label, critical, mountLabelFromKey(label));
+    }
+
+    /**
+     * 带显式挂载点 label 的失败记账。
+     *
+     * <p>{@code mountLabel} 用于同一挂载点后续 fallback 定位/安装成功时撤销失败
+     * （{@link #installed(Feature, String)}）。quiet 定位的失败键里已经带了挂载点，
+     * 但键本身不是稳定的挂载点标识，不能直接拿键去匹配安装 label。
+     */
+    public static void markNotFound(Feature f, String label, boolean critical,
+                                    String mountLabel) {
         if (f == null) {
             return;
         }
         State s = state(f);
-        if (label != null && !s.failedKeys.add(label)) {
-            if (critical && s.criticalFailedKeys.add(label)) {
-                s.criticalFailed.incrementAndGet();
-                publish();
+        boolean changed = false;
+        synchronized (s) {
+            if (label != null && !s.failedKeys.add(label)) {
+                // 同一失败键只计一次；critical 标记仍按 key 去重。
+                if (mountLabel != null) {
+                    s.failedKeyMounts.put(label, mountLabel);
+                }
+                if (critical && s.criticalFailedKeys.add(label)) {
+                    s.criticalFailed.incrementAndGet();
+                    changed = true;
+                }
+            } else {
+                s.failed.incrementAndGet();
+                if (label != null && mountLabel != null) {
+                    s.failedKeyMounts.put(label, mountLabel);
+                }
+                if (critical && (label == null || s.criticalFailedKeys.add(label))) {
+                    s.criticalFailed.incrementAndGet();
+                }
+                s.attempted();
+                changed = true;
             }
-            return;
         }
-        s.failed.incrementAndGet();
-        if (critical && (label == null || s.criticalFailedKeys.add(label))) {
-            s.criticalFailed.incrementAndGet();
+        if (changed) {
+            publish();
         }
-        s.attempted();
-        publish();
+    }
+
+    /**
+     * 从既有失败键格式中提取挂载点 label：
+     * quiet 定位用 {@code method:cls#name (mount)}；install/rettype/hook 用
+     * {@code hook:label} / {@code rettype:label}；简单调用方直接把 label 当挂载点。
+     * 无法确定时返回 null，调用方仍可走显式 mountLabel 重载。
+     */
+    private static String mountLabelFromKey(String key) {
+        if (key == null) {
+            return null;
+        }
+        if (key.startsWith("method:")) {
+            int open = key.lastIndexOf(" (");
+            if (open >= 0 && key.endsWith(")")) {
+                return key.substring(open + 2, key.length() - 1);
+            }
+            return null;
+        }
+        if (key.startsWith("hook:") || key.startsWith("rettype:")) {
+            return key.substring(key.indexOf(':') + 1);
+        }
+        if (key.startsWith("mount:")) {
+            return key.substring("mount:".length());
+        }
+        int nullSuffix = key.indexOf(": method null");
+        if (nullSuffix > 0) {
+            return key.substring(0, nullSuffix);
+        }
+        if (key.startsWith("class:")) {
+            return null;
+        }
+        return key;
+    }
+
+    /**
+     * 撤销某个挂载点已记录的失败（同一挂载点后续 fallback 安装成功）。
+     * 调用方持有 State 锁；返回是否有记录被撤销。
+     */
+    private static boolean clearFailuresLocked(State s, String mountLabel) {
+        if (mountLabel == null) {
+            return false;
+        }
+        boolean cleared = false;
+        for (Map.Entry<String, String> entry : s.failedKeyMounts.entrySet()) {
+            if (!mountLabel.equals(entry.getValue())) {
+                continue;
+            }
+            String key = entry.getKey();
+            if (s.failedKeys.remove(key)) {
+                s.failed.decrementAndGet();
+                if (s.criticalFailedKeys.remove(key)) {
+                    s.criticalFailed.decrementAndGet();
+                }
+                cleared = true;
+            }
+            s.failedKeyMounts.remove(key);
+        }
+        if (cleared && lastFailureBelongsToMount(s.lastFailure, s.lastFailureMount, mountLabel)) {
+            s.lastFailure = null;
+            s.lastFailureAt = 0L;
+            s.lastFailureMount = null;
+        }
+        return cleared;
+    }
+
+    /**
+     * lastFailure 是否属于刚恢复的挂载点：优先用 noteMount 记录的挂载点；
+     * 兼容直接 note(...) 写入的标准失败文案（文案里带挂载点 label）。
+     */
+    private static boolean lastFailureBelongsToMount(String text, String failureMount,
+                                                     String mountLabel) {
+        if (text == null) {
+            return false;
+        }
+        if (mountLabel.equals(failureMount)) {
+            return true;
+        }
+        return text.equals("挂载点未找到 " + mountLabel)
+                || text.equals("方法为空 " + mountLabel)
+                || text.equals("hook 失败 " + mountLabel)
+                || text.equals("返回类型不匹配 " + mountLabel);
     }
 
     public static void note(Feature f, String text) {
+        noteInternal(f, null, text);
+    }
+
+    /**
+     * 带挂载点的失败说明：挂载点后续安装成功时，{@link #installed(Feature, String)}
+     * 可一并清除这条 lastFailure，避免诊断页继续展示已经恢复的 skip 原因。
+     */
+    public static void noteMount(Feature f, String mountLabel, String text) {
+        noteInternal(f, mountLabel, text);
+    }
+
+    private static void noteInternal(Feature f, String mountLabel, String text) {
         if (f == null) {
             return;
         }
         State s = state(f);
-        if (text != null) {
-            s.lastFailure = truncate(text, MAX_FAILURE_CHARS);
-            s.lastFailureAt = System.currentTimeMillis();
-            Log.i(TAG, f.id + " " + text);
+        synchronized (s) {
+            if (text != null) {
+                s.lastFailure = truncate(text, MAX_FAILURE_CHARS);
+                s.lastFailureAt = System.currentTimeMillis();
+                s.lastFailureMount = mountLabel;
+                Log.i(TAG, f.id + " " + text);
+            }
         }
         publish();
     }

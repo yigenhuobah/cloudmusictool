@@ -142,7 +142,8 @@ public final class RuntimeHookBootstrap {
                 sBootstrapInstalled.set(false);
                 return;
             }
-            Method onCreate = HookKit.findMethodQuiet(activityCls, "onCreate", Bundle.class);
+            Method onCreate = HookKit.findMethodQuiet(module, null, "runtime/bootstrap",
+                    activityCls, "onCreate", Bundle.class);
             if (onCreate == null) {
                 sBootstrapInstalled.set(false);
                 return;

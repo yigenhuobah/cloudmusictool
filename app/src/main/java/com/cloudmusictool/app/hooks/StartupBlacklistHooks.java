@@ -42,7 +42,8 @@ public final class StartupBlacklistHooks {
             Class<?> taskCls = HookKit.findClass(module, f, cl,
                     "com.netease.cloudmusic.core.startup.StartupTask");
             if (taskCls != null) {
-                Method mNeedExecute = HookKit.findMethodQuiet(taskCls, "needExecute");
+                Method mNeedExecute = HookKit.findMethodQuiet(module, f,
+                        "StartupTask#needExecute", taskCls, "needExecute");
                 if (mNeedExecute != null) {
                     HookKit.install(module, f, "StartupTask#needExecute", mNeedExecute, chain -> {
                         try {

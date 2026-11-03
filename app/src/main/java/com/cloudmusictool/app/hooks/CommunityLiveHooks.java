@@ -46,8 +46,7 @@ public final class CommunityLiveHooks {
                     if (!List.class.isAssignableFrom(m.getReturnType())) {
                         continue;
                     }
-                    HookKit.install(module, f, "LivePromotion#listFromJson("
-                            + m.getParameterTypes().length + ")", m, chain -> {
+                    HookKit.install(module, f, livePromotionLabel(m), m, chain -> {
                         try {
                             HookKit.hit(module, f, "LivePromotion.listFromJson -> emptyList");
                             return new ArrayList<Object>();
@@ -94,6 +93,26 @@ public final class CommunityLiveHooks {
         } catch (Throwable t) {
             HookKit.error(module, f.id + " CommentLiveViewHolder hook failed", t);
         }
+    }
+
+    /**
+     * LivePromotion 重载的挂载点 label：带上参数类型，与 ProfileUi 的 logicalName
+     * （{@code LivePromotion#listFromJson(JSONObject)} / {@code (JSONArray)}）一致。
+     *
+     * <p>不能用参数个数做重载标识：JSONObject / JSONArray 两个重载都只有一个参数，
+     * 共用 label 会让 HookState.installed 按 label 撤销失败记录时，把另一个重载的
+     * critical 失败一并清掉，导致 criticalFailed=0、degraded 误报健康。
+     */
+    static String livePromotionLabel(Method method) {
+        StringBuilder label = new StringBuilder("LivePromotion#listFromJson(");
+        Class<?>[] params = method.getParameterTypes();
+        for (int i = 0; i < params.length; i++) {
+            if (i > 0) {
+                label.append(',');
+            }
+            label.append(params[i].getSimpleName());
+        }
+        return label.append(')').toString();
     }
 
     private static void installMaybeDisplayHint(XposedModule module, Feature f, ClassLoader cl,

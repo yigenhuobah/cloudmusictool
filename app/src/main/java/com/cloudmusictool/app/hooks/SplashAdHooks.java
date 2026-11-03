@@ -158,7 +158,8 @@ public final class SplashAdHooks {
             return;
         }
         // 冷启动广告 Fragment：after-proceed 正常执行后将广告 View 置 GONE 并从 parent 移除，杜绝空白覆盖层
-        Method onViewCreated = HookKit.findByNameQuiet(fragCls, "onViewCreated");
+        Method onViewCreated = HookKit.findByNameQuiet(module, f,
+                "LoadingAdFragment#onViewCreated", fragCls, "onViewCreated");
         if (onViewCreated != null) {
             HookKit.install(module, f, "LoadingAdFragment#onViewCreated", onViewCreated, chain -> {
                 Object res = chain.proceed();

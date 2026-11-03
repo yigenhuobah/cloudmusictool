@@ -22,9 +22,9 @@ public final class PendantHooks {
                     "com.netease.cloudmusic.utils.jn",
                     DexKitAnchors.JN);
             if (jnCls != null) {
-                Method mL = HookKit.findMethodQuiet(jnCls, "L");
+                Method mL = HookKit.findMethodQuiet(module, f, "jn#L", jnCls, "L");
                 if (mL == null) {
-                    mL = HookKit.findByNameQuiet(jnCls, "L");
+                    mL = HookKit.findByNameQuiet(module, f, "jn#L", jnCls, "L");
                 }
                 if (mL != null) {
                     HookKit.install(module, f, "jn#L", mL,

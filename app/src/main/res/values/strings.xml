@@ -200,6 +200,7 @@
     <!-- 首页定制页 -->
     <string name="home_customize_title">首页与导航定制</string>
     <string name="home_customize_hint">本页配置已持久化至远程配置。勾选后重启网易云音乐生效；未勾选任何项时对应功能保持全量显示</string>
+    <string name="home_customize_loading">正在读取远程配置…</string>
     <string name="home_customize_unavailable_title">框架未连接</string>
     <string name="home_customize_unavailable">框架未连接，设置不会生效；请在 LSPosed 中启用模块并勾选网易云音乐</string>
     <string name="home_customize_save_failed">保存失败，设置未生效</string>

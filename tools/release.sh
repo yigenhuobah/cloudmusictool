@@ -293,6 +293,7 @@ mount_gate
 if [ "$DRY_RUN" -eq 1 ]; then
     printf '[dry-run] bash %s %s --expected-version %s --expected-code %s --out-dir %s\n' \
         "$SCRIPT_DIR/verify-apk.sh" "$APK" "$VERSION" "$VERSION_CODE" "$ARTIFACT_DIR"
+    printf '[dry-run] cp %s %s/%s\n' "$APK" "$ARTIFACT_DIR" "$(basename "$APK")"
     printf '[dry-run] cp %s %s/mapping.txt\n' "$MAPPING" "$ARTIFACT_DIR"
     printf '[dry-run] write %s/release-notes.md\n' "$ARTIFACT_DIR"
 fi
@@ -307,6 +308,7 @@ if [ "$DRY_RUN" -eq 0 ]; then
         --expected-version "$VERSION" \
         --expected-code "$VERSION_CODE" \
         --out-dir "$ARTIFACT_DIR"
+    cp "$APK" "$ARTIFACT_DIR/$(basename "$APK")"
     cp "$MAPPING" "$ARTIFACT_DIR/mapping.txt"
     printf '%s\n' "$NOTES" > "$ARTIFACT_DIR/release-notes.md"
     log "产物已归档：$ARTIFACT_DIR"
@@ -324,6 +326,10 @@ publish_source_tag() {
     fi
     if [ "$DRY_RUN" -eq 0 ] && git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null; then
         die "源码 tag v${VERSION} 已存在"
+    fi
+    # tag 必须指向远端已有的提交：先推当前分支，再打 tag/push tag。
+    if [ "$NO_PUSH" -eq 0 ]; then
+        run git push origin HEAD
     fi
     run git tag -a "v${VERSION}" -m "v${VERSION}"
     if [ "$NO_PUSH" -eq 1 ]; then

@@ -73,13 +73,15 @@ public final class BottomTabHooks {
             Class<?> settingCls = HookKit.findClass(module, f, cl,
                     "com.netease.cloudmusic.music.biz.setting.activity.SettingActivity");
             if (settingCls != null) {
-                Method mT8 = HookKit.findMethodQuiet(settingCls, "T8");
+                Method mT8 = HookKit.findMethodQuiet(module, f, "SettingActivity#T8",
+                        settingCls, "T8");
                 if (mT8 != null) {
                     HookKit.install(module, f, "SettingActivity#T8", mT8,
                             HookKit.constBool(module, f,
                                     "SettingActivity.T8 (showFMAtBottomTab) -> false", false));
                 }
-                Method mU8 = HookKit.findMethodQuiet(settingCls, "U8");
+                Method mU8 = HookKit.findMethodQuiet(module, f, "SettingActivity#U8",
+                        settingCls, "U8");
                 if (mU8 != null) {
                     HookKit.install(module, f, "SettingActivity#U8", mU8,
                             HookKit.constBool(module, f,
@@ -137,7 +139,7 @@ public final class BottomTabHooks {
         try {
             Class<?> th0h = HookKit.findClass(module, f, cl, "th0.h", DexKitAnchors.TH0_H);
             if (th0h != null) {
-                Method mh = HookKit.findMethodQuiet(th0h, "h");
+                Method mh = HookKit.findMethodQuiet(module, f, "th0.h#h", th0h, "h");
                 if (mh != null) {
                     HookKit.install(module, f, "th0.h#h", mh, chain -> {
                         HookState.entry(f);

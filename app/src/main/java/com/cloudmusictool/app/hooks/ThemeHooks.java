@@ -21,13 +21,15 @@ public final class ThemeHooks {
             Class<?> routerCls = HookKit.findClass(module, f, cl,
                     "com.netease.cloudmusic.theme.core.ResourceRouter");
             if (routerCls != null) {
-                Method mNight = HookKit.findMethodQuiet(routerCls, "isNightTheme");
+                Method mNight = HookKit.findMethodQuiet(module, f, "ResourceRouter#isNightTheme",
+                        routerCls, "isNightTheme");
                 if (mNight != null) {
                     HookKit.install(module, f, "ResourceRouter#isNightTheme", mNight,
                             HookKit.constBool(module, f, "ResourceRouter.isNightTheme -> true", true));
                 }
 
-                Method mUiMode = HookKit.findMethodQuiet(routerCls, "isUiModeNightYes");
+                Method mUiMode = HookKit.findMethodQuiet(module, f, "ResourceRouter#isUiModeNightYes",
+                        routerCls, "isUiModeNightYes");
                 if (mUiMode != null) {
                     HookKit.install(module, f, "ResourceRouter#isUiModeNightYes", mUiMode,
                             HookKit.constBool(module, f, "ResourceRouter.isUiModeNightYes -> true", true));

@@ -37,14 +37,13 @@ public final class StatisticHooks {
             Class<?> statCls = HookKit.findClass(module, f, cl,
                     "com.netease.cloudmusic.core.statistic.StatisticImpl");
             if (statCls != null) {
-                Method mLog = HookKit.findMethodQuiet(statCls, "log", String.class, Object[].class);
+                Method mLog = HookKit.findMethodQuiet(module, f, "StatisticImpl#log",
+                        statCls, "log", String.class, Object[].class);
                 if (mLog == null) {
-                    mLog = HookKit.findByNameAndArity(statCls, "log", 2);
+                    mLog = HookKit.findByNameAndArity(module, f, "StatisticImpl#log",
+                            statCls, "log", 2);
                 }
-                if (mLog == null) {
-                    // quiet 定位失败必须显式记账，否则该挂载点既不进 expected 也不进 failed。
-                    HookKit.markMountMissing(module, f, "StatisticImpl#log");
-                } else {
+                if (mLog != null) {
                     HookKit.install(module, f, "StatisticImpl#log", mLog, chain -> {
                         Object res = chain.proceed();
                         try {
@@ -63,13 +62,13 @@ public final class StatisticHooks {
                     });
                 }
 
-                Method mLogJson = HookKit.findByNameAndArity(statCls, "logJSON", 2);
+                Method mLogJson = HookKit.findByNameAndArity(module, f, "StatisticImpl#logJSON",
+                        statCls, "logJSON", 2);
                 if (mLogJson == null) {
-                    mLogJson = HookKit.findByNameQuiet(statCls, "logJSON");
+                    mLogJson = HookKit.findByNameQuiet(module, f, "StatisticImpl#logJSON",
+                            statCls, "logJSON");
                 }
-                if (mLogJson == null) {
-                    HookKit.markMountMissing(module, f, "StatisticImpl#logJSON");
-                } else {
+                if (mLogJson != null) {
                     HookKit.install(module, f, "StatisticImpl#logJSON", mLogJson, chain -> {
                         Object res = chain.proceed();
                         try {
@@ -99,10 +98,9 @@ public final class StatisticHooks {
             if (monitorCls != null) {
                 String[] methods = {"b", "c", "d", "e"};
                 for (String mName : methods) {
-                    Method m = HookKit.findByNameQuiet(monitorCls, mName);
-                    if (m == null) {
-                        HookKit.markMountMissing(module, f, "LogMonitorConfigManager#" + mName);
-                    } else {
+                    Method m = HookKit.findByNameQuiet(module, f,
+                            "LogMonitorConfigManager#" + mName, monitorCls, mName);
+                    if (m != null) {
                         HookKit.install(module, f, "LogMonitorConfigManager#" + mName, m,
                                 HookKit.constBool(module, f, "LogMonitorConfigManager." + mName + " -> false", false));
                     }

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.4.10 - 2026-11-03
+
+### 修复
+
+- **hook 静默失败可见化**：`HookKit` 的 quiet 查找新增带 Feature/label 的记账重载，hooks 下约 60 处调用点迁移；方法缺失、`install(null)`、hook 安装抛错都会进入 skip/crit 诊断，不再静默跳过。
+- **fallback 成功不再留假失败**：quiet miss 后由 fallback 成功安装同一挂载点时，`HookState.installed` 按挂载点 label 撤销失败记录；critical 判定按 Profile 的 class+method+参数类型精确匹配，避免非 critical 重载成功清掉 critical 失败。
+- **只读探针不污染诊断**：EN-01 的 `sg#s`、`MyMusicProxyFragment#hc(probe)` 改用 probe 专用查找，失败只 WARN，不计入 failed/expected。
+- **LivePromotion 重载 label 唯一化**：`listFromJson(JSONObject)` / `(JSONArray)` 使用不同 label，避免共享 label 导致 critical 失败被非 critical 成功清掉。
+- **配置页 footer**：远程快照未到达时显示中性的“正在读取远程配置…”，不再宣称已持久化。
+
 ## 2.4.9 - 2026-11-02
 
 ### 修复

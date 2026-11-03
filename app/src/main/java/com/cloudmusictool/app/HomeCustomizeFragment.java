@@ -132,7 +132,9 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
 
         Preference hint = findPreference("footer_home_custom_hint");
         if (hint != null) {
-            hint.setSummary(R.string.home_customize_hint);
+            // remote 快照回来前不能声称“已持久化至远程配置”：此时既可能框架未连接，
+            // 也可能仍在后台解析；由 applySnapshot 按 remote 实际状态切换文案。
+            hint.setSummary(R.string.home_customize_loading);
         }
 
         Preference warning = findPreference(KEY_UNAVAILABLE);

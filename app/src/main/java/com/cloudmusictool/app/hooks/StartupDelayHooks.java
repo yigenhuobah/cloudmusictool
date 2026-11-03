@@ -32,7 +32,9 @@ public final class StartupDelayHooks {
             Method getDelayTime = HookKit.findMethod(module, f, handlerCls, "getStartAppRedPageDelayTime",
                     long.class, new Class<?>[]{String.class});
             if (getDelayTime == null) {
-                getDelayTime = HookKit.findByNameQuiet(handlerCls, "getStartAppRedPageDelayTime");
+                getDelayTime = HookKit.findByNameQuiet(module, f,
+                        "StartTimeHandler#getStartAppRedPageDelayTime",
+                        handlerCls, "getStartAppRedPageDelayTime");
             }
             if (!isDelayTimeMethod(getDelayTime)) {
                 warnSignature(module, f, "getStartAppRedPageDelayTime", getDelayTime, "long(String)");
@@ -44,7 +46,8 @@ public final class StartupDelayHooks {
             // 3. checkDelayDoAction(Runnable, String)V -> before: 直接 run()，跳过延迟
             Method checkDelay = HookKit.findMethod(module, f, handlerCls, "checkDelayDoAction", Runnable.class, String.class);
             if (checkDelay == null) {
-                checkDelay = HookKit.findByNameQuiet(handlerCls, "checkDelayDoAction");
+                checkDelay = HookKit.findByNameQuiet(module, f,
+                        "StartTimeHandler#checkDelayDoAction", handlerCls, "checkDelayDoAction");
             }
             if (!isCheckDelayMethod(checkDelay)) {
                 warnSignature(module, f, "checkDelayDoAction", checkDelay, "void(Runnable,String)");

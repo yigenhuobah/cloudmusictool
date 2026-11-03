@@ -90,7 +90,7 @@ public final class UpdateHooks {
         }
         Method q = HookKit.findMethod(module, f, eCls, "q", Context.class, boolean.class, boolean.class);
         if (q == null) {
-            q = HookKit.findByNameQuiet(eCls, "q");
+            q = HookKit.findByNameQuiet(module, f, "fw0.e#q", eCls, "q");
         }
         HookKit.install(module, f, "fw0.e#q", q, HookKit.skipVoid(module, f, "fw0.e.q"));
     }

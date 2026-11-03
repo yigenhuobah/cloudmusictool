@@ -89,12 +89,14 @@ public final class TopTabHooks {
             Class<?> tabInfoCls = HookKit.findClass(module, f, cl,
                     "com.netease.cloudmusic.discovery.view.module.hometoptab.model.HomeTopTabInfo");
             if (tabInfoCls != null) {
-                Method getCanDelete = HookKit.findMethodQuiet(tabInfoCls, "getCanDelete");
+                Method getCanDelete = HookKit.findMethodQuiet(module, f,
+                        "HomeTopTabInfo#getCanDelete", tabInfoCls, "getCanDelete");
                 if (getCanDelete != null) {
                     HookKit.install(module, f, "HomeTopTabInfo#getCanDelete", getCanDelete,
                             HookKit.constBool(module, f, "HomeTopTabInfo.getCanDelete -> true", true));
                 }
-                Method getCanDrag = HookKit.findMethodQuiet(tabInfoCls, "getCanDrag");
+                Method getCanDrag = HookKit.findMethodQuiet(module, f,
+                        "HomeTopTabInfo#getCanDrag", tabInfoCls, "getCanDrag");
                 if (getCanDrag != null) {
                     HookKit.install(module, f, "HomeTopTabInfo#getCanDrag", getCanDrag,
                             HookKit.constBool(module, f, "HomeTopTabInfo.getCanDrag -> true", true));
@@ -128,7 +130,9 @@ public final class TopTabHooks {
             try {
                 Class<?> tabExtraCls = HookKit.findClass(module, f, cl, clsName);
                 if (tabExtraCls != null) {
-                    Method getNowChannelItems = HookKit.findMethodQuiet(tabExtraCls, "getNowChannelItems");
+                    Method getNowChannelItems = HookKit.findMethodQuiet(module, f,
+                            tabExtraCls.getSimpleName() + "#getNowChannelItems",
+                            tabExtraCls, "getNowChannelItems");
                     if (getNowChannelItems != null) {
                         HookKit.install(module, f, tabExtraCls.getSimpleName() + "#getNowChannelItems",
                                 getNowChannelItems, chain -> {
@@ -157,7 +161,8 @@ public final class TopTabHooks {
             try {
                 Class<?> dtoCls = HookKit.findClass(module, f, cl, dtoName);
                 if (dtoCls != null) {
-                    Method getCurrentRes = HookKit.findMethodQuiet(dtoCls, "getCurrentRes");
+                    Method getCurrentRes = HookKit.findMethodQuiet(module, f,
+                            dtoCls.getSimpleName() + "#getCurrentRes", dtoCls, "getCurrentRes");
                     if (getCurrentRes != null) {
                         HookKit.install(module, f, dtoCls.getSimpleName() + "#getCurrentRes", getCurrentRes,
                                 chain -> {
@@ -189,10 +194,11 @@ public final class TopTabHooks {
             if (drh == null) {
                 return;
             }
-            Method t0 = HookKit.findMethodQuiet(drh, "T0", List.class);
+            Method t0 = HookKit.findMethodQuiet(module, f, "dr.h#T0", drh, "T0", List.class);
             if (t0 == null) {
                 // 9.6.13: T0 -> O0（Profile 映射），兜底扫描也用映射后的名字。
-                t0 = HookKit.findByNameAndArity(drh, HookKit.mappedMethodName(drh, "T0"), 1);
+                t0 = HookKit.findByNameAndArity(module, f, "dr.h#T0", drh,
+                        HookKit.mappedMethodName(drh, "T0"), 1);
             }
             if (t0 != null) {
                 // proceed 只调用一次：先算过滤后的入参，再放行宿主方法。
@@ -215,7 +221,8 @@ public final class TopTabHooks {
             if (fragCls == null) {
                 return;
             }
-            Method getTabDataList = HookKit.findMethodQuiet(fragCls, "getTabDataList");
+            Method getTabDataList = HookKit.findMethodQuiet(module, f,
+                    "BaseArkV3Fragment#getTabDataList", fragCls, "getTabDataList");
             if (getTabDataList != null) {
                 HookKit.install(module, f, "BaseArkV3Fragment#getTabDataList", getTabDataList, chain -> {
                     Object res = chain.proceed();
@@ -288,7 +295,8 @@ public final class TopTabHooks {
             }
             String[] methods = {"getTabDataList", "getTabData"};
             for (String methodName : methods) {
-                Method m = HookKit.findMethodQuiet(fragCls, methodName);
+                Method m = HookKit.findMethodQuiet(module, f, "ArkFragmentV2#" + methodName,
+                        fragCls, methodName);
                 if (m == null) {
                     continue;
                 }
@@ -334,7 +342,8 @@ public final class TopTabHooks {
             if (fragCls == null) {
                 return;
             }
-            Method refresh = HookKit.findMethodQuiet(fragCls, "refreshAdapterData", List.class);
+            Method refresh = HookKit.findMethodQuiet(module, f,
+                    "arkview.ArkFragment#refreshAdapterData", fragCls, "refreshAdapterData", List.class);
             if (refresh == null) {
                 return;
             }

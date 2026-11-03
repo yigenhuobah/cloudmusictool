@@ -21,28 +21,28 @@ public final class ApmHooks {
             Class<?> statCls = HookKit.findClass(module, f, cl,
                     "com.netease.cloudmusic.core.statistic.StatisticImpl");
             if (statCls != null) {
-                Method mLogApm = HookKit.findByNameAndArity(statCls, "logApm", 1);
+                Method mLogApm = HookKit.findByNameAndArity(module, f, "StatisticImpl#logApm",
+                        statCls, "logApm", 1);
                 if (mLogApm == null) {
-                    mLogApm = HookKit.findByNameQuiet(statCls, "logApm");
+                    mLogApm = HookKit.findByNameQuiet(module, f, "StatisticImpl#logApm",
+                            statCls, "logApm");
                 }
-                if (mLogApm == null) {
-                    // quiet 定位失败必须显式记账，否则该挂载点既不进 expected 也不进 failed。
-                    HookKit.markMountMissing(module, f, "StatisticImpl#logApm");
-                } else {
+                if (mLogApm != null) {
                     HookKit.install(module, f, "StatisticImpl#logApm", mLogApm,
                             HookKit.skipVoid(module, f, "StatisticImpl.logApm"));
                 }
 
-                Method mForceApmUpload = HookKit.findMethodQuiet(statCls, "forceApmUpload");
+                Method mForceApmUpload = HookKit.findMethodQuiet(module, f,
+                        "StatisticImpl#forceApmUpload", statCls, "forceApmUpload");
                 if (mForceApmUpload == null) {
-                    mForceApmUpload = HookKit.findByNameAndArity(statCls, "forceApmUpload", 0);
+                    mForceApmUpload = HookKit.findByNameAndArity(module, f,
+                            "StatisticImpl#forceApmUpload", statCls, "forceApmUpload", 0);
                 }
                 if (mForceApmUpload == null) {
-                    mForceApmUpload = HookKit.findByNameQuiet(statCls, "forceApmUpload");
+                    mForceApmUpload = HookKit.findByNameQuiet(module, f,
+                            "StatisticImpl#forceApmUpload", statCls, "forceApmUpload");
                 }
-                if (mForceApmUpload == null) {
-                    HookKit.markMountMissing(module, f, "StatisticImpl#forceApmUpload");
-                } else {
+                if (mForceApmUpload != null) {
                     HookKit.install(module, f, "StatisticImpl#forceApmUpload", mForceApmUpload,
                             HookKit.skipVoid(module, f, "StatisticImpl.forceApmUpload"));
                 }

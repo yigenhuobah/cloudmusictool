@@ -31,7 +31,8 @@ public final class CommentAdHooks {
 
                 Method y1 = entryCls != null
                         ? HookKit.findMethod(module, f, adapter, "y1", entryCls)
-                        : HookKit.findByNameAndArity(adapter, "y1", 1);
+                        : HookKit.findByNameAndArity(module, f, "CommentAdapter#y1",
+                                adapter, "y1", 1);
                 HookKit.install(module, f, "CommentAdapter#y1", y1,
                         chain -> interceptEntry(module, f, chain));
             }

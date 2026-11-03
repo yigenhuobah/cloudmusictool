@@ -161,7 +161,7 @@ public final class MineBackgroundHooks {
         if (manager == null) {
             return;
         }
-        Method e = HookKit.findByNameAndArity(manager, "e", 1);
+        Method e = HookKit.findByNameAndArity(module, f, "manager#e", manager, "e", 1);
         if (e == null || e.getParameterTypes().length != 1
                 || !BG_INFO.equals(e.getParameterTypes()[0].getName())) {
             HookKit.warn(module, f.id + " skip: " + MANAGER + "#e(UserBackgroundInfo) not found");
@@ -179,7 +179,8 @@ public final class MineBackgroundHooks {
             });
         }
 
-        Method onResume = HookKit.findMethodQuiet(manager, "onResume");
+        Method onResume = HookKit.findMethodQuiet(module, f, "manager#onResume",
+                manager, "onResume");
         if (onResume != null && onResume.getParameterTypes().length == 0) {
             HookKit.install(module, f, "manager#onResume", onResume, chain -> {
                 Object result = chain.proceed();
@@ -277,9 +278,10 @@ public final class MineBackgroundHooks {
     private static void installProxyProbes(XposedModule module, Feature f, ClassLoader cl,
                                            Class<?> proxy) {
         try {
-            Class<?> sg = HookKit.findClass(module, f, cl, SG);
+            Class<?> sg = HookKit.findClassProbe(module, f, cl, SG);
             if (sg != null) {
-                Method s = HookKit.findMethodQuiet(sg, "s", org.json.JSONObject.class);
+                Method s = HookKit.findMethodQuietProbe(module, f, "sg#s", sg,
+                        "s", org.json.JSONObject.class);
                 if (s != null && s.getReturnType() == boolean.class
                         && s.getParameterTypes().length == 1
                         && "org.json.JSONObject".equals(s.getParameterTypes()[0].getName())) {
@@ -295,7 +297,8 @@ public final class MineBackgroundHooks {
         }
 
         try {
-            Method hc = HookKit.findByNameAndArity(proxy, "hc", 1);
+            Method hc = HookKit.findByNameAndArityProbe(module, f,
+                    "MyMusicProxyFragment#hc(probe)", proxy, "hc", 1);
             if (hc != null && hc.getReturnType() == Object.class
                     && "kotlin.coroutines.Continuation"
                     .equals(hc.getParameterTypes()[0].getName())) {
