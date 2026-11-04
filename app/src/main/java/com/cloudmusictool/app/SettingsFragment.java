@@ -9,6 +9,8 @@ import android.widget.Toast;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 
+import com.cloudmusictool.app.anchor.SupportedVersions;
+
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -376,7 +378,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             if (snapshot.installed && snapshot.targetVersion != null
                     && !VersionGate.isSupportedVersion(snapshot.targetVersion)) {
                 text.append(getString(R.string.status_warning_version,
-                        snapshot.targetVersion, VersionGate.SUPPORTED_VERSION));
+                        snapshot.targetVersion, SupportedVersions.namesLabel()));
             }
             if (snapshot.failedFeatures >= 2) {
                 if (text.length() > 0) {

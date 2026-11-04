@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.util.Log;
 
+import com.cloudmusictool.app.anchor.SupportedVersions;
 import com.cloudmusictool.app.profile.ProfileRegistry;
 import com.cloudmusictool.app.profile.TargetProfile;
 
@@ -11,13 +12,6 @@ import io.github.libxposed.api.XposedModule;
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam;
 
 public final class VersionGate {
-
-    public static final String SUPPORTED_VERSION = "9.6.13";
-    public static final long SUPPORTED_VERSION_CODE = 9006013L;
-    /** 已适配版本展示用；9.6.15 复用 9.6.13 挂载点（2026-10-29 体检 145/145）。 */
-    public static final String SUPPORTED_VERSION_LABEL = "9.6.08 / 9.6.13 / 9.6.15";
-    public static final String LEGACY_VERSION = "9.6.08";
-    public static final long LEGACY_VERSION_CODE = 9006008L;
 
     private static final String TAG = "CloudMusicTool";
 
@@ -96,7 +90,7 @@ public final class VersionGate {
             }
             ProfileRegistry.setActive(null);
             module.log(Log.WARN, TAG, "target versionCode unsupported (" + versionCode
-                    + ", supported: " + SUPPORTED_VERSION_CODE
+                    + ", supported: " + SupportedVersions.codesLabel()
                     + "); best-effort with hardcoded mounts");
             return true;
         }
@@ -170,13 +164,12 @@ public final class VersionGate {
             return true;
         }
         module.log(Log.WARN, TAG, "target version unsupported: " + versionName
-                + " (supported: " + SUPPORTED_VERSION + "); best-effort with hardcoded mounts");
+                + " (supported: " + SupportedVersions.namesLabel()
+                + "); best-effort with hardcoded mounts");
         return true;
     }
 
     public static boolean isSupportedVersion(String versionName) {
-        return SUPPORTED_VERSION.equals(versionName)
-                || "9.6.15".equals(versionName)
-                || LEGACY_VERSION.equals(versionName);
+        return SupportedVersions.isSupported(versionName);
     }
 }

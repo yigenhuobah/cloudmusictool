@@ -19,6 +19,8 @@ import android.widget.Toast;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
+import com.cloudmusictool.app.anchor.SupportedVersions;
+
 /**
  * 关于页：模块/版本/目标应用/源码/四模块互链/免责声明/MIT。
  *
@@ -51,7 +53,7 @@ public class AboutFragment extends Fragment {
         version.setText(getString(R.string.about_version, versionName, versionCode));
 
         TextView target = view.findViewById(R.id.about_target);
-        target.setText(getString(R.string.about_target, VersionGate.SUPPORTED_VERSION_LABEL));
+        target.setText(getString(R.string.about_target, SupportedVersions.label()));
 
         TextView source = view.findViewById(R.id.about_source);
         SpannableStringBuilder sourceText =

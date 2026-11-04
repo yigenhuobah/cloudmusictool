@@ -1,9 +1,9 @@
 package com.cloudmusictool.app;
 
+import com.cloudmusictool.app.anchor.AnchorTable;
 import com.cloudmusictool.app.profile.MountSpec;
 import com.cloudmusictool.app.profile.Profile9608;
 import com.cloudmusictool.app.profile.Profile9613;
-import com.cloudmusictool.app.profile.Profile9615;
 import com.cloudmusictool.app.profile.ProfileRegistry;
 import com.cloudmusictool.app.profile.TargetProfile;
 
@@ -28,39 +28,73 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 /**
- * 导出各适配版本的挂载点清单，供 {@code tools/check-mounts.sh} 使用。
+ * 从 anchors.json 派生并导出各适配版本的挂载点清单，供 {@code tools/check-mounts.sh}
+ * 使用。
  *
- * 输出路径优先 {@code <module>/build/profile<ver>.json}：
+ * <p>anchors.json（{@code app/src/main/resources/anchors.json}）是唯一来源：
+ * 本测试不再读取运行时 Profile* 来导出，而是走 {@link AnchorTable} 的
+ * base 继承规则生成派生 Profile，再写到
+ * {@code app/build/profile<ver>.json}。统一 schema 下 profile 的
+ * {@code mounts} 只列相对 base 的增量，AnchorTable 按 mount id
+ * （{@code feature/logicalName}）原位覆盖/追加；版本变体 key 形如
+ * {@code mountId@版本名}。运行时 Profile* 与派生表的逐项等价由
+ * {@code ProfileAnchorEquivalenceTest} 锁定。
+ *
+ * <p>输出路径优先 {@code <module>/build/profile<ver>.json}：
  * - Gradle 单测默认工作目录是 app 模块，因此通常是 {@code app/build/profile<ver>.json}；
  * - 若从仓库根目录运行，则自动落到 {@code app/build/profile<ver>.json}。
  *
- * 同时校验清单自身的一致性，避免 Profile 漂移（两个版本共用同一套断言）：
+ * <p>同时校验清单自身的一致性，避免 Profile 漂移：
  * 1) id 唯一；2) classCandidates 非空；3) 每个有挂载点的 Feature 至少一个 critical；
  * 4) 所有未 blocked 的 UI Feature 都必须有挂载点与 critical。
  */
 public class ProfileExportTest {
 
-    @Test
-    public void exportProfile9608() throws Exception {
-        exportAndVerify(Profile9608.PROFILE, "profile9608.json");
+    private static final String[] EXPECTED_VERSIONS = {"9.6.08", "9.6.13", "9.6.15"};
+
+    private static AnchorTable anchors() {
+        AnchorTable table = AnchorTable.load(ProfileExportTest.class.getClassLoader());
+        assertNotNull("anchors.json 必须在测试 classpath 上", table);
+        return table;
     }
 
     @Test
-    public void exportProfile9613() throws Exception {
-        exportAndVerify(Profile9613.PROFILE, "profile9613.json");
+    public void anchorsCoverEverySupportedVersion() {
+        AnchorTable table = anchors();
+        assertEquals(EXPECTED_VERSIONS.length, table.versions().size());
+        for (int i = 0; i < EXPECTED_VERSIONS.length; i++) {
+            AnchorTable.Version version = table.versions().get(i);
+            assertEquals(EXPECTED_VERSIONS[i], version.versionName);
+            assertNotNull(AnchorTable.RESOURCE, version.profile);
+        }
+        assertNotNull(table.versionByCode(9006008L));
+        assertNotNull(table.versionByCode(9006013L));
+        assertNotNull(table.versionByCode(9006015L));
+        assertNotNull(table.versionByName("9.6.15"));
+        assertEquals(null, table.versionByCode(9006009L));
+        assertEquals(null, table.versionByName("9.6.09"));
     }
 
     @Test
-    public void exportProfile9615() throws Exception {
-        exportAndVerify(Profile9615.PROFILE, "profile9615.json");
+    public void exportAnchorsProfiles() throws Exception {
+        AnchorTable table = anchors();
+        for (AnchorTable.Version version : table.versions()) {
+            exportAndVerify(version.profile, "profile"
+                    + version.versionName.replace(".", "") + ".json");
+        }
     }
 
     @Test
-    public void registryMapsBothVersions() {
+    public void registryMapsEveryRuntimeVersion() {
+        for (AnchorTable.Version version : anchors().versions()) {
+            TargetProfile byCode = ProfileRegistry.forVersionCode(version.versionCode);
+            TargetProfile byName = ProfileRegistry.forVersionName(version.versionName);
+            assertNotNull("no runtime profile for " + version.versionName, byCode);
+            assertNotNull("no runtime profile for " + version.versionName, byName);
+            assertSame(byCode, byName);
+        }
         assertSame(Profile9608.PROFILE, ProfileRegistry.forVersionCode(9006008L));
-        assertSame(Profile9608.PROFILE, ProfileRegistry.forVersionName("9.6.08"));
         assertSame(Profile9613.PROFILE, ProfileRegistry.forVersionCode(9006013L));
-        assertSame(Profile9613.PROFILE, ProfileRegistry.forVersionName("9.6.13"));
         assertEquals(null, ProfileRegistry.forVersionCode(9006009L));
         assertEquals(null, ProfileRegistry.forVersionName("9.6.09"));
     }

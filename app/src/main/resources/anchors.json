@@ -1,0 +1,2509 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "tools/gen_anchors.py",
+  "app": "com.netease.cloudmusic",
+  "appVersion": "9.6.15",
+  "versionCode": 9006015,
+  "anchors": {
+    "AD-01/LoadingAdManager#E": {
+      "c": "com.netease.cloudmusic.module.ad.LoadingAdManager",
+      "m": "E",
+      "s": "(Lcom/netease/cloudmusic/module/ad/meta/AdInfo;)Z",
+      "feature": "AD-01",
+      "critical": true,
+      "note": "开屏广告跳过：LoadingAdManager#E 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "LoadingAdManager#E",
+      "params": [
+        "Lcom/netease/cloudmusic/module/ad/meta/AdInfo;"
+      ],
+      "dexkit": [
+        "adInfoCacheEmpty",
+        "onAdGet, getFactLoadingAd addAdActivity"
+      ]
+    },
+    "AD-01/LoadingAdManager#E@9.6.13": {
+      "c": "com.netease.cloudmusic.module.ad.LoadingAdManager",
+      "m": "H",
+      "s": "(Lcom/netease/cloudmusic/module/ad/meta/AdInfo;)Z",
+      "feature": "AD-01",
+      "critical": true,
+      "note": "9.6.13: 判定 E(AdInfo)Z -> H。",
+      "logicalName": "LoadingAdManager#E",
+      "params": [
+        "Lcom/netease/cloudmusic/module/ad/meta/AdInfo;"
+      ],
+      "dexkit": [
+        "adInfoCacheEmpty",
+        "onAdGet, getFactLoadingAd addAdActivity"
+      ]
+    },
+    "AD-01/LoadingAdManager#G": {
+      "c": "com.netease.cloudmusic.module.ad.LoadingAdManager",
+      "m": "G",
+      "s": "(Landroid/app/Activity;)V",
+      "feature": "AD-01",
+      "critical": false,
+      "note": "开屏广告跳过：LoadingAdManager#G 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "LoadingAdManager#G",
+      "params": [
+        "Landroid/app/Activity;"
+      ],
+      "dexkit": [
+        "adInfoCacheEmpty",
+        "onAdGet, getFactLoadingAd addAdActivity"
+      ]
+    },
+    "AD-01/LoadingAdManager#G@9.6.13": {
+      "c": "com.netease.cloudmusic.module.ad.LoadingAdManager",
+      "m": "J",
+      "s": "(Landroid/app/Activity;)V",
+      "feature": "AD-01",
+      "critical": false,
+      "note": "9.6.13: 热启动 G(Activity)V -> J（showAdIfAppForeground）。",
+      "logicalName": "LoadingAdManager#G",
+      "params": [
+        "Landroid/app/Activity;"
+      ],
+      "dexkit": [
+        "adInfoCacheEmpty",
+        "onAdGet, getFactLoadingAd addAdActivity"
+      ]
+    },
+    "AD-01/LoadingAdManager#o": {
+      "c": "com.netease.cloudmusic.module.ad.LoadingAdManager",
+      "m": "o",
+      "s": "(Z)Ljava/util/ArrayList;",
+      "feature": "AD-01",
+      "critical": true,
+      "note": "开屏广告跳过：LoadingAdManager#o 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "LoadingAdManager#o",
+      "params": [
+        "Z"
+      ],
+      "dexkit": [
+        "adInfoCacheEmpty",
+        "onAdGet, getFactLoadingAd addAdActivity"
+      ]
+    },
+    "AD-01/LoadingAdManager#o@9.6.13": {
+      "c": "com.netease.cloudmusic.module.ad.LoadingAdManager",
+      "m": "p",
+      "s": "(Z)Ljava/util/ArrayList;",
+      "feature": "AD-01",
+      "critical": true,
+      "note": "9.6.13: 数据源 o(Z)ArrayList -> p。",
+      "logicalName": "LoadingAdManager#o",
+      "params": [
+        "Z"
+      ],
+      "dexkit": [
+        "adInfoCacheEmpty",
+        "onAdGet, getFactLoadingAd addAdActivity"
+      ]
+    },
+    "AD-01/LoadingAdActivity#onCreate": {
+      "c": "com.netease.cloudmusic.activity.LoadingAdActivity",
+      "m": "onCreate",
+      "s": "(Landroid/os/Bundle;)V",
+      "feature": "AD-01",
+      "critical": false,
+      "note": "开屏广告跳过：LoadingAdActivity#onCreate 挂载点。",
+      "logicalName": "LoadingAdActivity#onCreate",
+      "params": [
+        "Landroid/os/Bundle;"
+      ]
+    },
+    "AD-01/LoadingAdFragment#onViewCreated": {
+      "c": "com.netease.cloudmusic.fragment.LoadingAdFragment",
+      "m": "onViewCreated",
+      "s": "(Landroid/view/View;Landroid/os/Bundle;)V",
+      "feature": "AD-01",
+      "critical": false,
+      "note": "开屏广告跳过：LoadingAdFragment#onViewCreated 挂载点。",
+      "logicalName": "LoadingAdFragment#onViewCreated",
+      "params": [
+        "Landroid/view/View;",
+        "Landroid/os/Bundle;"
+      ]
+    },
+    "AD-01/LoadingAdShakeHelper#onSensorChanged": {
+      "c": "com.netease.cloudmusic.module.ad.boot.LoadingAdShakeHelper",
+      "m": "onSensorChanged",
+      "s": "(Landroid/hardware/SensorEvent;)V",
+      "feature": "AD-01",
+      "critical": false,
+      "note": "开屏广告跳过：LoadingAdShakeHelper#onSensorChanged 挂载点。",
+      "logicalName": "LoadingAdShakeHelper#onSensorChanged",
+      "params": [
+        "Landroid/hardware/SensorEvent;"
+      ]
+    },
+    "AD-01/q60.w0#g": {
+      "c": "q60.w0",
+      "m": "g",
+      "s": "()Z",
+      "feature": "AD-01",
+      "critical": false,
+      "note": "开屏广告跳过：q60.w0#g 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "q60.w0#g",
+      "params": [],
+      "dexkit": [
+        "loading_ad_judge"
+      ]
+    },
+    "AD-01/q60.w0#g@9.6.13": {
+      "c": "l40.x0",
+      "candidates": [
+        "l40.x0",
+        "q60.w0"
+      ],
+      "m": "g",
+      "s": "()Z",
+      "feature": "AD-01",
+      "critical": false,
+      "note": "9.6.13: q60.w0 -> l40.x0（anchor loading_ad_judge 仍唯一命中）。",
+      "logicalName": "q60.w0#g",
+      "params": [],
+      "dexkit": [
+        "loading_ad_judge"
+      ]
+    },
+    "AD-02/LaunchDialog#showDialog": {
+      "c": "com.netease.cloudmusic.ui.LaunchDialog",
+      "m": "showDialog",
+      "s": "(Landroid/app/Activity;Lcom/netease/cloudmusic/ui/LaunchDialog$Data;)V",
+      "feature": "AD-02",
+      "critical": true,
+      "note": "运营弹窗屏蔽：LaunchDialog#showDialog 挂载点。",
+      "logicalName": "LaunchDialog#showDialog",
+      "params": [
+        "Landroid/app/Activity;",
+        "Lcom/netease/cloudmusic/ui/LaunchDialog$Data;"
+      ]
+    },
+    "AD-02/LaunchDialog#showDialog(3)": {
+      "c": "com.netease.cloudmusic.ui.LaunchDialog",
+      "m": "showDialog",
+      "s": "(Lcom/netease/cloudmusic/ui/LaunchDialog;Landroid/content/Context;I)V",
+      "feature": "AD-02",
+      "critical": false,
+      "note": "运营弹窗屏蔽：LaunchDialog#showDialog(3) 挂载点。",
+      "logicalName": "LaunchDialog#showDialog(3)",
+      "params": [
+        "Lcom/netease/cloudmusic/ui/LaunchDialog;",
+        "Landroid/content/Context;",
+        "I"
+      ]
+    },
+    "AD-02/LaunchDialog#showMultiModulePopUpDialog": {
+      "c": "com.netease.cloudmusic.ui.LaunchDialog",
+      "m": "showMultiModulePopUpDialog",
+      "s": "(Landroid/app/Activity;Lcom/netease/cloudmusic/ui/LaunchDialog$Data;)V",
+      "feature": "AD-02",
+      "critical": true,
+      "note": "运营弹窗屏蔽：LaunchDialog#showMultiModulePopUpDialog 挂载点。",
+      "logicalName": "LaunchDialog#showMultiModulePopUpDialog",
+      "params": [
+        "Landroid/app/Activity;",
+        "Lcom/netease/cloudmusic/ui/LaunchDialog$Data;"
+      ]
+    },
+    "AD-02/LaunchDialog#showSinglePicDialog": {
+      "c": "com.netease.cloudmusic.ui.LaunchDialog",
+      "m": "showSinglePicDialog",
+      "s": "(Landroid/app/Activity;Lcom/netease/cloudmusic/ui/LaunchDialog$Data;)V",
+      "feature": "AD-02",
+      "critical": false,
+      "note": "运营弹窗屏蔽：LaunchDialog#showSinglePicDialog 挂载点。",
+      "logicalName": "LaunchDialog#showSinglePicDialog",
+      "params": [
+        "Landroid/app/Activity;",
+        "Lcom/netease/cloudmusic/ui/LaunchDialog$Data;"
+      ]
+    },
+    "AD-02/LaunchDialog#showPictureDialog": {
+      "c": "com.netease.cloudmusic.ui.LaunchDialog",
+      "m": "showPictureDialog",
+      "s": "(Landroid/app/Activity;Lcom/netease/cloudmusic/ui/LaunchDialog$Data;Landroid/content/DialogInterface$OnDismissListener;)V",
+      "feature": "AD-02",
+      "critical": false,
+      "note": "运营弹窗屏蔽：LaunchDialog#showPictureDialog 挂载点。",
+      "logicalName": "LaunchDialog#showPictureDialog",
+      "params": [
+        "Landroid/app/Activity;",
+        "Lcom/netease/cloudmusic/ui/LaunchDialog$Data;",
+        "Landroid/content/DialogInterface$OnDismissListener;"
+      ]
+    },
+    "AD-02/LaunchDialog#showCompactDialog": {
+      "c": "com.netease.cloudmusic.ui.LaunchDialog",
+      "m": "showCompactDialog",
+      "s": "(Landroid/app/Activity;Lcom/netease/cloudmusic/ui/LaunchDialog$Data;)V",
+      "feature": "AD-02",
+      "critical": false,
+      "note": "运营弹窗屏蔽：LaunchDialog#showCompactDialog 挂载点。",
+      "logicalName": "LaunchDialog#showCompactDialog",
+      "params": [
+        "Landroid/app/Activity;",
+        "Lcom/netease/cloudmusic/ui/LaunchDialog$Data;"
+      ]
+    },
+    "UI-01/CMUpdateConfig#hasNewVersion": {
+      "c": "com.netease.cloudmusic.appupdate.CMUpdateConfig",
+      "m": "hasNewVersion",
+      "s": "()Z",
+      "feature": "UI-01",
+      "critical": true,
+      "note": "更新弹窗屏蔽：CMUpdateConfig#hasNewVersion 挂载点。",
+      "logicalName": "CMUpdateConfig#hasNewVersion",
+      "params": []
+    },
+    "UI-01/appupdate.d#B": {
+      "c": "com.netease.cloudmusic.appupdate.d",
+      "m": "B",
+      "s": "()Z",
+      "feature": "UI-01",
+      "critical": true,
+      "note": "更新弹窗屏蔽：appupdate.d#B 挂载点。",
+      "logicalName": "appupdate.d#B",
+      "params": [],
+      "dexkit": [
+        "apkRemindVersionCode"
+      ]
+    },
+    "UI-01/appupdate.d#I": {
+      "c": "com.netease.cloudmusic.appupdate.d",
+      "m": "I",
+      "s": "()Z",
+      "feature": "UI-01",
+      "critical": false,
+      "note": "更新弹窗屏蔽：appupdate.d#I 挂载点。",
+      "logicalName": "appupdate.d#I",
+      "params": [],
+      "dexkit": [
+        "apkRemindVersionCode"
+      ]
+    },
+    "UI-01/UpdateInfo#getNeedPopUp": {
+      "c": "com.netease.cloudmusic.appupdate.meta.UpdateInfo",
+      "m": "getNeedPopUp",
+      "s": "()Ljava/lang/Boolean;",
+      "feature": "UI-01",
+      "critical": false,
+      "note": "更新弹窗屏蔽：UpdateInfo#getNeedPopUp 挂载点。",
+      "logicalName": "UpdateInfo#getNeedPopUp",
+      "params": []
+    },
+    "UI-01/UpdateInfo#getForceUpdate": {
+      "c": "com.netease.cloudmusic.appupdate.meta.UpdateInfo",
+      "m": "getForceUpdate",
+      "s": "()Ljava/lang/Boolean;",
+      "feature": "UI-01",
+      "critical": true,
+      "note": "更新弹窗屏蔽：UpdateInfo#getForceUpdate 挂载点。",
+      "logicalName": "UpdateInfo#getForceUpdate",
+      "params": []
+    },
+    "UI-01/fw0.e#q": {
+      "c": "fw0.e",
+      "m": "q",
+      "s": "(Landroid/content/Context;ZZ)V",
+      "feature": "UI-01",
+      "critical": false,
+      "note": "更新弹窗屏蔽：fw0.e#q 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "fw0.e#q",
+      "params": [
+        "Landroid/content/Context;",
+        "Z",
+        "Z"
+      ],
+      "dexkit": [
+        "MarketUpdate [logMarketStage] fail, stage="
+      ]
+    },
+    "UI-01/fw0.e#q@9.6.13": {
+      "c": "gu0.e",
+      "candidates": [
+        "gu0.e",
+        "fw0.e"
+      ],
+      "m": "q",
+      "s": "(Landroid/content/Context;ZZ)V",
+      "feature": "UI-01",
+      "critical": false,
+      "note": "9.6.13: fw0.e -> gu0.e（anchor 字符串仍在该类，q 签名不变）。",
+      "logicalName": "fw0.e#q",
+      "params": [
+        "Landroid/content/Context;",
+        "Z",
+        "Z"
+      ],
+      "dexkit": [
+        "MarketUpdate [logMarketStage] fail, stage="
+      ]
+    },
+    "AD-06/Banner#isAdBanner": {
+      "c": "com.netease.cloudmusic.meta.Banner",
+      "m": "isAdBanner",
+      "s": "()Z",
+      "feature": "AD-06",
+      "critical": true,
+      "note": "首页信息流广告：Banner#isAdBanner 挂载点。",
+      "logicalName": "Banner#isAdBanner",
+      "params": []
+    },
+    "AD-07/CommentAdapter#y1": {
+      "c": "com.netease.cloudmusic.adapter.CommentAdapter",
+      "m": "y1",
+      "s": "(Lcom/netease/cloudmusic/meta/virtual/CommentListEntry;)V",
+      "feature": "AD-07",
+      "critical": true,
+      "note": "评论区广告：CommentAdapter#y1 挂载点。",
+      "logicalName": "CommentAdapter#y1",
+      "params": [
+        "Lcom/netease/cloudmusic/meta/virtual/CommentListEntry;"
+      ]
+    },
+    "AD-07/SpecialComment#getGeneralBanner": {
+      "c": "com.netease.cloudmusic.meta.virtual.SpecialComment",
+      "m": "getGeneralBanner",
+      "s": "()Lcom/netease/cloudmusic/meta/virtual/CommentGeneralBanner;",
+      "feature": "AD-07",
+      "critical": false,
+      "note": "评论区广告：SpecialComment#getGeneralBanner 挂载点。",
+      "logicalName": "SpecialComment#getGeneralBanner",
+      "params": []
+    },
+    "AD-07/SpecialComment#getLiveRcmdList": {
+      "c": "com.netease.cloudmusic.meta.virtual.SpecialComment",
+      "m": "getLiveRcmdList",
+      "s": "()Ljava/util/ArrayList;",
+      "feature": "AD-07",
+      "critical": false,
+      "note": "评论区广告：SpecialComment#getLiveRcmdList 挂载点。",
+      "logicalName": "SpecialComment#getLiveRcmdList",
+      "params": []
+    },
+    "AD-07/SpecialComment#getVipRcmdList": {
+      "c": "com.netease.cloudmusic.meta.virtual.SpecialComment",
+      "m": "getVipRcmdList",
+      "s": "()Ljava/util/ArrayList;",
+      "feature": "AD-07",
+      "critical": false,
+      "note": "评论区广告：SpecialComment#getVipRcmdList 挂载点。",
+      "logicalName": "SpecialComment#getVipRcmdList",
+      "params": []
+    },
+    "AD-07/SpecialComment#getConcertInfo": {
+      "c": "com.netease.cloudmusic.meta.virtual.SpecialComment",
+      "m": "getConcertInfo",
+      "s": "()Lcom/netease/cloudmusic/meta/virtual/ConcertInfo;",
+      "feature": "AD-07",
+      "critical": false,
+      "note": "评论区广告：SpecialComment#getConcertInfo 挂载点。",
+      "logicalName": "SpecialComment#getConcertInfo",
+      "params": []
+    },
+    "AD-07/Comment#isTagValid": {
+      "c": "com.netease.cloudmusic.meta.Comment",
+      "m": "isTagValid",
+      "s": "()Z",
+      "feature": "AD-07",
+      "critical": true,
+      "note": "评论区广告：Comment#isTagValid 挂载点。",
+      "logicalName": "Comment#isTagValid",
+      "params": []
+    },
+    "AD-07/Comment#getBottomTags": {
+      "c": "com.netease.cloudmusic.meta.Comment",
+      "m": "getBottomTags",
+      "s": "()Ljava/util/List;",
+      "feature": "AD-07",
+      "critical": false,
+      "note": "评论区广告：Comment#getBottomTags 挂载点。",
+      "logicalName": "Comment#getBottomTags",
+      "params": []
+    },
+    "AD-07/CommentVipRcmdAdapter#getItemCount": {
+      "c": "com.netease.cloudmusic.adapter.CommentVipRcmdAdapter",
+      "m": "getItemCount",
+      "s": "()I",
+      "feature": "AD-07",
+      "critical": false,
+      "note": "评论区广告：CommentVipRcmdAdapter#getItemCount 挂载点。",
+      "logicalName": "CommentVipRcmdAdapter#getItemCount",
+      "params": []
+    },
+    "AD-08/PlayerAdJarDelegateImpl#k": {
+      "c": "com.netease.cloudmusic.module.ad.playerjar.PlayerAdJarDelegateImpl",
+      "m": "k",
+      "s": "(Lcom/netease/cloudmusic/meta/Ad;Landroid/view/ViewGroup;Landroid/view/ViewGroup;)V",
+      "feature": "AD-08",
+      "critical": true,
+      "note": "播放页广告：PlayerAdJarDelegateImpl#k 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "PlayerAdJarDelegateImpl#k",
+      "params": [
+        "Lcom/netease/cloudmusic/meta/Ad;",
+        "Landroid/view/ViewGroup;",
+        "Landroid/view/ViewGroup;"
+      ]
+    },
+    "AD-08/PlayerAdJarDelegateImpl#k@9.6.13": {
+      "c": "com.netease.cloudmusic.module.ad.playerjar.PlayerAdJarDelegateImpl",
+      "m": "j",
+      "s": "(Lcom/netease/cloudmusic/meta/Ad;Landroid/view/ViewGroup;Landroid/view/ViewGroup;)V",
+      "feature": "AD-08",
+      "critical": true,
+      "note": "9.6.13: k(Ad,ViewGroup,ViewGroup) -> j（renderVideo 不变）。",
+      "logicalName": "PlayerAdJarDelegateImpl#k",
+      "params": [
+        "Lcom/netease/cloudmusic/meta/Ad;",
+        "Landroid/view/ViewGroup;",
+        "Landroid/view/ViewGroup;"
+      ]
+    },
+    "AD-08/PlayerAdJarDelegateImpl#q": {
+      "c": "com.netease.cloudmusic.module.ad.playerjar.PlayerAdJarDelegateImpl",
+      "m": "q",
+      "s": "(Lcom/netease/cloudmusic/meta/Ad;)V",
+      "feature": "AD-08",
+      "critical": true,
+      "note": "播放页广告：PlayerAdJarDelegateImpl#q 挂载点。",
+      "logicalName": "PlayerAdJarDelegateImpl#q",
+      "params": [
+        "Lcom/netease/cloudmusic/meta/Ad;"
+      ]
+    },
+    "AD-08/MusicGiftModel#isValid": {
+      "c": "com.netease.cloudmusic.module.player.vinylfakelayer.musicgift.meta.MusicGiftModel",
+      "m": "isValid",
+      "s": "()Z",
+      "feature": "AD-08",
+      "critical": false,
+      "note": "播放页广告：MusicGiftModel#isValid 挂载点。",
+      "logicalName": "MusicGiftModel#isValid",
+      "params": []
+    },
+    "AD-08/AdPlayerFullScreenHelper#checkNeedExpose": {
+      "c": "com.netease.cloudmusic.ui.ad.player.AdPlayerFullScreenHelper",
+      "m": "checkNeedExpose",
+      "s": "(Lcom/netease/cloudmusic/meta/Ad;)Z",
+      "feature": "AD-08",
+      "critical": false,
+      "note": "播放页广告：AdPlayerFullScreenHelper#checkNeedExpose 挂载点。",
+      "logicalName": "AdPlayerFullScreenHelper#checkNeedExpose",
+      "params": [
+        "Lcom/netease/cloudmusic/meta/Ad;"
+      ]
+    },
+    "AD-09/AdAudioClipManager#d": {
+      "c": "com.netease.cloudmusic.module.ad.audioclip.AdAudioClipManager",
+      "m": "d",
+      "s": "(Ljava/lang/String;IJLkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+      "feature": "AD-09",
+      "critical": true,
+      "note": "音频贴片广告：AdAudioClipManager#d 挂载点。",
+      "logicalName": "AdAudioClipManager#d",
+      "params": [
+        "Ljava/lang/String;",
+        "I",
+        "J",
+        "Lkotlin/jvm/functions/Function1;",
+        "Lkotlin/coroutines/Continuation;"
+      ]
+    },
+    "AD-09/AdAudioClipManager#c": {
+      "c": "com.netease.cloudmusic.module.ad.audioclip.AdAudioClipManager",
+      "m": "c",
+      "s": "(Lkotlinx/coroutines/n0;Lcom/netease/cloudmusic/meta/ad/audioclip/AudioClipData;JLkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+      "feature": "AD-09",
+      "critical": true,
+      "note": "音频贴片广告：AdAudioClipManager#c 挂载点。",
+      "logicalName": "AdAudioClipManager#c",
+      "params": [
+        "Lkotlinx/coroutines/n0;",
+        "Lcom/netease/cloudmusic/meta/ad/audioclip/AudioClipData;",
+        "J",
+        "Lkotlin/jvm/functions/Function1;",
+        "Lkotlin/coroutines/Continuation;"
+      ]
+    },
+    "AD-09/AdPodcastPlayerPageHelper#h": {
+      "c": "com.netease.cloudmusic.module.ad.podcast.AdPodcastPlayerPageHelper",
+      "m": "h",
+      "s": "(Lcom/netease/cloudmusic/meta/Ad;)V",
+      "feature": "AD-09",
+      "critical": false,
+      "note": "音频贴片广告：AdPodcastPlayerPageHelper#h 挂载点。",
+      "logicalName": "AdPodcastPlayerPageHelper#h",
+      "params": [
+        "Lcom/netease/cloudmusic/meta/Ad;"
+      ]
+    },
+    "AD-09/PodcastVideoAdHelperImpl#z": {
+      "c": "com.netease.cloudmusic.module.ad.podcast.PodcastVideoAdHelperImpl",
+      "m": "z",
+      "s": "(JJLcom/netease/cloudmusic/meta/Ad;Landroid/view/ViewGroup;)V",
+      "feature": "AD-09",
+      "critical": false,
+      "note": "音频贴片广告：PodcastVideoAdHelperImpl#z 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "PodcastVideoAdHelperImpl#z",
+      "params": [
+        "J",
+        "J",
+        "Lcom/netease/cloudmusic/meta/Ad;",
+        "Landroid/view/ViewGroup;"
+      ]
+    },
+    "AD-09/PodcastVideoAdHelperImpl#z@9.6.13": {
+      "c": "com.netease.cloudmusic.module.ad.podcast.PodcastVideoAdHelperImpl",
+      "m": "B",
+      "s": "(JJLcom/netease/cloudmusic/meta/Ad;Landroid/view/ViewGroup;)V",
+      "feature": "AD-09",
+      "critical": false,
+      "note": "9.6.13: z(J,J,Ad,ViewGroup) -> B（render 不变）。",
+      "logicalName": "PodcastVideoAdHelperImpl#z",
+      "params": [
+        "J",
+        "J",
+        "Lcom/netease/cloudmusic/meta/Ad;",
+        "Landroid/view/ViewGroup;"
+      ]
+    },
+    "AD-03/AdCloudReportTask#execute": {
+      "c": "com.netease.cloudmusic.module.ad.AdCloudReportTask",
+      "m": "execute",
+      "s": "()Z",
+      "feature": "AD-03",
+      "critical": true,
+      "note": "广告上报与外跳拦截：AdCloudReportTask#execute 挂载点。",
+      "logicalName": "AdCloudReportTask#execute",
+      "params": []
+    },
+    "AD-03/StartAppHelper$b#startApp": {
+      "c": "com.netease.cloudmusic.ad.StartAppHelper$b",
+      "m": "startApp",
+      "s": "(Landroid/app/Activity;Landroid/content/Intent;Lcom/netease/cloudmusic/ad/StartAppHelper$StartAppListener;Z)Z",
+      "feature": "AD-03",
+      "critical": true,
+      "note": "广告上报与外跳拦截：StartAppHelper$b#startApp 挂载点。",
+      "logicalName": "StartAppHelper$b#startApp",
+      "params": [
+        "Landroid/app/Activity;",
+        "Landroid/content/Intent;",
+        "Lcom/netease/cloudmusic/ad/StartAppHelper$StartAppListener;",
+        "Z"
+      ]
+    },
+    "AD-03/AdExposureDeeplinkPreRequestTask#init": {
+      "c": "com.netease.cloudmusic.process.task.app.attach.AdExposureDeeplinkPreRequestTask",
+      "m": "init",
+      "s": "()V",
+      "feature": "AD-03",
+      "critical": false,
+      "note": "广告上报与外跳拦截：AdExposureDeeplinkPreRequestTask#init 挂载点。",
+      "logicalName": "AdExposureDeeplinkPreRequestTask#init",
+      "params": []
+    },
+    "AD-03/AdExposureDeeplinkTask#init": {
+      "c": "com.netease.cloudmusic.process.task.app.create.AdExposureDeeplinkTask",
+      "m": "init",
+      "s": "()V",
+      "feature": "AD-03",
+      "critical": false,
+      "note": "广告上报与外跳拦截：AdExposureDeeplinkTask#init 挂载点。",
+      "logicalName": "AdExposureDeeplinkTask#init",
+      "params": []
+    },
+    "AD-04/RNSearchAdViewManger#newStyle": {
+      "c": "com.netease.cloudmusic.music.biz.search.start.rnview.RNSearchAdViewManger",
+      "m": "newStyle",
+      "s": "(Lcom/netease/cloudmusic/music/biz/search/start/rnview/RNSearchAdView;Lcom/netease/cloudmusic/meta/Ad;ILjava/lang/String;)V",
+      "feature": "AD-04",
+      "critical": true,
+      "note": "搜索广告净化：RNSearchAdViewManger#newStyle 挂载点。",
+      "logicalName": "RNSearchAdViewManger#newStyle",
+      "params": [
+        "Lcom/netease/cloudmusic/music/biz/search/start/rnview/RNSearchAdView;",
+        "Lcom/netease/cloudmusic/meta/Ad;",
+        "I",
+        "Ljava/lang/String;"
+      ]
+    },
+    "AD-04/RNSearchAdViewManger#oldStyle": {
+      "c": "com.netease.cloudmusic.music.biz.search.start.rnview.RNSearchAdViewManger",
+      "m": "oldStyle",
+      "s": "(Lcom/netease/cloudmusic/music/biz/search/start/rnview/RNSearchAdView;Lcom/netease/cloudmusic/meta/Ad;ILjava/lang/String;)V",
+      "feature": "AD-04",
+      "critical": true,
+      "note": "搜索广告净化：RNSearchAdViewManger#oldStyle 挂载点。",
+      "logicalName": "RNSearchAdViewManger#oldStyle",
+      "params": [
+        "Lcom/netease/cloudmusic/music/biz/search/start/rnview/RNSearchAdView;",
+        "Lcom/netease/cloudmusic/meta/Ad;",
+        "I",
+        "Ljava/lang/String;"
+      ]
+    },
+    "AD-04/RNSearchAdViewManger#hideAllViews": {
+      "c": "com.netease.cloudmusic.music.biz.search.start.rnview.RNSearchAdViewManger",
+      "m": "hideAllViews",
+      "s": "()V",
+      "feature": "AD-04",
+      "critical": false,
+      "note": "搜索广告净化：RNSearchAdViewManger#hideAllViews 挂载点。",
+      "logicalName": "RNSearchAdViewManger#hideAllViews",
+      "params": []
+    },
+    "AD-04/SearchAdItemLargeView#e": {
+      "c": "com.netease.cloudmusic.music.biz.search.complex.viewholder.ad.SearchAdItemLargeView",
+      "m": "e",
+      "s": "(Lcom/netease/cloudmusic/meta/Ad;ILkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;)V",
+      "feature": "AD-04",
+      "critical": true,
+      "note": "搜索广告净化：SearchAdItemLargeView#e 挂载点。",
+      "logicalName": "SearchAdItemLargeView#e",
+      "params": [
+        "Lcom/netease/cloudmusic/meta/Ad;",
+        "I",
+        "Lkotlin/jvm/functions/Function1;",
+        "Lkotlin/jvm/functions/Function1;"
+      ]
+    },
+    "AD-04/SearchAdItemMediumView#e": {
+      "c": "com.netease.cloudmusic.music.biz.search.complex.viewholder.ad.SearchAdItemMediumView",
+      "m": "e",
+      "s": "(Lcom/netease/cloudmusic/meta/Ad;ILkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;)V",
+      "feature": "AD-04",
+      "critical": true,
+      "note": "搜索广告净化：SearchAdItemMediumView#e 挂载点。",
+      "logicalName": "SearchAdItemMediumView#e",
+      "params": [
+        "Lcom/netease/cloudmusic/meta/Ad;",
+        "I",
+        "Lkotlin/jvm/functions/Function1;",
+        "Lkotlin/jvm/functions/Function1;"
+      ]
+    },
+    "AD-05/AdColdBootEntranceTask#init": {
+      "c": "com.netease.cloudmusic.process.task.main.create.AdColdBootEntranceTask",
+      "m": "init",
+      "s": "()V",
+      "feature": "AD-05",
+      "critical": true,
+      "note": "广告预加载裁剪：AdColdBootEntranceTask#init 挂载点。",
+      "logicalName": "AdColdBootEntranceTask#init",
+      "params": []
+    },
+    "AD-05/PodcastRewardAdTask#init": {
+      "c": "com.netease.cloudmusic.process.task.main.createproxy.PodcastRewardAdTask",
+      "m": "init",
+      "s": "()V",
+      "feature": "AD-05",
+      "critical": false,
+      "note": "广告预加载裁剪：PodcastRewardAdTask#init 挂载点。",
+      "logicalName": "PodcastRewardAdTask#init",
+      "params": []
+    },
+    "AD-05/APreloadRecommendViewTask#init": {
+      "c": "com.netease.cloudmusic.process.task.main.create.APreloadRecommendViewTask",
+      "m": "init",
+      "s": "()V",
+      "feature": "AD-05",
+      "critical": false,
+      "note": "广告预加载裁剪：APreloadRecommendViewTask#init 挂载点。",
+      "logicalName": "APreloadRecommendViewTask#init",
+      "params": []
+    },
+    "PV-01/MusicOaidUploadManager#o": {
+      "c": "com.netease.cloudmusic.oaid.MusicOaidUploadManager",
+      "m": "o",
+      "s": "(Ljava/lang/String;)V",
+      "feature": "PV-01",
+      "critical": true,
+      "note": "OAID 与设备追踪拦截：MusicOaidUploadManager#o 挂载点。",
+      "logicalName": "MusicOaidUploadManager#o",
+      "params": [
+        "Ljava/lang/String;"
+      ]
+    },
+    "PV-01/AdOaidUploadTask#init": {
+      "c": "com.netease.cloudmusic.process.task.app.create.AdOaidUploadTask",
+      "m": "init",
+      "s": "()V",
+      "feature": "PV-01",
+      "critical": false,
+      "note": "OAID 与设备追踪拦截：AdOaidUploadTask#init 挂载点。",
+      "logicalName": "AdOaidUploadTask#init",
+      "params": []
+    },
+    "PV-02/NeedLogToFileTask#init": {
+      "c": "com.netease.cloudmusic.process.task.app.create.NeedLogToFileTask",
+      "m": "init",
+      "s": "()V",
+      "feature": "PV-02",
+      "critical": true,
+      "note": "日志写盘任务屏蔽：NeedLogToFileTask#init 挂载点。",
+      "logicalName": "NeedLogToFileTask#init",
+      "params": []
+    },
+    "PV-02/NBLogTask#init": {
+      "c": "com.netease.cloudmusic.process.task.app.create.NBLogTask",
+      "m": "init",
+      "s": "()V",
+      "feature": "PV-02",
+      "critical": true,
+      "note": "日志写盘任务屏蔽：NBLogTask#init 挂载点。",
+      "logicalName": "NBLogTask#init",
+      "params": []
+    },
+    "PV-03/StartupTask#needExecute": {
+      "c": "com.netease.cloudmusic.core.startup.StartupTask",
+      "m": "needExecute",
+      "s": "()Z",
+      "feature": "PV-03",
+      "critical": true,
+      "note": "启动任务黑名单：StartupTask#needExecute 挂载点。",
+      "logicalName": "StartupTask#needExecute",
+      "params": []
+    },
+    "PV-04/StatisticImpl#logApm": {
+      "c": "com.netease.cloudmusic.core.statistic.StatisticImpl",
+      "m": "logApm",
+      "s": "(Lcom/alibaba/fastjson/JSONObject;)V",
+      "feature": "PV-04",
+      "critical": true,
+      "note": "APM 上报抑制：StatisticImpl#logApm 挂载点。",
+      "logicalName": "StatisticImpl#logApm",
+      "params": [
+        "Lcom/alibaba/fastjson/JSONObject;"
+      ]
+    },
+    "PV-04/StatisticImpl#forceApmUpload": {
+      "c": "com.netease.cloudmusic.core.statistic.StatisticImpl",
+      "m": "forceApmUpload",
+      "s": "()V",
+      "feature": "PV-04",
+      "critical": true,
+      "note": "APM 上报抑制：StatisticImpl#forceApmUpload 挂载点。",
+      "logicalName": "StatisticImpl#forceApmUpload",
+      "params": []
+    },
+    "PV-05/StatisticImpl#log": {
+      "c": "com.netease.cloudmusic.core.statistic.StatisticImpl",
+      "m": "log",
+      "s": "(Ljava/lang/String;[Ljava/lang/Object;)V",
+      "feature": "PV-05",
+      "critical": true,
+      "note": "统计数据上报抑制：StatisticImpl#log 挂载点。",
+      "logicalName": "StatisticImpl#log",
+      "params": [
+        "Ljava/lang/String;",
+        "[Ljava/lang/Object;"
+      ]
+    },
+    "PV-05/StatisticImpl#logJSON": {
+      "c": "com.netease.cloudmusic.core.statistic.StatisticImpl",
+      "m": "logJSON",
+      "s": "(Ljava/lang/String;Lcom/alibaba/fastjson/JSONObject;)V",
+      "feature": "PV-05",
+      "critical": true,
+      "note": "统计数据上报抑制：StatisticImpl#logJSON 挂载点。",
+      "logicalName": "StatisticImpl#logJSON",
+      "params": [
+        "Ljava/lang/String;",
+        "Lcom/alibaba/fastjson/JSONObject;"
+      ]
+    },
+    "PV-05/LogMonitorConfigManager#b": {
+      "c": "com.netease.cloudmusic.statistic.monitor.LogMonitorConfigManager",
+      "m": "b",
+      "s": "()Z",
+      "feature": "PV-05",
+      "critical": false,
+      "note": "统计数据上报抑制：LogMonitorConfigManager#b 挂载点。",
+      "logicalName": "LogMonitorConfigManager#b",
+      "params": []
+    },
+    "PV-05/LogMonitorConfigManager#c": {
+      "c": "com.netease.cloudmusic.statistic.monitor.LogMonitorConfigManager",
+      "m": "c",
+      "s": "()Z",
+      "feature": "PV-05",
+      "critical": false,
+      "note": "统计数据上报抑制：LogMonitorConfigManager#c 挂载点。",
+      "logicalName": "LogMonitorConfigManager#c",
+      "params": []
+    },
+    "PV-05/LogMonitorConfigManager#d": {
+      "c": "com.netease.cloudmusic.statistic.monitor.LogMonitorConfigManager",
+      "m": "d",
+      "s": "()Z",
+      "feature": "PV-05",
+      "critical": false,
+      "note": "统计数据上报抑制：LogMonitorConfigManager#d 挂载点。",
+      "logicalName": "LogMonitorConfigManager#d",
+      "params": []
+    },
+    "PV-05/LogMonitorConfigManager#e": {
+      "c": "com.netease.cloudmusic.statistic.monitor.LogMonitorConfigManager",
+      "m": "e",
+      "s": "()Z",
+      "feature": "PV-05",
+      "critical": false,
+      "note": "统计数据上报抑制：LogMonitorConfigManager#e 挂载点。",
+      "logicalName": "LogMonitorConfigManager#e",
+      "params": []
+    },
+    "PV-06/utils.h2#d": {
+      "c": "com.netease.cloudmusic.utils.h2",
+      "m": "d",
+      "s": "(Landroid/content/Context;)Landroid/content/ClipData$Item;",
+      "feature": "PV-06",
+      "critical": true,
+      "note": "剪贴板读取拦截：utils.h2#d 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "utils.h2#d",
+      "params": [
+        "Landroid/content/Context;"
+      ]
+    },
+    "PV-06/utils.h2#d@9.6.13": {
+      "c": "com.netease.cloudmusic.utils.i2",
+      "candidates": [
+        "com.netease.cloudmusic.utils.i2",
+        "com.netease.cloudmusic.utils.h2"
+      ],
+      "m": "d",
+      "s": "(Landroid/content/Context;)Landroid/content/ClipData$Item;",
+      "feature": "PV-06",
+      "critical": true,
+      "note": "9.6.13: utils.h2 -> utils.i2（ClipboardUtils，d(Context) 不变）。",
+      "logicalName": "utils.h2#d",
+      "params": [
+        "Landroid/content/Context;"
+      ]
+    },
+    "EX-02/StartupTask#runOnUIThread": {
+      "c": "com.netease.cloudmusic.core.startup.StartupTask",
+      "m": "runOnUIThread",
+      "s": "()Z",
+      "feature": "EX-02",
+      "critical": true,
+      "note": "启动任务编排：StartupTask#runOnUIThread 挂载点。",
+      "logicalName": "StartupTask#runOnUIThread",
+      "params": []
+    },
+    "EX-02/StartupTask#priority": {
+      "c": "com.netease.cloudmusic.core.startup.StartupTask",
+      "m": "priority",
+      "s": "()I",
+      "feature": "EX-02",
+      "critical": true,
+      "note": "启动任务编排：StartupTask#priority 挂载点。",
+      "logicalName": "StartupTask#priority",
+      "params": []
+    },
+    "EX-02/StartupTask#runOnStage": {
+      "c": "com.netease.cloudmusic.core.startup.StartupTask",
+      "m": "runOnStage",
+      "s": "()I",
+      "feature": "EX-02",
+      "critical": false,
+      "note": "启动任务编排：StartupTask#runOnStage 挂载点。",
+      "logicalName": "StartupTask#runOnStage",
+      "params": []
+    },
+    "EX-02/StartupTask#degradeInit": {
+      "c": "com.netease.cloudmusic.core.startup.StartupTask",
+      "m": "degradeInit",
+      "s": "()V",
+      "feature": "EX-02",
+      "critical": false,
+      "note": "启动任务编排：StartupTask#degradeInit 挂载点。",
+      "logicalName": "StartupTask#degradeInit",
+      "params": []
+    },
+    "ABTEST/ABTestManagerImpl#checkExperiment": {
+      "c": "com.netease.cloudmusic.abtest2.ABTestManagerImpl",
+      "m": "checkExperiment",
+      "s": "(Ljava/lang/String;Z)Lcom/netease/cloudmusic/abtest2/ABTestConfig;",
+      "feature": "ABTEST",
+      "critical": true,
+      "note": "ABTEST：ABTestManagerImpl#checkExperiment 挂载点。",
+      "logicalName": "ABTestManagerImpl#checkExperiment",
+      "params": [
+        "Ljava/lang/String;",
+        "Z"
+      ]
+    },
+    "ABTEST/ABTestConfig#getGroupKeys": {
+      "c": "com.netease.cloudmusic.abtest2.ABTestConfig",
+      "m": "getGroupKeys",
+      "s": "()Ljava/lang/String;",
+      "feature": "ABTEST",
+      "critical": true,
+      "note": "ABTEST：ABTestConfig#getGroupKeys 挂载点。",
+      "logicalName": "ABTestConfig#getGroupKeys",
+      "params": []
+    },
+    "ABTEST/LibraABTestConfig#getGroupKeys": {
+      "c": "com.netease.cloudmusic.abtest2.LibraABTestConfig",
+      "m": "getGroupKeys",
+      "s": "()Ljava/lang/String;",
+      "feature": "ABTEST",
+      "critical": true,
+      "note": "ABTEST：LibraABTestConfig#getGroupKeys 挂载点。",
+      "logicalName": "LibraABTestConfig#getGroupKeys",
+      "params": []
+    },
+    "ABTEST/abtest2.b#x": {
+      "c": "com.netease.cloudmusic.abtest2.b",
+      "m": "x",
+      "s": "(Ljava/lang/String;Z)Lcom/netease/cloudmusic/abtest2/ABTestConfig;",
+      "feature": "ABTEST",
+      "critical": true,
+      "note": "ABTEST：abtest2.b#x 挂载点。",
+      "logicalName": "abtest2.b#x",
+      "params": [
+        "Ljava/lang/String;",
+        "Z"
+      ]
+    },
+    "ABTEST/StartupABManager#getGroup": {
+      "c": "com.netease.cloudmusic.module.startup.StartupABManager",
+      "m": "getGroup",
+      "s": "(Ljava/lang/String;)Ljava/lang/String;",
+      "feature": "ABTEST",
+      "critical": true,
+      "note": "ABTEST：StartupABManager#getGroup 挂载点。",
+      "logicalName": "StartupABManager#getGroup",
+      "params": [
+        "Ljava/lang/String;"
+      ]
+    },
+    "UI-03/MixContainerData#getBlockCodeOrderList": {
+      "c": "com.netease.cloudmusic.dsl.container.data.MixContainerData",
+      "m": "getBlockCodeOrderList",
+      "s": "()Ljava/lang/String;",
+      "feature": "UI-03",
+      "critical": true,
+      "note": "首页模块净化：MixContainerData#getBlockCodeOrderList 挂载点。",
+      "logicalName": "MixContainerData#getBlockCodeOrderList",
+      "params": []
+    },
+    "UI-03/MixContainerData#getResources": {
+      "c": "com.netease.cloudmusic.dsl.container.data.MixContainerData",
+      "m": "getResources",
+      "s": "()Ljava/util/List;",
+      "feature": "UI-03",
+      "critical": true,
+      "note": "首页模块净化：MixContainerData#getResources 挂载点。",
+      "logicalName": "MixContainerData#getResources",
+      "params": []
+    },
+    "UI-03/DiscoveryBlockData#getBlockList": {
+      "c": "com.netease.cloudmusic.discovery.data.meta.DiscoveryBlockData",
+      "m": "getBlockList",
+      "s": "()Ljava/util/List;",
+      "feature": "UI-03",
+      "critical": false,
+      "note": "首页模块净化：DiscoveryBlockData#getBlockList 挂载点。",
+      "logicalName": "DiscoveryBlockData#getBlockList",
+      "params": []
+    },
+    "UI-03/MMKV#decodeString(String)": {
+      "c": "com.tencent.mmkv.MMKV",
+      "m": "decodeString",
+      "s": "(Ljava/lang/String;)Ljava/lang/String;",
+      "feature": "UI-03",
+      "critical": false,
+      "note": "首页模块净化：MMKV#decodeString(String) 挂载点。",
+      "logicalName": "MMKV#decodeString(String)",
+      "params": [
+        "Ljava/lang/String;"
+      ]
+    },
+    "UI-03/MMKV#decodeString(String,String)": {
+      "c": "com.tencent.mmkv.MMKV",
+      "m": "decodeString",
+      "s": "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
+      "feature": "UI-03",
+      "critical": false,
+      "note": "首页模块净化：MMKV#decodeString(String,String) 挂载点。",
+      "logicalName": "MMKV#decodeString(String,String)",
+      "params": [
+        "Ljava/lang/String;",
+        "Ljava/lang/String;"
+      ]
+    },
+    "UI-03/MMKV#getString(String,String)": {
+      "c": "com.tencent.mmkv.MMKV",
+      "m": "getString",
+      "s": "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
+      "feature": "UI-03",
+      "critical": false,
+      "note": "首页模块净化：MMKV#getString(String,String) 挂载点。",
+      "logicalName": "MMKV#getString(String,String)",
+      "params": [
+        "Ljava/lang/String;",
+        "Ljava/lang/String;"
+      ]
+    },
+    "UI-04/HomeTopTabInfo#getCanDelete": {
+      "c": "com.netease.cloudmusic.discovery.view.module.hometoptab.model.HomeTopTabInfo",
+      "m": "getCanDelete",
+      "s": "()Ljava/lang/Boolean;",
+      "feature": "UI-04",
+      "critical": false,
+      "note": "顶部频道管理：HomeTopTabInfo#getCanDelete 挂载点。",
+      "logicalName": "HomeTopTabInfo#getCanDelete",
+      "params": []
+    },
+    "UI-04/HomeTopTabInfo#getCanDrag": {
+      "c": "com.netease.cloudmusic.discovery.view.module.hometoptab.model.HomeTopTabInfo",
+      "m": "getCanDrag",
+      "s": "()Ljava/lang/Boolean;",
+      "feature": "UI-04",
+      "critical": false,
+      "note": "顶部频道管理：HomeTopTabInfo#getCanDrag 挂载点。",
+      "logicalName": "HomeTopTabInfo#getCanDrag",
+      "params": []
+    },
+    "UI-04/hometoptab.TabExtra#getNowChannelItems": {
+      "c": "com.netease.cloudmusic.discovery.view.module.hometoptab.model.TabExtra",
+      "m": "getNowChannelItems",
+      "s": "()Ljava/util/List;",
+      "feature": "UI-04",
+      "critical": false,
+      "note": "顶部频道管理：hometoptab.TabExtra#getNowChannelItems 挂载点。",
+      "logicalName": "hometoptab.TabExtra#getNowChannelItems",
+      "params": []
+    },
+    "UI-04/newframework.TabExtra#getNowChannelItems": {
+      "c": "com.netease.cloudmusic.discovery.view.newframework.model.TabExtra",
+      "m": "getNowChannelItems",
+      "s": "()Ljava/util/List;",
+      "feature": "UI-04",
+      "critical": false,
+      "note": "顶部频道管理：newframework.TabExtra#getNowChannelItems 挂载点。",
+      "logicalName": "newframework.TabExtra#getNowChannelItems",
+      "params": []
+    },
+    "UI-04/hometoptab.UserSettingDTO#getCurrentRes": {
+      "c": "com.netease.cloudmusic.discovery.view.module.hometoptab.model.UserSettingDTO",
+      "m": "getCurrentRes",
+      "s": "()Ljava/util/List;",
+      "feature": "UI-04",
+      "critical": false,
+      "note": "顶部频道管理：hometoptab.UserSettingDTO#getCurrentRes 挂载点。",
+      "logicalName": "hometoptab.UserSettingDTO#getCurrentRes",
+      "params": []
+    },
+    "UI-04/hometoptab.v2.UserSettingDTO#getCurrentRes": {
+      "c": "com.netease.cloudmusic.discovery.view.module.hometoptab.v2.UserSettingDTO",
+      "m": "getCurrentRes",
+      "s": "()Ljava/util/List;",
+      "feature": "UI-04",
+      "critical": false,
+      "note": "顶部频道管理：hometoptab.v2.UserSettingDTO#getCurrentRes 挂载点。",
+      "logicalName": "hometoptab.v2.UserSettingDTO#getCurrentRes",
+      "params": []
+    },
+    "UI-04/ArkFragmentV2#getTabDataList": {
+      "c": "com.netease.cloudmusic.discovery.view.newframework.ArkFragmentV2",
+      "m": "getTabDataList",
+      "s": "()Ljava/util/List;",
+      "feature": "UI-04",
+      "critical": true,
+      "note": "顶部频道管理：ArkFragmentV2#getTabDataList 挂载点。",
+      "logicalName": "ArkFragmentV2#getTabDataList",
+      "params": []
+    },
+    "UI-04/ArkFragmentV2#getTabData": {
+      "c": "com.netease.cloudmusic.discovery.view.newframework.ArkFragmentV2",
+      "m": "getTabData",
+      "s": "()Ljava/util/List;",
+      "feature": "UI-04",
+      "critical": false,
+      "note": "顶部频道管理：ArkFragmentV2#getTabData 挂载点。",
+      "logicalName": "ArkFragmentV2#getTabData",
+      "params": []
+    },
+    "UI-04/arkview.ArkFragment#refreshAdapterData": {
+      "c": "com.netease.cloudmusic.discovery.view.arkview.ArkFragment",
+      "m": "refreshAdapterData",
+      "s": "(Ljava/util/List;)V",
+      "feature": "UI-04",
+      "critical": true,
+      "note": "顶部频道管理：arkview.ArkFragment#refreshAdapterData 挂载点。",
+      "logicalName": "arkview.ArkFragment#refreshAdapterData",
+      "params": [
+        "Ljava/util/List;"
+      ]
+    },
+    "UI-04/BaseArkV3Fragment#getTabDataList": {
+      "c": "com.netease.cloudmusic.discovery.view.newframework.BaseArkV3Fragment",
+      "m": "getTabDataList",
+      "s": "()Ljava/util/List;",
+      "feature": "UI-04",
+      "critical": true,
+      "note": "顶部频道管理：BaseArkV3Fragment#getTabDataList 挂载点。",
+      "logicalName": "BaseArkV3Fragment#getTabDataList",
+      "params": []
+    },
+    "UI-04/BaseArkV3Fragment#hc": {
+      "c": "com.netease.cloudmusic.discovery.view.newframework.BaseArkV3Fragment",
+      "m": "hc",
+      "s": "(Ljava/util/List;Landroidx/viewpager2/widget/ViewPager2;Lcom/netease/cloudmusic/discovery/view/widget/DiscoveryCustomThemeRightIconTabLayout;)V",
+      "feature": "UI-04",
+      "critical": false,
+      "note": "顶部频道管理：BaseArkV3Fragment#hc 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "BaseArkV3Fragment#hc",
+      "params": [
+        "Ljava/util/List;",
+        "Landroidx/viewpager2/widget/ViewPager2;",
+        "Lcom/netease/cloudmusic/discovery/view/widget/DiscoveryCustomThemeRightIconTabLayout;"
+      ]
+    },
+    "UI-04/BaseArkV3Fragment#hc@9.6.13": {
+      "c": "com.netease.cloudmusic.discovery.view.newframework.BaseArkV3Fragment",
+      "m": "dc",
+      "s": "(Ljava/util/List;Landroidx/viewpager2/widget/ViewPager2;Lcom/netease/cloudmusic/discovery/view/widget/DiscoveryCustomThemeRightIconTabLayout;)V",
+      "feature": "UI-04",
+      "critical": false,
+      "note": "9.6.13: hc -> dc。",
+      "logicalName": "BaseArkV3Fragment#hc",
+      "params": [
+        "Ljava/util/List;",
+        "Landroidx/viewpager2/widget/ViewPager2;",
+        "Lcom/netease/cloudmusic/discovery/view/widget/DiscoveryCustomThemeRightIconTabLayout;"
+      ]
+    },
+    "UI-04/BaseArkV3Fragment#Tc": {
+      "c": "com.netease.cloudmusic.discovery.view.newframework.BaseArkV3Fragment",
+      "m": "Tc",
+      "s": "(Ljava/util/List;)V",
+      "feature": "UI-04",
+      "critical": false,
+      "note": "顶部频道管理：BaseArkV3Fragment#Tc 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "BaseArkV3Fragment#Tc",
+      "params": [
+        "Ljava/util/List;"
+      ]
+    },
+    "UI-04/BaseArkV3Fragment#Tc@9.6.13": {
+      "c": "com.netease.cloudmusic.discovery.view.newframework.BaseArkV3Fragment",
+      "m": "Pc",
+      "s": "(Ljava/util/List;)V",
+      "feature": "UI-04",
+      "critical": false,
+      "note": "9.6.13: Tc(写 o 字段) -> Pc。",
+      "logicalName": "BaseArkV3Fragment#Tc",
+      "params": [
+        "Ljava/util/List;"
+      ]
+    },
+    "UI-04/BaseArkV3Fragment#Lc": {
+      "c": "com.netease.cloudmusic.discovery.view.newframework.BaseArkV3Fragment",
+      "m": "Lc",
+      "s": "(Ljava/util/List;)V",
+      "feature": "UI-04",
+      "critical": false,
+      "note": "顶部频道管理：BaseArkV3Fragment#Lc 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "BaseArkV3Fragment#Lc",
+      "params": [
+        "Ljava/util/List;"
+      ]
+    },
+    "UI-04/BaseArkV3Fragment#Lc@9.6.13": {
+      "c": "com.netease.cloudmusic.discovery.view.newframework.BaseArkV3Fragment",
+      "m": "Hc",
+      "s": "(Ljava/util/List;)V",
+      "feature": "UI-04",
+      "critical": false,
+      "note": "9.6.13: Lc(写 q 字段) -> Hc。",
+      "logicalName": "BaseArkV3Fragment#Lc",
+      "params": [
+        "Ljava/util/List;"
+      ]
+    },
+    "UI-04/dr.h#T0": {
+      "c": "dr.h",
+      "m": "T0",
+      "s": "(Ljava/util/List;)V",
+      "feature": "UI-04",
+      "critical": true,
+      "note": "顶部频道管理：dr.h#T0 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "dr.h#T0",
+      "params": [
+        "Ljava/util/List;"
+      ],
+      "dexkit": [
+        "RecommendTwoFlowAdapter"
+      ]
+    },
+    "UI-04/dr.h#T0@9.6.13": {
+      "c": "iq.h",
+      "candidates": [
+        "iq.h",
+        "dr.h"
+      ],
+      "m": "O0",
+      "s": "(Ljava/util/List;)V",
+      "feature": "UI-04",
+      "critical": true,
+      "note": "9.6.13: dr.h -> iq.h，T0 -> O0（anchor RecommendTwoFlowAdapter 仍唯一）。",
+      "logicalName": "dr.h#T0",
+      "params": [
+        "Ljava/util/List;"
+      ],
+      "dexkit": [
+        "RecommendTwoFlowAdapter"
+      ]
+    },
+    "UI-04/MusicTabLayout#addTab(k,int,boolean)": {
+      "c": "com.netease.cloudmusic.theme.ui.tab.MusicTabLayout",
+      "m": "addTab",
+      "s": "(Lcom/netease/cloudmusic/theme/ui/tab/MusicTabLayout$k;IZ)V",
+      "feature": "UI-04",
+      "critical": false,
+      "note": "顶部频道管理：MusicTabLayout#addTab(k,int,boolean) 挂载点。",
+      "logicalName": "MusicTabLayout#addTab(k,int,boolean)",
+      "params": [
+        "Lcom/netease/cloudmusic/theme/ui/tab/MusicTabLayout$k;",
+        "I",
+        "Z"
+      ]
+    },
+    "UI-05/SettingActivity#T8": {
+      "c": "com.netease.cloudmusic.music.biz.setting.activity.SettingActivity",
+      "m": "T8",
+      "s": "()Z",
+      "feature": "UI-05",
+      "critical": false,
+      "note": "底部导航精简：SettingActivity#T8 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "SettingActivity#T8",
+      "params": []
+    },
+    "UI-05/SettingActivity#T8@9.6.13": {
+      "c": "com.netease.cloudmusic.music.biz.setting.activity.SettingActivity",
+      "m": "P8",
+      "s": "()Z",
+      "feature": "UI-05",
+      "critical": false,
+      "note": "9.6.13: T8(showNoteAtBottomTab) -> P8。",
+      "logicalName": "SettingActivity#T8",
+      "params": []
+    },
+    "UI-05/SettingActivity#U8": {
+      "c": "com.netease.cloudmusic.music.biz.setting.activity.SettingActivity",
+      "m": "U8",
+      "s": "()Z",
+      "feature": "UI-05",
+      "critical": false,
+      "note": "底部导航精简：SettingActivity#U8 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "SettingActivity#U8",
+      "params": []
+    },
+    "UI-05/SettingActivity#U8@9.6.13": {
+      "c": "com.netease.cloudmusic.music.biz.setting.activity.SettingActivity",
+      "m": "O8",
+      "s": "()Z",
+      "feature": "UI-05",
+      "critical": false,
+      "note": "9.6.13: U8(showFMAtBottomTab) -> O8。",
+      "logicalName": "SettingActivity#U8",
+      "params": []
+    },
+    "UI-05/th0.h#h": {
+      "c": "th0.h",
+      "m": "h",
+      "s": "()Ljava/util/List;",
+      "feature": "UI-05",
+      "critical": true,
+      "note": "底部导航精简：th0.h#h 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "th0.h#h",
+      "params": [],
+      "dexkit": [
+        "BottomNavigationRepository"
+      ]
+    },
+    "UI-05/th0.h#h@9.6.13": {
+      "c": "tf0.h",
+      "candidates": [
+        "tf0.h",
+        "th0.h"
+      ],
+      "m": "h",
+      "s": "()Ljava/util/List;",
+      "feature": "UI-05",
+      "critical": true,
+      "note": "9.6.13: th0.h -> tf0.h（anchor BottomNavigationRepository 仍唯一）。",
+      "logicalName": "th0.h#h",
+      "params": [],
+      "dexkit": [
+        "BottomNavigationRepository"
+      ]
+    },
+    "UI-05/rh0.c#c": {
+      "c": "rh0.c",
+      "m": "c",
+      "s": "(ZLjava/util/List;Lcom/netease/cloudmusic/module/strategy/meta/MainTabContext;)Ljava/util/List;",
+      "feature": "UI-05",
+      "critical": false,
+      "note": "底部导航精简：rh0.c#c 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "rh0.c#c",
+      "params": [
+        "Z",
+        "Ljava/util/List;",
+        "Lcom/netease/cloudmusic/module/strategy/meta/MainTabContext;"
+      ],
+      "dexkit": [
+        "tabCodeList",
+        "context"
+      ]
+    },
+    "UI-05/rh0.c#c@9.6.13": {
+      "c": "rf0.c",
+      "candidates": [
+        "rf0.c",
+        "rh0.c"
+      ],
+      "m": "c",
+      "s": "(ZLjava/util/List;Lcom/netease/cloudmusic/module/strategy/meta/MainTabContext;)Ljava/util/List;",
+      "feature": "UI-05",
+      "critical": false,
+      "note": "9.6.13: rh0.c -> rf0.c（anchor tabCodeList 仍在，c 签名不变）。",
+      "logicalName": "rh0.c#c",
+      "params": [
+        "Z",
+        "Ljava/util/List;",
+        "Lcom/netease/cloudmusic/module/strategy/meta/MainTabContext;"
+      ],
+      "dexkit": [
+        "tabCodeList",
+        "context"
+      ]
+    },
+    "UI-02/StartTimeHandler#isNeedDelayStart": {
+      "c": "com.netease.cloudmusic.module.startup.StartTimeHandler",
+      "m": "isNeedDelayStart",
+      "s": "()Z",
+      "feature": "UI-02",
+      "critical": true,
+      "note": "跳过启动延迟：StartTimeHandler#isNeedDelayStart 挂载点。",
+      "logicalName": "StartTimeHandler#isNeedDelayStart",
+      "params": []
+    },
+    "UI-02/StartTimeHandler#getStartAppRedPageDelayTime": {
+      "c": "com.netease.cloudmusic.module.startup.StartTimeHandler",
+      "m": "getStartAppRedPageDelayTime",
+      "s": "(Ljava/lang/String;)J",
+      "feature": "UI-02",
+      "critical": false,
+      "note": "跳过启动延迟：StartTimeHandler#getStartAppRedPageDelayTime 挂载点。",
+      "logicalName": "StartTimeHandler#getStartAppRedPageDelayTime",
+      "params": [
+        "Ljava/lang/String;"
+      ]
+    },
+    "UI-02/StartTimeHandler#checkDelayDoAction": {
+      "c": "com.netease.cloudmusic.module.startup.StartTimeHandler",
+      "m": "checkDelayDoAction",
+      "s": "(Ljava/lang/Runnable;Ljava/lang/String;)V",
+      "feature": "UI-02",
+      "critical": true,
+      "note": "跳过启动延迟：StartTimeHandler#checkDelayDoAction 挂载点。",
+      "logicalName": "StartTimeHandler#checkDelayDoAction",
+      "params": [
+        "Ljava/lang/Runnable;",
+        "Ljava/lang/String;"
+      ]
+    },
+    "UI-07/PushGuideHintView#maybeDisplayHint": {
+      "c": "com.netease.cloudmusic.main.hint.push.PushGuideHintView",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/r;)V",
+      "feature": "UI-07",
+      "critical": true,
+      "note": "引导与气泡屏蔽：PushGuideHintView#maybeDisplayHint 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "PushGuideHintView#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/r;"
+      ]
+    },
+    "UI-07/PushGuideHintView#maybeDisplayHint@9.6.13": {
+      "c": "com.netease.cloudmusic.main.hint.push.PushGuideHintView",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/u;)V",
+      "feature": "UI-07",
+      "critical": true,
+      "note": "9.6.13 hint 第三参 r -> u。",
+      "logicalName": "PushGuideHintView#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/u;"
+      ]
+    },
+    "UI-07/ScoreHintDialogView#maybeDisplayHint": {
+      "c": "com.netease.cloudmusic.module.hint.view.ScoreHintDialogView",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/r;)V",
+      "feature": "UI-07",
+      "critical": false,
+      "note": "引导与气泡屏蔽：ScoreHintDialogView#maybeDisplayHint 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "ScoreHintDialogView#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/r;"
+      ]
+    },
+    "UI-07/ScoreHintDialogView#maybeDisplayHint@9.6.13": {
+      "c": "com.netease.cloudmusic.module.hint.view.ScoreHintDialogView",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/u;)V",
+      "feature": "UI-07",
+      "critical": false,
+      "note": "9.6.13 hint 第三参 r -> u。",
+      "logicalName": "ScoreHintDialogView#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/u;"
+      ]
+    },
+    "UI-07/HintVipNormalRenewalDialogueView#maybeDisplayHint": {
+      "c": "com.netease.cloudmusic.discovery.view.module.music.v3.vipcard.HintVipNormalRenewalDialogueView",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/r;)V",
+      "feature": "UI-07",
+      "critical": false,
+      "note": "引导与气泡屏蔽：HintVipNormalRenewalDialogueView#maybeDisplayHint 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "HintVipNormalRenewalDialogueView#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/r;"
+      ]
+    },
+    "UI-07/HintVipNormalRenewalDialogueView#maybeDisplayHint@9.6.13": {
+      "c": "com.netease.cloudmusic.discovery.view.module.music.v3.vipcard.HintVipNormalRenewalDialogueView",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/u;)V",
+      "feature": "UI-07",
+      "critical": false,
+      "note": "9.6.13 hint 第三参 r -> u。",
+      "logicalName": "HintVipNormalRenewalDialogueView#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/u;"
+      ]
+    },
+    "UI-07/LiveLocalPushHintView#maybeDisplayHint": {
+      "c": "com.netease.cloudmusic.module.hint.view.LiveLocalPushHintView",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/r;)V",
+      "feature": "UI-07",
+      "critical": false,
+      "note": "引导与气泡屏蔽：LiveLocalPushHintView#maybeDisplayHint 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "LiveLocalPushHintView#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/r;"
+      ]
+    },
+    "UI-07/LiveLocalPushHintView#maybeDisplayHint@9.6.13": {
+      "c": "com.netease.cloudmusic.module.hint.view.LiveLocalPushHintView",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/u;)V",
+      "feature": "UI-07",
+      "critical": false,
+      "note": "9.6.13 hint 第三参 r -> u。",
+      "logicalName": "LiveLocalPushHintView#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/u;"
+      ]
+    },
+    "UI-07/BottomTabGuideBubbleNativeView#maybeDisplayHint": {
+      "c": "com.netease.cloudmusic.main.hint.BottomTabGuideBubbleNativeView",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/r;)V",
+      "feature": "UI-07",
+      "critical": false,
+      "note": "引导与气泡屏蔽：BottomTabGuideBubbleNativeView#maybeDisplayHint 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "BottomTabGuideBubbleNativeView#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/r;"
+      ]
+    },
+    "UI-07/BottomTabGuideBubbleNativeView#maybeDisplayHint@9.6.13": {
+      "c": "com.netease.cloudmusic.main.hint.BottomTabGuideBubbleNativeView",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/u;)V",
+      "feature": "UI-07",
+      "critical": false,
+      "note": "9.6.13 hint 第三参 r -> u。",
+      "logicalName": "BottomTabGuideBubbleNativeView#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/u;"
+      ]
+    },
+    "UI-07/nr2.c#checkAndShowYouthDialog": {
+      "c": "nr2.c",
+      "m": "checkAndShowYouthDialog",
+      "s": "(Landroid/content/Context;)Z",
+      "feature": "UI-07",
+      "critical": false,
+      "note": "引导与气泡屏蔽：nr2.c#checkAndShowYouthDialog 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "nr2.c#checkAndShowYouthDialog",
+      "params": [
+        "Landroid/content/Context;"
+      ]
+    },
+    "UI-07/nr2.c#checkAndShowYouthDialog@9.6.13": {
+      "c": "en2.c",
+      "candidates": [
+        "en2.c",
+        "nr2.c"
+      ],
+      "m": "checkAndShowYouthDialog",
+      "s": "(Landroid/content/Context;)Z",
+      "feature": "UI-07",
+      "critical": false,
+      "note": "9.6.13: nr2.c -> en2.c（38 个方法一一对应）。",
+      "logicalName": "nr2.c#checkAndShowYouthDialog",
+      "params": [
+        "Landroid/content/Context;"
+      ]
+    },
+    "UI-08/SettingActivity#V8": {
+      "c": "com.netease.cloudmusic.music.biz.setting.activity.SettingActivity",
+      "m": "V8",
+      "s": "()Z",
+      "feature": "UI-08",
+      "critical": true,
+      "note": "禁止自动播放：SettingActivity#V8 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "SettingActivity#V8",
+      "params": []
+    },
+    "UI-08/SettingActivity#V8@9.6.13": {
+      "c": "com.netease.cloudmusic.music.biz.setting.activity.SettingActivity",
+      "m": "Q8",
+      "s": "()Z",
+      "feature": "UI-08",
+      "critical": true,
+      "note": "9.6.13: V8(double_flow_auto_play_switch) -> Q8。",
+      "logicalName": "SettingActivity#V8",
+      "params": []
+    },
+    "UI-08/jn#m0": {
+      "c": "com.netease.cloudmusic.utils.jn",
+      "m": "m0",
+      "s": "()Z",
+      "feature": "UI-08",
+      "critical": false,
+      "note": "禁止自动播放：jn#m0 挂载点。",
+      "logicalName": "jn#m0",
+      "params": [],
+      "dexkit": [
+        "MESSAGE_CENTER_NEW_SONG_VERSION_CODE_TEMP"
+      ]
+    },
+    "UI-08/tt0.d#a": {
+      "c": "tt0.d",
+      "m": "a",
+      "s": "()Z",
+      "feature": "UI-08",
+      "critical": false,
+      "note": "禁止自动播放：tt0.d#a 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "tt0.d#a",
+      "params": [],
+      "dexkit": [
+        "bluetoothAutoPlay2History"
+      ]
+    },
+    "UI-08/tt0.d#a@9.6.13": {
+      "c": "ur0.d",
+      "candidates": [
+        "ur0.d",
+        "tt0.d"
+      ],
+      "m": "a",
+      "s": "()Z",
+      "feature": "UI-08",
+      "critical": false,
+      "note": "9.6.13: tt0.d -> ur0.d（anchor bluetoothAutoPlay2History 仍在）。",
+      "logicalName": "tt0.d#a",
+      "params": [],
+      "dexkit": [
+        "bluetoothAutoPlay2History"
+      ]
+    },
+    "UI-08/tt0.d#d": {
+      "c": "tt0.d",
+      "m": "d",
+      "s": "()Z",
+      "feature": "UI-08",
+      "critical": false,
+      "note": "禁止自动播放：tt0.d#d 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "tt0.d#d",
+      "params": [],
+      "dexkit": [
+        "bluetoothAutoPlay2History"
+      ]
+    },
+    "UI-08/tt0.d#d@9.6.13": {
+      "c": "ur0.d",
+      "candidates": [
+        "ur0.d",
+        "tt0.d"
+      ],
+      "m": "d",
+      "s": "()Z",
+      "feature": "UI-08",
+      "critical": false,
+      "note": "9.6.13: tt0.d -> ur0.d（anchor bluetoothAutoPlay2History 仍在）。",
+      "logicalName": "tt0.d#d",
+      "params": [],
+      "dexkit": [
+        "bluetoothAutoPlay2History"
+      ]
+    },
+    "UI-08/vt0.r#j": {
+      "c": "vt0.r",
+      "m": "j",
+      "s": "()Z",
+      "feature": "UI-08",
+      "critical": false,
+      "note": "禁止自动播放：vt0.r#j 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "vt0.r#j",
+      "params": [],
+      "dexkit": [
+        "HOMEPAGE_BOTTOM_TAB_PUBLISH_GUIDE"
+      ]
+    },
+    "UI-08/vt0.r#j@9.6.13": {
+      "c": "wr0.r",
+      "candidates": [
+        "wr0.r",
+        "vt0.r"
+      ],
+      "m": "j",
+      "s": "()Z",
+      "feature": "UI-08",
+      "critical": false,
+      "note": "9.6.13: vt0.r -> wr0.r（anchor HOMEPAGE_BOTTOM_TAB_PUBLISH_GUIDE 仍在）。",
+      "logicalName": "vt0.r#j",
+      "params": [],
+      "dexkit": [
+        "HOMEPAGE_BOTTOM_TAB_PUBLISH_GUIDE"
+      ]
+    },
+    "UI-08/lv0.j#e": {
+      "c": "lv0.j",
+      "m": "e",
+      "s": "()Lcom/netease/cloudmusic/module/strategy/meta/AutoPlayConfig;",
+      "feature": "UI-08",
+      "critical": false,
+      "note": "禁止自动播放：lv0.j#e 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "lv0.j#e",
+      "params": [],
+      "dexkit": [
+        "key_start_music_after_launch_mode_enable_"
+      ]
+    },
+    "UI-08/lv0.j#e@9.6.13": {
+      "c": "mt0.j",
+      "candidates": [
+        "mt0.j",
+        "lv0.j"
+      ],
+      "m": "c",
+      "s": "()Lcom/netease/cloudmusic/module/strategy/meta/AutoPlayConfig;",
+      "feature": "UI-08",
+      "critical": false,
+      "note": "9.6.13: lv0.j -> mt0.j，e()AutoPlayConfig -> c。",
+      "logicalName": "lv0.j#e",
+      "params": [],
+      "dexkit": [
+        "key_start_music_after_launch_mode_enable_"
+      ]
+    },
+    "EX-01/ResourceRouter#isNightTheme": {
+      "c": "com.netease.cloudmusic.theme.core.ResourceRouter",
+      "m": "isNightTheme",
+      "s": "()Z",
+      "feature": "EX-01",
+      "critical": true,
+      "note": "强制深色模式（实验性）：ResourceRouter#isNightTheme 挂载点。",
+      "logicalName": "ResourceRouter#isNightTheme",
+      "params": []
+    },
+    "EX-01/ResourceRouter#isUiModeNightYes": {
+      "c": "com.netease.cloudmusic.theme.core.ResourceRouter",
+      "m": "isUiModeNightYes",
+      "s": "()Z",
+      "feature": "EX-01",
+      "critical": false,
+      "note": "强制深色模式（实验性）：ResourceRouter#isUiModeNightYes 挂载点。",
+      "logicalName": "ResourceRouter#isUiModeNightYes",
+      "params": []
+    },
+    "UI-09/jn#L": {
+      "c": "com.netease.cloudmusic.utils.jn",
+      "m": "L",
+      "s": "()Z",
+      "feature": "UI-09",
+      "critical": true,
+      "note": "关闭头像挂件：jn#L 挂载点。",
+      "logicalName": "jn#L",
+      "params": [],
+      "dexkit": [
+        "MESSAGE_CENTER_NEW_SONG_VERSION_CODE_TEMP"
+      ]
+    },
+    "UI-10/PlayerCommentPopView#renderCommentListAndShow": {
+      "c": "com.netease.cloudmusic.ui.hint.PlayerCommentPopView",
+      "m": "renderCommentListAndShow",
+      "s": "(Ljava/util/List;)V",
+      "feature": "UI-10",
+      "critical": true,
+      "note": "播放页提示治理：PlayerCommentPopView#renderCommentListAndShow 挂载点。",
+      "logicalName": "PlayerCommentPopView#renderCommentListAndShow",
+      "params": [
+        "Ljava/util/List;"
+      ]
+    },
+    "UI-10/PlayerRecommendSongHintView#maybeDisplayHint": {
+      "c": "com.netease.cloudmusic.module.hint.view.PlayerRecommendSongHintView",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/r;)V",
+      "feature": "UI-10",
+      "critical": false,
+      "note": "播放页提示治理：PlayerRecommendSongHintView#maybeDisplayHint 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "PlayerRecommendSongHintView#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/r;"
+      ]
+    },
+    "UI-10/PlayerRecommendSongHintView#maybeDisplayHint@9.6.13": {
+      "c": "com.netease.cloudmusic.module.hint.view.PlayerRecommendSongHintView",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/u;)V",
+      "feature": "UI-10",
+      "critical": false,
+      "note": "9.6.13 hint 第三参 r -> u。",
+      "logicalName": "PlayerRecommendSongHintView#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/u;"
+      ]
+    },
+    "UI-10/PlayerJankDialogHelper#showPlayJankNetErrorDialog": {
+      "c": "com.netease.cloudmusic.ui.PlayerJankDialogHelper",
+      "m": "showPlayJankNetErrorDialog",
+      "s": "(Landroid/content/Context;)V",
+      "feature": "UI-10",
+      "critical": false,
+      "note": "播放页提示治理：PlayerJankDialogHelper#showPlayJankNetErrorDialog 挂载点。",
+      "logicalName": "PlayerJankDialogHelper#showPlayJankNetErrorDialog",
+      "params": [
+        "Landroid/content/Context;"
+      ]
+    },
+    "UI-10/PlayerJankDialogHelper#showNMCacheIOErrorDialog": {
+      "c": "com.netease.cloudmusic.ui.PlayerJankDialogHelper",
+      "m": "showNMCacheIOErrorDialog",
+      "s": "(Landroid/content/Context;)V",
+      "feature": "UI-10",
+      "critical": false,
+      "note": "播放页提示治理：PlayerJankDialogHelper#showNMCacheIOErrorDialog 挂载点。",
+      "logicalName": "PlayerJankDialogHelper#showNMCacheIOErrorDialog",
+      "params": [
+        "Landroid/content/Context;"
+      ]
+    },
+    "UI-10/PlayerIncentiveAdView#maybeDisplayHint": {
+      "c": "com.netease.cloudmusic.module.hint.view.PlayerIncentiveAdView",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/r;)V",
+      "feature": "UI-10",
+      "critical": false,
+      "note": "播放页提示治理：PlayerIncentiveAdView#maybeDisplayHint 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "PlayerIncentiveAdView#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/r;"
+      ]
+    },
+    "UI-10/PlayerIncentiveAdView#maybeDisplayHint@9.6.13": {
+      "c": "com.netease.cloudmusic.module.hint.view.PlayerIncentiveAdView",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/u;)V",
+      "feature": "UI-10",
+      "critical": false,
+      "note": "9.6.13 hint 第三参 r -> u。",
+      "logicalName": "PlayerIncentiveAdView#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/u;"
+      ]
+    },
+    "UI-11/SearchGuide#isValid": {
+      "c": "com.netease.cloudmusic.meta.SearchGuide",
+      "m": "isValid",
+      "s": "()Z",
+      "feature": "UI-11",
+      "critical": true,
+      "note": "搜索热词轮播：SearchGuide#isValid 挂载点。",
+      "logicalName": "SearchGuide#isValid",
+      "params": []
+    },
+    "UI-12/PodcastBottomGuideManager#isTimeToShowFMAutoPlayGuide": {
+      "c": "com.netease.cloudmusic.music.biz.voice.home.PodcastBottomGuideManager",
+      "m": "isTimeToShowFMAutoPlayGuide",
+      "s": "()Z",
+      "feature": "UI-12",
+      "critical": true,
+      "note": "播客与 AI DJ 引导：PodcastBottomGuideManager#isTimeToShowFMAutoPlayGuide 挂载点。",
+      "logicalName": "PodcastBottomGuideManager#isTimeToShowFMAutoPlayGuide",
+      "params": []
+    },
+    "UI-12/PodcastBottomGuideManager#isTimeToShowVoiceBookGuide": {
+      "c": "com.netease.cloudmusic.music.biz.voice.home.PodcastBottomGuideManager",
+      "m": "isTimeToShowVoiceBookGuide",
+      "s": "()Z",
+      "feature": "UI-12",
+      "critical": false,
+      "note": "播客与 AI DJ 引导：PodcastBottomGuideManager#isTimeToShowVoiceBookGuide 挂载点。",
+      "logicalName": "PodcastBottomGuideManager#isTimeToShowVoiceBookGuide",
+      "params": []
+    },
+    "UI-12/PlayerAIDJSwitchGuideView#showGuide": {
+      "c": "com.netease.cloudmusic.ui.hint.aidj.PlayerAIDJSwitchGuideView",
+      "m": "showGuide",
+      "s": "(Ljava/lang/String;Ljava/lang/String;J)V",
+      "feature": "UI-12",
+      "critical": false,
+      "note": "播客与 AI DJ 引导：PlayerAIDJSwitchGuideView#showGuide 挂载点。",
+      "logicalName": "PlayerAIDJSwitchGuideView#showGuide",
+      "params": [
+        "Ljava/lang/String;",
+        "Ljava/lang/String;",
+        "J"
+      ]
+    },
+    "UI-12/FMAIDJSwitchView#maybeDisplayHint": {
+      "c": "com.netease.cloudmusic.hint.aidj.FMAIDJSwitchView",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/r;)V",
+      "feature": "UI-12",
+      "critical": false,
+      "note": "播客与 AI DJ 引导：FMAIDJSwitchView#maybeDisplayHint 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "FMAIDJSwitchView#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/r;"
+      ]
+    },
+    "UI-12/FMAIDJSwitchView#maybeDisplayHint@9.6.13": {
+      "c": "com.netease.cloudmusic.hint.aidj.FMAIDJSwitchView",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/u;)V",
+      "feature": "UI-12",
+      "critical": false,
+      "note": "9.6.13 hint 第三参 r -> u。",
+      "logicalName": "FMAIDJSwitchView#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/u;"
+      ]
+    },
+    "UI-13/WidgetAddGuideDialogHelper$a#a": {
+      "c": "com.netease.cloudmusic.music.biz.appwidgets.view.WidgetAddGuideDialogHelper$a",
+      "m": "a",
+      "s": "()Z",
+      "feature": "UI-13",
+      "critical": true,
+      "note": "小组件与推送引导：WidgetAddGuideDialogHelper$a#a 挂载点。",
+      "logicalName": "WidgetAddGuideDialogHelper$a#a",
+      "params": []
+    },
+    "UI-13/PushGuideCenterDialogFragment#onCreateView": {
+      "c": "com.netease.cloudmusic.main.hint.push.PushGuideCenterDialogFragment",
+      "m": "onCreateView",
+      "s": "(Landroid/view/LayoutInflater;Landroid/view/ViewGroup;Landroid/os/Bundle;)Landroid/view/View;",
+      "feature": "UI-13",
+      "critical": false,
+      "note": "小组件与推送引导：PushGuideCenterDialogFragment#onCreateView 挂载点。",
+      "logicalName": "PushGuideCenterDialogFragment#onCreateView",
+      "params": [
+        "Landroid/view/LayoutInflater;",
+        "Landroid/view/ViewGroup;",
+        "Landroid/os/Bundle;"
+      ]
+    },
+    "UI-13/PushGuideCenterDialogFragment#onActivityCreated": {
+      "c": "com.netease.cloudmusic.main.hint.push.PushGuideCenterDialogFragment",
+      "m": "onActivityCreated",
+      "s": "(Landroid/os/Bundle;)V",
+      "feature": "UI-13",
+      "critical": false,
+      "note": "小组件与推送引导：PushGuideCenterDialogFragment#onActivityCreated 挂载点。",
+      "logicalName": "PushGuideCenterDialogFragment#onActivityCreated",
+      "params": [
+        "Landroid/os/Bundle;"
+      ]
+    },
+    "UI-13/PushGuideBottomSheetFragment#onCreateView": {
+      "c": "com.netease.cloudmusic.main.hint.push.PushGuideBottomSheetFragment",
+      "m": "onCreateView",
+      "s": "(Landroid/view/LayoutInflater;Landroid/view/ViewGroup;Landroid/os/Bundle;)Landroid/view/View;",
+      "feature": "UI-13",
+      "critical": false,
+      "note": "小组件与推送引导：PushGuideBottomSheetFragment#onCreateView 挂载点。",
+      "logicalName": "PushGuideBottomSheetFragment#onCreateView",
+      "params": [
+        "Landroid/view/LayoutInflater;",
+        "Landroid/view/ViewGroup;",
+        "Landroid/os/Bundle;"
+      ]
+    },
+    "UI-13/PushGuideBottomSheetFragment#onActivityCreated": {
+      "c": "com.netease.cloudmusic.main.hint.push.PushGuideBottomSheetFragment",
+      "m": "onActivityCreated",
+      "s": "(Landroid/os/Bundle;)V",
+      "feature": "UI-13",
+      "critical": false,
+      "note": "小组件与推送引导：PushGuideBottomSheetFragment#onActivityCreated 挂载点。",
+      "logicalName": "PushGuideBottomSheetFragment#onActivityCreated",
+      "params": [
+        "Landroid/os/Bundle;"
+      ]
+    },
+    "UI-14/LyricsBottomHintView#maybeDisplayHint": {
+      "c": "com.netease.cloudmusic.module.hint.view.LyricsBottomHintView",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/r;)V",
+      "feature": "UI-14",
+      "critical": true,
+      "note": "歌词页推广：LyricsBottomHintView#maybeDisplayHint 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "LyricsBottomHintView#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/r;"
+      ]
+    },
+    "UI-14/LyricsBottomHintView#maybeDisplayHint@9.6.13": {
+      "c": "com.netease.cloudmusic.module.hint.view.LyricsBottomHintView",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/u;)V",
+      "feature": "UI-14",
+      "critical": true,
+      "note": "9.6.13 hint 第三参 r -> u。",
+      "logicalName": "LyricsBottomHintView#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/u;"
+      ]
+    },
+    "UI-14/LyricViewContainer#checkAndShowLrcOptionHint": {
+      "c": "com.netease.cloudmusic.ui.LyricViewContainer",
+      "m": "checkAndShowLrcOptionHint",
+      "s": "()V",
+      "feature": "UI-14",
+      "critical": false,
+      "note": "歌词页推广：LyricViewContainer#checkAndShowLrcOptionHint 挂载点。",
+      "logicalName": "LyricViewContainer#checkAndShowLrcOptionHint",
+      "params": []
+    },
+    "UI-14/LyricVideoTipsDialog#oc": {
+      "c": "com.netease.cloudmusic.fragment.LyricVideoTipsDialog",
+      "m": "oc",
+      "s": "(Landroidx/fragment/app/FragmentActivity;Lcom/netease/cloudmusic/meta/LyricDialogData;)V",
+      "feature": "UI-14",
+      "critical": false,
+      "note": "歌词页推广：LyricVideoTipsDialog#oc 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "LyricVideoTipsDialog#oc",
+      "params": [
+        "Landroidx/fragment/app/FragmentActivity;",
+        "Lcom/netease/cloudmusic/meta/LyricDialogData;"
+      ]
+    },
+    "UI-14/LyricVideoTipsDialog#oc@9.6.13": {
+      "c": "com.netease.cloudmusic.fragment.LyricVideoTipsDialog",
+      "m": "kc",
+      "s": "(Landroidx/fragment/app/FragmentActivity;Lcom/netease/cloudmusic/meta/LyricDialogData;)V",
+      "feature": "UI-14",
+      "critical": false,
+      "note": "9.6.13: oc(Activity,LyricDialogData) -> kc。",
+      "logicalName": "LyricVideoTipsDialog#oc",
+      "params": [
+        "Landroidx/fragment/app/FragmentActivity;",
+        "Lcom/netease/cloudmusic/meta/LyricDialogData;"
+      ]
+    },
+    "EN-01/MyMusicProfileHeaderBgViewHolderManager#e": {
+      "c": "com.netease.cloudmusic.vh.MyMusicProfileHeaderBgViewHolderManager",
+      "m": "e",
+      "s": "(Lcom/netease/cloudmusic/meta/virtual/UserBackgroundInfo;)V",
+      "feature": "EN-01",
+      "critical": true,
+      "note": "我的页自定义背景：MyMusicProfileHeaderBgViewHolderManager#e 挂载点。",
+      "logicalName": "MyMusicProfileHeaderBgViewHolderManager#e",
+      "params": [
+        "Lcom/netease/cloudmusic/meta/virtual/UserBackgroundInfo;"
+      ]
+    },
+    "EN-01/MyMusicProfileHeaderBgViewHolderManager#onResume": {
+      "c": "com.netease.cloudmusic.vh.MyMusicProfileHeaderBgViewHolderManager",
+      "m": "onResume",
+      "s": "()V",
+      "feature": "EN-01",
+      "critical": false,
+      "note": "我的页自定义背景：MyMusicProfileHeaderBgViewHolderManager#onResume 挂载点。",
+      "logicalName": "MyMusicProfileHeaderBgViewHolderManager#onResume",
+      "params": []
+    },
+    "EN-01/BgInfoParser#B": {
+      "c": "pc2.e$a",
+      "m": "B",
+      "s": "(Lorg/json/JSONObject;)Lkotlin/Pair;",
+      "feature": "EN-01",
+      "critical": false,
+      "note": "我的页自定义背景：BgInfoParser#B 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "BgInfoParser#B",
+      "params": [
+        "Lorg/json/JSONObject;"
+      ]
+    },
+    "EN-01/BgInfoParser#B@9.6.13": {
+      "c": "nb2.e$a",
+      "candidates": [
+        "nb2.e$a",
+        "pc2.e$a"
+      ],
+      "m": "B",
+      "s": "(Lorg/json/JSONObject;)Lkotlin/Pair;",
+      "feature": "EN-01",
+      "critical": false,
+      "note": "9.6.13: pc2.e$a -> nb2.e$a（整包改名，签名不变）。",
+      "logicalName": "BgInfoParser#B",
+      "params": [
+        "Lorg/json/JSONObject;"
+      ]
+    },
+    "EN-01/BgStore#g": {
+      "c": "pc2.f",
+      "m": "g",
+      "s": "(J)Ljava/lang/String;",
+      "feature": "EN-01",
+      "critical": false,
+      "note": "我的页自定义背景：BgStore#g 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "BgStore#g",
+      "params": [
+        "J"
+      ]
+    },
+    "EN-01/BgStore#g@9.6.13": {
+      "c": "nb2.f",
+      "candidates": [
+        "nb2.f",
+        "pc2.f"
+      ],
+      "m": "g",
+      "s": "(J)Ljava/lang/String;",
+      "feature": "EN-01",
+      "critical": false,
+      "note": "9.6.13: pc2.f -> nb2.f（整包改名，签名不变）。",
+      "logicalName": "BgStore#g",
+      "params": [
+        "J"
+      ]
+    },
+    "EN-01/BgStore#s": {
+      "c": "pc2.f",
+      "m": "s",
+      "s": "(JLjava/lang/String;)Z",
+      "feature": "EN-01",
+      "critical": false,
+      "note": "我的页自定义背景：BgStore#s 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "BgStore#s",
+      "params": [
+        "J",
+        "Ljava/lang/String;"
+      ]
+    },
+    "EN-01/BgStore#s@9.6.13": {
+      "c": "nb2.f",
+      "candidates": [
+        "nb2.f",
+        "pc2.f"
+      ],
+      "m": "s",
+      "s": "(JLjava/lang/String;)Z",
+      "feature": "EN-01",
+      "critical": false,
+      "note": "9.6.13: pc2.f -> nb2.f（整包改名，签名不变）。",
+      "logicalName": "BgStore#s",
+      "params": [
+        "J",
+        "Ljava/lang/String;"
+      ]
+    },
+    "UI-15/LivePromotion#listFromJson(JSONObject)": {
+      "c": "com.netease.play.livepage.promotion.LivePromotion",
+      "m": "listFromJson",
+      "s": "(Lorg/json/JSONObject;)Ljava/util/List;",
+      "feature": "UI-15",
+      "critical": true,
+      "note": "云村与直播推广：LivePromotion#listFromJson(JSONObject) 挂载点。",
+      "logicalName": "LivePromotion#listFromJson(JSONObject)",
+      "params": [
+        "Lorg/json/JSONObject;"
+      ]
+    },
+    "UI-15/LivePromotion#listFromJson(JSONArray)": {
+      "c": "com.netease.play.livepage.promotion.LivePromotion",
+      "m": "listFromJson",
+      "s": "(Lorg/json/JSONArray;)Ljava/util/List;",
+      "feature": "UI-15",
+      "critical": false,
+      "note": "云村与直播推广：LivePromotion#listFromJson(JSONArray) 挂载点。",
+      "logicalName": "LivePromotion#listFromJson(JSONArray)",
+      "params": [
+        "Lorg/json/JSONArray;"
+      ]
+    },
+    "UI-15/NotesPublishGuideHint#maybeDisplayHint": {
+      "c": "com.netease.cloudmusic.music.biz.mlog.consume.social.homepage.ui.NotesPublishGuideHint",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/r;)V",
+      "feature": "UI-15",
+      "critical": false,
+      "note": "云村与直播推广：NotesPublishGuideHint#maybeDisplayHint 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "NotesPublishGuideHint#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/r;"
+      ]
+    },
+    "UI-15/NotesPublishGuideHint#maybeDisplayHint@9.6.13": {
+      "c": "com.netease.cloudmusic.music.biz.mlog.consume.social.homepage.ui.NotesPublishGuideHint",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/u;)V",
+      "feature": "UI-15",
+      "critical": false,
+      "note": "9.6.13 hint 第三参 r -> u。",
+      "logicalName": "NotesPublishGuideHint#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/u;"
+      ]
+    },
+    "UI-15/NotesSearchGuideHint#maybeDisplayHint": {
+      "c": "com.netease.cloudmusic.music.biz.mlog.consume.social.homepage.ui.NotesSearchGuideHint",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/r;)V",
+      "feature": "UI-15",
+      "critical": false,
+      "note": "云村与直播推广：NotesSearchGuideHint#maybeDisplayHint 的 9.6.08 基线坐标；9.6.13 起见同名 @9.6.13 条目。",
+      "logicalName": "NotesSearchGuideHint#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/r;"
+      ]
+    },
+    "UI-15/NotesSearchGuideHint#maybeDisplayHint@9.6.13": {
+      "c": "com.netease.cloudmusic.music.biz.mlog.consume.social.homepage.ui.NotesSearchGuideHint",
+      "m": "maybeDisplayHint",
+      "s": "(Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;Lcom/netease/cloudmusic/module/hint/view/a;Lcom/netease/cloudmusic/module/hint/view/u;)V",
+      "feature": "UI-15",
+      "critical": false,
+      "note": "9.6.13 hint 第三参 r -> u。",
+      "logicalName": "NotesSearchGuideHint#maybeDisplayHint",
+      "params": [
+        "Lcom/netease/cloudmusic/module/hint/view/AbsHintContainer;",
+        "Lcom/netease/cloudmusic/module/hint/view/a;",
+        "Lcom/netease/cloudmusic/module/hint/view/u;"
+      ]
+    },
+    "UI-15/CommentLiveViewHolder#onBindViewHolder": {
+      "c": "com.netease.cloudmusic.module.comment.CommentLiveViewHolder",
+      "m": "onBindViewHolder",
+      "s": "(Ljava/lang/Object;II)V",
+      "feature": "UI-15",
+      "critical": false,
+      "note": "云村与直播推广：CommentLiveViewHolder#onBindViewHolder 挂载点。",
+      "logicalName": "CommentLiveViewHolder#onBindViewHolder",
+      "params": [
+        "Ljava/lang/Object;",
+        "I",
+        "I"
+      ]
+    },
+    "UI-05/tf0.o$a#y": {
+      "c": "tf0.o$a",
+      "m": "y",
+      "s": "(Ljava/util/List;Z)V",
+      "feature": "UI-05",
+      "critical": false,
+      "note": "9.6.13 专属：底栏 state 列表唯一构建点（主题刷新 z 也经过它）。",
+      "logicalName": "tf0.o$a#y",
+      "params": [
+        "Ljava/util/List;",
+        "Z"
+      ]
+    },
+    "EN-01/MyMusicProxyFragment#kc": {
+      "c": "com.netease.cloudmusic.fragment.MyMusicProxyFragment",
+      "m": "kc",
+      "s": "()Z",
+      "feature": "EN-01",
+      "critical": true,
+      "note": "9.6.13 专属：9.6.08 的 oc()Z 在本版改名 kc()Z。",
+      "logicalName": "MyMusicProxyFragment#kc",
+      "params": []
+    },
+    "EN-01/sg#s": {
+      "c": "com.netease.cloudmusic.utils.sg",
+      "m": "s",
+      "s": "(Lorg/json/JSONObject;)Z",
+      "feature": "EN-01",
+      "critical": false,
+      "note": "只读探针：sg.s(JSONObject) 用于选择 V4(true)/V3(false)。",
+      "logicalName": "sg#s",
+      "params": [
+        "Lorg/json/JSONObject;"
+      ]
+    }
+  },
+  "classes": {},
+  "profiles": [
+    {
+      "versionName": "9.6.08",
+      "versionCode": 9006008,
+      "mounts": [
+        "AD-01/LoadingAdManager#E",
+        "AD-01/LoadingAdManager#G",
+        "AD-01/LoadingAdManager#o",
+        "AD-01/LoadingAdActivity#onCreate",
+        "AD-01/LoadingAdFragment#onViewCreated",
+        "AD-01/LoadingAdShakeHelper#onSensorChanged",
+        "AD-01/q60.w0#g",
+        "AD-02/LaunchDialog#showDialog",
+        "AD-02/LaunchDialog#showDialog(3)",
+        "AD-02/LaunchDialog#showMultiModulePopUpDialog",
+        "AD-02/LaunchDialog#showSinglePicDialog",
+        "AD-02/LaunchDialog#showPictureDialog",
+        "AD-02/LaunchDialog#showCompactDialog",
+        "UI-01/CMUpdateConfig#hasNewVersion",
+        "UI-01/appupdate.d#B",
+        "UI-01/appupdate.d#I",
+        "UI-01/UpdateInfo#getNeedPopUp",
+        "UI-01/UpdateInfo#getForceUpdate",
+        "UI-01/fw0.e#q",
+        "AD-06/Banner#isAdBanner",
+        "AD-07/CommentAdapter#y1",
+        "AD-07/SpecialComment#getGeneralBanner",
+        "AD-07/SpecialComment#getLiveRcmdList",
+        "AD-07/SpecialComment#getVipRcmdList",
+        "AD-07/SpecialComment#getConcertInfo",
+        "AD-07/Comment#isTagValid",
+        "AD-07/Comment#getBottomTags",
+        "AD-07/CommentVipRcmdAdapter#getItemCount",
+        "AD-08/PlayerAdJarDelegateImpl#k",
+        "AD-08/PlayerAdJarDelegateImpl#q",
+        "AD-08/MusicGiftModel#isValid",
+        "AD-08/AdPlayerFullScreenHelper#checkNeedExpose",
+        "AD-09/AdAudioClipManager#d",
+        "AD-09/AdAudioClipManager#c",
+        "AD-09/AdPodcastPlayerPageHelper#h",
+        "AD-09/PodcastVideoAdHelperImpl#z",
+        "AD-03/AdCloudReportTask#execute",
+        "AD-03/StartAppHelper$b#startApp",
+        "AD-03/AdExposureDeeplinkPreRequestTask#init",
+        "AD-03/AdExposureDeeplinkTask#init",
+        "AD-04/RNSearchAdViewManger#newStyle",
+        "AD-04/RNSearchAdViewManger#oldStyle",
+        "AD-04/RNSearchAdViewManger#hideAllViews",
+        "AD-04/SearchAdItemLargeView#e",
+        "AD-04/SearchAdItemMediumView#e",
+        "AD-05/AdColdBootEntranceTask#init",
+        "AD-05/PodcastRewardAdTask#init",
+        "AD-05/APreloadRecommendViewTask#init",
+        "PV-01/MusicOaidUploadManager#o",
+        "PV-01/AdOaidUploadTask#init",
+        "PV-02/NeedLogToFileTask#init",
+        "PV-02/NBLogTask#init",
+        "PV-03/StartupTask#needExecute",
+        "PV-04/StatisticImpl#logApm",
+        "PV-04/StatisticImpl#forceApmUpload",
+        "PV-05/StatisticImpl#log",
+        "PV-05/StatisticImpl#logJSON",
+        "PV-05/LogMonitorConfigManager#b",
+        "PV-05/LogMonitorConfigManager#c",
+        "PV-05/LogMonitorConfigManager#d",
+        "PV-05/LogMonitorConfigManager#e",
+        "PV-06/utils.h2#d",
+        "EX-02/StartupTask#runOnUIThread",
+        "EX-02/StartupTask#priority",
+        "EX-02/StartupTask#runOnStage",
+        "EX-02/StartupTask#degradeInit",
+        "ABTEST/ABTestManagerImpl#checkExperiment",
+        "ABTEST/ABTestConfig#getGroupKeys",
+        "ABTEST/LibraABTestConfig#getGroupKeys",
+        "ABTEST/abtest2.b#x",
+        "ABTEST/StartupABManager#getGroup",
+        "UI-03/MixContainerData#getBlockCodeOrderList",
+        "UI-03/MixContainerData#getResources",
+        "UI-03/DiscoveryBlockData#getBlockList",
+        "UI-03/MMKV#decodeString(String)",
+        "UI-03/MMKV#decodeString(String,String)",
+        "UI-03/MMKV#getString(String,String)",
+        "UI-04/HomeTopTabInfo#getCanDelete",
+        "UI-04/HomeTopTabInfo#getCanDrag",
+        "UI-04/hometoptab.TabExtra#getNowChannelItems",
+        "UI-04/newframework.TabExtra#getNowChannelItems",
+        "UI-04/hometoptab.UserSettingDTO#getCurrentRes",
+        "UI-04/hometoptab.v2.UserSettingDTO#getCurrentRes",
+        "UI-04/ArkFragmentV2#getTabDataList",
+        "UI-04/ArkFragmentV2#getTabData",
+        "UI-04/arkview.ArkFragment#refreshAdapterData",
+        "UI-04/BaseArkV3Fragment#getTabDataList",
+        "UI-04/BaseArkV3Fragment#hc",
+        "UI-04/BaseArkV3Fragment#Tc",
+        "UI-04/BaseArkV3Fragment#Lc",
+        "UI-04/dr.h#T0",
+        "UI-04/MusicTabLayout#addTab(k,int,boolean)",
+        "UI-05/SettingActivity#T8",
+        "UI-05/SettingActivity#U8",
+        "UI-05/th0.h#h",
+        "UI-05/rh0.c#c",
+        "UI-02/StartTimeHandler#isNeedDelayStart",
+        "UI-02/StartTimeHandler#getStartAppRedPageDelayTime",
+        "UI-02/StartTimeHandler#checkDelayDoAction",
+        "UI-07/PushGuideHintView#maybeDisplayHint",
+        "UI-07/ScoreHintDialogView#maybeDisplayHint",
+        "UI-07/HintVipNormalRenewalDialogueView#maybeDisplayHint",
+        "UI-07/LiveLocalPushHintView#maybeDisplayHint",
+        "UI-07/BottomTabGuideBubbleNativeView#maybeDisplayHint",
+        "UI-07/nr2.c#checkAndShowYouthDialog",
+        "UI-08/SettingActivity#V8",
+        "UI-08/jn#m0",
+        "UI-08/tt0.d#a",
+        "UI-08/tt0.d#d",
+        "UI-08/vt0.r#j",
+        "UI-08/lv0.j#e",
+        "EX-01/ResourceRouter#isNightTheme",
+        "EX-01/ResourceRouter#isUiModeNightYes",
+        "UI-09/jn#L",
+        "UI-10/PlayerCommentPopView#renderCommentListAndShow",
+        "UI-10/PlayerRecommendSongHintView#maybeDisplayHint",
+        "UI-10/PlayerJankDialogHelper#showPlayJankNetErrorDialog",
+        "UI-10/PlayerJankDialogHelper#showNMCacheIOErrorDialog",
+        "UI-10/PlayerIncentiveAdView#maybeDisplayHint",
+        "UI-11/SearchGuide#isValid",
+        "UI-12/PodcastBottomGuideManager#isTimeToShowFMAutoPlayGuide",
+        "UI-12/PodcastBottomGuideManager#isTimeToShowVoiceBookGuide",
+        "UI-12/PlayerAIDJSwitchGuideView#showGuide",
+        "UI-12/FMAIDJSwitchView#maybeDisplayHint",
+        "UI-13/WidgetAddGuideDialogHelper$a#a",
+        "UI-13/PushGuideCenterDialogFragment#onCreateView",
+        "UI-13/PushGuideCenterDialogFragment#onActivityCreated",
+        "UI-13/PushGuideBottomSheetFragment#onCreateView",
+        "UI-13/PushGuideBottomSheetFragment#onActivityCreated",
+        "UI-14/LyricsBottomHintView#maybeDisplayHint",
+        "UI-14/LyricViewContainer#checkAndShowLrcOptionHint",
+        "UI-14/LyricVideoTipsDialog#oc",
+        "EN-01/MyMusicProfileHeaderBgViewHolderManager#e",
+        "EN-01/MyMusicProfileHeaderBgViewHolderManager#onResume",
+        "EN-01/BgInfoParser#B",
+        "EN-01/BgStore#g",
+        "EN-01/BgStore#s",
+        "UI-15/LivePromotion#listFromJson(JSONObject)",
+        "UI-15/LivePromotion#listFromJson(JSONArray)",
+        "UI-15/NotesPublishGuideHint#maybeDisplayHint",
+        "UI-15/NotesSearchGuideHint#maybeDisplayHint",
+        "UI-15/CommentLiveViewHolder#onBindViewHolder"
+      ]
+    },
+    {
+      "versionName": "9.6.13",
+      "versionCode": 9006013,
+      "base": "9.6.08",
+      "mounts": [
+        "AD-01/LoadingAdManager#E@9.6.13",
+        "AD-01/LoadingAdManager#G@9.6.13",
+        "AD-01/LoadingAdManager#o@9.6.13",
+        "AD-01/q60.w0#g@9.6.13",
+        "UI-01/fw0.e#q@9.6.13",
+        "AD-08/PlayerAdJarDelegateImpl#k@9.6.13",
+        "AD-09/PodcastVideoAdHelperImpl#z@9.6.13",
+        "PV-06/utils.h2#d@9.6.13",
+        "UI-04/BaseArkV3Fragment#hc@9.6.13",
+        "UI-04/BaseArkV3Fragment#Tc@9.6.13",
+        "UI-04/BaseArkV3Fragment#Lc@9.6.13",
+        "UI-04/dr.h#T0@9.6.13",
+        "UI-05/SettingActivity#T8@9.6.13",
+        "UI-05/SettingActivity#U8@9.6.13",
+        "UI-05/th0.h#h@9.6.13",
+        "UI-05/rh0.c#c@9.6.13",
+        "UI-07/PushGuideHintView#maybeDisplayHint@9.6.13",
+        "UI-07/ScoreHintDialogView#maybeDisplayHint@9.6.13",
+        "UI-07/HintVipNormalRenewalDialogueView#maybeDisplayHint@9.6.13",
+        "UI-07/LiveLocalPushHintView#maybeDisplayHint@9.6.13",
+        "UI-07/BottomTabGuideBubbleNativeView#maybeDisplayHint@9.6.13",
+        "UI-07/nr2.c#checkAndShowYouthDialog@9.6.13",
+        "UI-08/SettingActivity#V8@9.6.13",
+        "UI-08/tt0.d#a@9.6.13",
+        "UI-08/tt0.d#d@9.6.13",
+        "UI-08/vt0.r#j@9.6.13",
+        "UI-08/lv0.j#e@9.6.13",
+        "UI-10/PlayerRecommendSongHintView#maybeDisplayHint@9.6.13",
+        "UI-10/PlayerIncentiveAdView#maybeDisplayHint@9.6.13",
+        "UI-12/FMAIDJSwitchView#maybeDisplayHint@9.6.13",
+        "UI-14/LyricsBottomHintView#maybeDisplayHint@9.6.13",
+        "UI-14/LyricVideoTipsDialog#oc@9.6.13",
+        "EN-01/BgInfoParser#B@9.6.13",
+        "EN-01/BgStore#g@9.6.13",
+        "EN-01/BgStore#s@9.6.13",
+        "UI-15/NotesPublishGuideHint#maybeDisplayHint@9.6.13",
+        "UI-15/NotesSearchGuideHint#maybeDisplayHint@9.6.13",
+        "UI-05/tf0.o$a#y",
+        "EN-01/MyMusicProxyFragment#kc",
+        "EN-01/sg#s"
+      ]
+    },
+    {
+      "versionName": "9.6.15",
+      "versionCode": 9006015,
+      "base": "9.6.13",
+      "mounts": []
+    }
+  ]
+}

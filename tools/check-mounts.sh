@@ -1,25 +1,28 @@
 #!/usr/bin/env bash
-# 云音乐工具箱 · 挂载点体检 v3
+# 云音乐工具箱 · 挂载点体检 v4
 #
-# 数据源：ProfileExportTest 导出的 build/profile9608.json / profile9613.json /
-# profile9615.json（与代码共用同一份清单）。
+# 数据源：app/src/main/resources/anchors.json（唯一来源）。公共 core 与 TB/QB/QM
+# 一致；CMT 额外用 app/profiles 做多宿主版本分发，其他模块是单版本。
+# 脚本按 APK versionCode 选择对应的 profile，展开 base 继承链，按 mount id
+# (feature/logicalName) 合并增量 mounts 后逐项查询；不再依赖 ProfileExportTest
+# 的构建产物（仍可用 --profile 指定已导出的扁平 profileXXXX.json 排查问题）。
 # 检查项：
-#   1) aapt2 dump badging 的 versionCode 必须与所选 profile JSON 顶层的
-#      versionCode 一致（--allow-version 可跳过）；未显式 --profile 时按
-#      APK versionCode 自动选择 profile（9006008/9006013/9006015）；
+#   1) aapt2 dump badging 的 versionCode 必须在 anchors.json 的 profiles 中
+#      （--allow-version 可跳过；--profile 时按该 JSON 顶层 versionCode 校验）；
 #   2) 每个 mount 的 classCandidates 至少有一个能在 classes 表中找到；
 #   3) 有 methodName 的 mount，必须在 methods 表中找到同参数/返回类型的方法；
 #   4) 有 anchors 的 mount，至少一个 classCandidate 的方法体里包含全部锚点
 #      字符串（与 DexKit ClassMatcher.addUsingString 的 Contains 语义一致）。
 #
 # 用法:
-#   tools/check-mounts.sh [APK路径] [--apk APK] [--dexsql PATH] [--profile JSON]
+#   tools/check-mounts.sh [APK路径] [--apk APK] [--dexsql PATH]
+#                         [--anchors JSON] [--profile JSON]
 #                         [--aapt2 PATH] [--allow-version] [--skip-anchors]
 #
 # 参数优先级: CLI > 环境变量 > 常见安装路径。
 # 环境变量:
-#   TARGET_APK, DEXSQL, PROFILE_JSON, AAPT2, ALLOW_VERSION=1, SKIP_ANCHORS=1
-#   （旧变量 APK 仍作为 TARGET_APK 的别名）
+#   TARGET_APK, DEXSQL, ANCHORS_JSON, PROFILE_JSON, AAPT2,
+#   ALLOW_VERSION=1, SKIP_ANCHORS=1（旧变量 APK 仍作为 TARGET_APK 的别名）
 #
 # 缓存/临时文件固定在 <repo>/tools/.dexsql-cache/（已在 .gitignore 中忽略）。
 # 本脚本不做 dexsql 查询缓存，每次都用当前 APK 直接查询；apk.meta 记录
@@ -34,6 +37,7 @@ CACHE_DIR="$REPO_ROOT/tools/.dexsql-cache"
 
 TARGET_APK="${TARGET_APK:-${APK:-}}"
 DEXSQL="${DEXSQL:-}"
+ANCHORS_JSON="${ANCHORS_JSON:-$REPO_ROOT/app/src/main/resources/anchors.json}"
 PROFILE_JSON="${PROFILE_JSON:-}"
 AAPT2="${AAPT2:-}"
 ALLOW_VERSION="${ALLOW_VERSION:-0}"
@@ -43,20 +47,20 @@ POSITIONAL=""
 usage() {
     cat <<'EOF'
 Usage:
-  tools/check-mounts.sh [APK_PATH] [--apk APK] [--dexsql PATH] [--profile JSON]
+  tools/check-mounts.sh [APK_PATH] [--apk APK] [--dexsql PATH]
+                        [--anchors JSON] [--profile JSON]
                         [--aapt2 PATH] [--allow-version] [--skip-anchors]
 
 Arguments:
   APK_PATH / --apk      目标 APK（网易云 9.6.08 / 9.6.13 / 9.6.15）；也可用 TARGET_APK 环境变量
   --dexsql PATH         dexsql 可执行文件；也可用 DEXSQL
-  --profile JSON        ProfileExportTest 导出的 profile9608.json / profile9613.json /
-                        profile9615.json；也可用 PROFILE_JSON（期望 versionCode 取自该 JSON）。
-                        不传时按 APK versionCode 自动选择：
-                        9006008 -> profile9608.json，9006013 -> profile9613.json，
-                        9006015 -> profile9615.json（缺失时回退 profile9613.json 并 WARN）
-  --aapt2 PATH          aapt2 可执行文件；也可用 AAPT2（缺失时无法自动选 profile，
+  --anchors JSON        anchors.json（默认 app/src/main/resources/anchors.json）；
+                        按 APK versionCode 自动选择 profile 并展开 base 继承链
+  --profile JSON        已导出的扁平 profile JSON（ProfileExportTest 产物）；
+                        指定后不再读 anchors.json，期望 versionCode 取自该 JSON
+  --aapt2 PATH          aapt2 可执行文件；也可用 AAPT2（缺失时无法自动选版本，
                         也会跳过 versionCode 校验）
-  --allow-version       不强制 versionCode 与 profile JSON 一致
+  --allow-version       不强制 versionCode 与所选数据源的 versionCode 一致
   --skip-anchors        跳过 DexKitAnchors 校验（锚点缺失不再计入 GONE）
   -h, --help            显示本帮助
 
@@ -82,6 +86,11 @@ while [ $# -gt 0 ]; do
             PROFILE_JSON="$2"; shift 2 ;;
         --profile=*)
             PROFILE_JSON="${1#*=}"; shift ;;
+        --anchors)
+            [ $# -ge 2 ] || { echo "ERROR: --anchors needs a value" >&2; exit 2; }
+            ANCHORS_JSON="$2"; PROFILE_JSON=""; shift 2 ;;
+        --anchors=*)
+            ANCHORS_JSON="${1#*=}"; PROFILE_JSON=""; shift ;;
         --aapt2)
             [ $# -ge 2 ] || { echo "ERROR: --aapt2 needs a value" >&2; exit 2; }
             AAPT2="$2"; shift 2 ;;
@@ -165,23 +174,35 @@ if [ -z "$TARGET_APK" ]; then
     done
 fi
 
-# ---- profile 定位 ---------------------------------------------------------
-# 未显式 --profile 时按 APK versionCode 自动选择，见下方「版本与 profile」段。
-find_profile_file() {
-    local ver="$1"
-    local candidate
-    for candidate in \
-        "$REPO_ROOT/app/build/profile${ver}.json" \
-        "$REPO_ROOT/build/profile${ver}.json" \
-        "$PWD/app/build/profile${ver}.json" \
-        "$PWD/build/profile${ver}.json" \
-        "$REPO_ROOT/app/profile${ver}.json"; do
-        if [ -f "$candidate" ]; then
-            printf '%s\n' "$candidate"
-            return 0
-        fi
-    done
-    return 1
+# ---- anchors.json 定位 ----------------------------------------------------
+# 默认数据源；--profile 显式指定扁平 profile 时优先，见下方「版本与数据源」段。
+anchors_versions() {
+    local file="$1"
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$file" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    data = json.load(f)
+for p in data.get("profiles", []):
+    print("%s\t%s" % (p.get("versionCode", ""), p.get("versionName", "")))
+PY
+    elif command -v python >/dev/null 2>&1; then
+        python - "$file" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    data = json.load(f)
+for p in data.get("profiles", []):
+    print("%s\t%s" % (p.get("versionCode", ""), p.get("versionName", "")))
+PY
+    elif command -v jq >/dev/null 2>&1; then
+        jq -r '.profiles[] | "\(.versionCode)\t\(.versionName)"' "$file"
+    else
+        return 3
+    fi
+}
+
+anchors_supported_names() {
+    awk -F'\t' 'BEGIN { sep="" } { printf "%s%s", sep, $2; sep=" / " }'
 }
 
 # ---- dexsql 定位 ----------------------------------------------------------
@@ -238,10 +259,10 @@ if [ -n "$AAPT2" ] && ! is_executable_file "$AAPT2"; then
     AAPT2=""
 fi
 
-# ---- 版本与 profile ---------------------------------------------------------
-# 显式 --profile 优先；否则按 APK versionCode 选择：
-#   9006008 -> profile9608.json, 9006013 -> profile9613.json,
-#   9006015 -> profile9615.json（缺失时回退 profile9613.json，并放宽版本断言）。
+# ---- 版本与数据源 ---------------------------------------------------------
+# 默认读 anchors.json：按 APK versionCode 在 profiles 中选版本，展开 base 链。
+# 显式 --profile 时改读扁平 profile JSON（ProfileExportTest 产物），按其后
+# 顶层 versionCode 做断言。
 profile_version_code() {
     local file="$1"
     if command -v python3 >/dev/null 2>&1; then
@@ -263,76 +284,60 @@ if is_executable_file "$AAPT2"; then
     fi
 fi
 
-PROFILE_AUTO=0
-PROFILE_FALLBACK=0
-if [ -z "$PROFILE_JSON" ]; then
-    if [ -z "$VERSION_CODE" ]; then
-        echo "ERROR: cannot auto-select profile without versionCode (aapt2 unavailable)" >&2
-        echo "  Fix: pass --profile app/build/profile<ver>.json, or pass --aapt2 /path/to/aapt2," >&2
-        echo "       or set ANDROID_HOME/ANDROID_SDK_ROOT." >&2
+ANCHORS_VERSION=""
+if [ -n "$PROFILE_JSON" ]; then
+    if [ ! -f "$PROFILE_JSON" ]; then
+        echo "ERROR: profile JSON not found: $PROFILE_JSON" >&2
+        echo "  Fix: ./gradlew :app:testDebugUnitTest --tests com.cloudmusictool.app.ProfileExportTest" >&2
+        echo "       or pass --anchors app/src/main/resources/anchors.json." >&2
         exit 2
     fi
-    case "$VERSION_CODE" in
-        9006008) PROFILE_VER=9608 ;;
-        9006013) PROFILE_VER=9613 ;;
-        9006015) PROFILE_VER=9615 ;;
-        *)
-            echo "ERROR: no profile for versionCode=$VERSION_CODE (supported: 9006008/9006013/9006015)" >&2
-            echo "  Fix: pass --profile app/build/profile<ver>.json explicitly." >&2
-            exit 2 ;;
-    esac
-    PROFILE_AUTO=1
-    PROFILE_JSON="$(find_profile_file "$PROFILE_VER" || true)"
-    if [ -z "$PROFILE_JSON" ] && [ "$PROFILE_VER" = "9615" ]; then
-        PROFILE_JSON="$(find_profile_file 9613 || true)"
-        if [ -n "$PROFILE_JSON" ]; then
-            PROFILE_FALLBACK=1
-            echo "WARN: profile9615.json 缺失，回退 profile9613.json（9.6.15 复用 9.6.13 mounts）" >&2
-            echo "      Fix: ./gradlew :app:testDebugUnitTest --tests com.cloudmusictool.app.ProfileExportTest" >&2
-            echo "           生成 app/build/profile9615.json 后可消除本回退。" >&2
-        fi
-    fi
-fi
-
-if [ -z "$PROFILE_JSON" ] || [ ! -f "$PROFILE_JSON" ]; then
-    echo "ERROR: profile JSON not found: ${PROFILE_JSON:-<unset>}" >&2
-    echo "  Fix: ./gradlew :app:testDebugUnitTest --tests com.cloudmusictool.app.ProfileExportTest" >&2
-    echo "       or pass --profile /path/to/profile9608.json|profile9613.json|profile9615.json" >&2
-    echo "       / export PROFILE_JSON=..." >&2
-    exit 2
-fi
-
-echo "APK: $TARGET_APK"
-if [ "$PROFILE_AUTO" -eq 1 ]; then
-    if [ "$PROFILE_FALLBACK" -eq 1 ]; then
-        echo "Profile: $PROFILE_JSON (auto by versionCode=$VERSION_CODE; profile9615.json 缺失，已回退 9613)"
-    else
-        echo "Profile: $PROFILE_JSON (auto by versionCode=$VERSION_CODE)"
-    fi
-else
+    echo "APK: $TARGET_APK"
     echo "Profile: $PROFILE_JSON"
+else
+    if [ ! -f "$ANCHORS_JSON" ]; then
+        echo "ERROR: anchors.json not found: $ANCHORS_JSON" >&2
+        echo "  Fix: pass --anchors /path/to/anchors.json（仓库内默认 app/src/main/resources/anchors.json）" >&2
+        exit 2
+    fi
+    if [ -z "$VERSION_CODE" ]; then
+        echo "ERROR: cannot auto-select anchors profile without versionCode (aapt2 unavailable)" >&2
+        echo "  Fix: pass --aapt2 /path/to/aapt2, or set ANDROID_HOME/ANDROID_SDK_ROOT." >&2
+        exit 2
+    fi
+    VERSIONS_TSV="$(anchors_versions "$ANCHORS_JSON")"
+    if [ $? -ne 0 ] || [ -z "$VERSIONS_TSV" ]; then
+        echo "ERROR: cannot read profiles from $ANCHORS_JSON (need python3/python or jq)" >&2
+        exit 2
+    fi
+    ANCHORS_VERSION="$(printf '%s\n' "$VERSIONS_TSV" \
+        | awk -F'\t' -v code="$VERSION_CODE" '$1==code { print $2; exit }')"
+    if [ -z "$ANCHORS_VERSION" ]; then
+        SUPPORTED_NAMES="$(printf '%s\n' "$VERSIONS_TSV" | anchors_supported_names)"
+        echo "ERROR: versionCode=$VERSION_CODE is not in $ANCHORS_JSON (supported: $SUPPORTED_NAMES)" >&2
+        echo "  Fix: add the version to anchors.json, or pass --profile for a manual profile." >&2
+        exit 2
+    fi
+    echo "APK: $TARGET_APK"
+    echo "Anchors: $ANCHORS_JSON (versionCode=$VERSION_CODE -> $ANCHORS_VERSION)"
 fi
 
-# 期望 versionCode 取自 profile JSON 顶层字段（ProfileExportTest 导出时写入），
-# 9608 / 9613 / 9615 各自携带对应值；9615 缺失回退 9613 时放宽断言。
 if is_executable_file "$AAPT2"; then
-    EXPECTED_VERSION_CODE="$(profile_version_code "$PROFILE_JSON")"
-    if [ -z "$EXPECTED_VERSION_CODE" ]; then
-        echo "ERROR: cannot read versionCode from profile JSON: $PROFILE_JSON (need python3/python or jq)" >&2
-        exit 2
-    fi
-    if [ "$VERSION_CODE" != "$EXPECTED_VERSION_CODE" ] \
-        && [ "$ALLOW_VERSION" != "1" ] && [ "$PROFILE_FALLBACK" != "1" ]; then
-        echo "ERROR: versionCode=$VERSION_CODE (expected $EXPECTED_VERSION_CODE, per $PROFILE_JSON); use --allow-version to override" >&2
-        exit 2
-    fi
-    if [ "$VERSION_CODE" != "$EXPECTED_VERSION_CODE" ]; then
-        if [ "$PROFILE_FALLBACK" -eq 1 ]; then
-            echo "WARN: versionCode=$VERSION_CODE (expected $EXPECTED_VERSION_CODE), continuing because profile9615.json 缺失已回退 9613"
-        else
+    if [ -n "$PROFILE_JSON" ]; then
+        EXPECTED_VERSION_CODE="$(profile_version_code "$PROFILE_JSON")"
+        if [ -z "$EXPECTED_VERSION_CODE" ]; then
+            echo "ERROR: cannot read versionCode from profile JSON: $PROFILE_JSON (need python3/python or jq)" >&2
+            exit 2
+        fi
+        if [ "$VERSION_CODE" != "$EXPECTED_VERSION_CODE" ] && [ "$ALLOW_VERSION" != "1" ]; then
+            echo "ERROR: versionCode=$VERSION_CODE (expected $EXPECTED_VERSION_CODE, per $PROFILE_JSON); use --allow-version to override" >&2
+            exit 2
+        fi
+        if [ "$VERSION_CODE" != "$EXPECTED_VERSION_CODE" ]; then
             echo "WARN: versionCode=$VERSION_CODE (expected $EXPECTED_VERSION_CODE), continuing due to --allow-version"
         fi
     fi
+    # anchors 模式：版本就是按 VERSION_CODE 选出来的，断言天然成立。
     echo "versionCode: $VERSION_CODE"
 else
     echo "WARN: aapt2 not found; skip versionCode assertion" >&2
@@ -408,45 +413,210 @@ fi
     || echo "WARN: cannot write APK meta: $META" >&2
 
 echo "APK 指纹: size=$APK_SIZE mtime=${APK_MTIME:-unknown} sha256=${APK_SHA:-unavailable}"
-echo "签名校验: 完整参数/返回类型（来自 profile JSON）"
+echo "签名校验: 完整参数/返回类型（来自 anchors.json / profile JSON）"
 
 json_to_tsv() {
     local file="$1"
+    local version="$2"
     # 字段分隔用 US(\x1f)、锚点分隔用 RS(\x1e)，不用 TAB：
     # IFS 里的 TAB 属于空白字符，空字段（如无参数方法）会被 read 折叠导致列错位。
     if command -v python3 >/dev/null 2>&1; then
-        python3 - "$file" <<'PY'
+        python3 - "$file" "$version" <<'PY'
 import json, sys
-with open(sys.argv[1], encoding="utf-8") as f:
+
+path, want = sys.argv[1], sys.argv[2]
+with open(path, encoding="utf-8") as f:
     data = json.load(f)
-for m in data.get("mounts", []):
-    print("\x1f".join([
-        str(m.get("featureId", "")),
-        str(m.get("logicalName", "")),
-        ",".join(m.get("classCandidates") or []),
-        m.get("methodName") or "",
-        m.get("returnType") or "",
-        ",".join(m.get("paramTypes") or []),
-        "\x1e".join(m.get("anchors") or []),
-    ]))
+
+
+def split_params(sig):
+    end = sig.find(")")
+    if end < 0:
+        raise SystemExit("bad signature: " + sig)
+    out = []
+    i = 1
+    while i < end:
+        start = i
+        while sig[i] == "[":
+            i += 1
+        if sig[i] == "L":
+            i = sig.index(";", i) + 1
+        else:
+            i += 1
+        out.append(sig[start:i])
+    return out
+
+
+def return_type(sig):
+    return sig[sig.find(")") + 1:]
+
+
+rows = []
+if "profiles" in data and "anchors" in data and "mounts" not in data:
+    anchors_section = data.get("anchors") or {}
+    profiles = {p.get("versionName"): p for p in data.get("profiles", [])}
+    chain, seen, cur = [], set(), want
+    while cur:
+        if cur in seen:
+            raise SystemExit("base cycle at " + str(cur))
+        seen.add(cur)
+        profile = profiles.get(cur)
+        if profile is None:
+            raise SystemExit("unknown version: " + str(cur))
+        chain.append(profile)
+        cur = profile.get("base")
+    # mounts 是相对 base 的增量：按 mount id (feature/logicalName) 原位覆盖/追加。
+    merged, order = {}, []
+    for profile in reversed(chain):
+        for key in profile.get("mounts") or []:
+            entry = anchors_section.get(key)
+            if entry is None:
+                raise SystemExit("profile references unknown anchor: " + str(key))
+            feature = str(entry.get("feature", ""))
+            logical = entry.get("logicalName")
+            if not logical:
+                prefix = feature + "/"
+                if not str(key).startswith(prefix):
+                    raise SystemExit("bad anchor key: " + str(key))
+                logical = str(key)[len(prefix):]
+            mount_id = feature + "/" + str(logical)
+            if mount_id not in merged:
+                order.append(mount_id)
+            merged[mount_id] = entry
+    for mount_id in order:
+        entry = merged[mount_id]
+        feature, logical = mount_id.split("/", 1)
+        anchors = entry.get("dexkit") or []
+        signature = entry.get("s") or ""
+        params = entry.get("params")
+        if params is None:
+            params = split_params(signature) if signature else []
+        returns = return_type(signature) if signature else ""
+        rows.append([
+            feature,
+            logical,
+            ",".join(entry.get("candidates") or [entry.get("c", "")]),
+            entry.get("m") or "",
+            returns,
+            ",".join(params),
+            "\x1e".join(anchors),
+        ])
+else:
+    for mount in data.get("mounts", []):
+        rows.append([
+            str(mount.get("featureId", "")),
+            str(mount.get("logicalName", "")),
+            ",".join(mount.get("classCandidates") or []),
+            mount.get("methodName") or "",
+            mount.get("returnType") or "",
+            ",".join(mount.get("paramTypes") or []),
+            "\x1e".join(mount.get("anchors") or []),
+        ])
+
+for row in rows:
+    print("\x1f".join(row))
 PY
     elif command -v python >/dev/null 2>&1; then
-        python - "$file" <<'PY'
+        python - "$file" "$version" <<'PY'
 import json, sys
-with open(sys.argv[1], encoding="utf-8") as f:
+
+path, want = sys.argv[1], sys.argv[2]
+with open(path, encoding="utf-8") as f:
     data = json.load(f)
-for m in data.get("mounts", []):
-    print("\x1f".join([
-        str(m.get("featureId", "")),
-        str(m.get("logicalName", "")),
-        ",".join(m.get("classCandidates") or []),
-        m.get("methodName") or "",
-        m.get("returnType") or "",
-        ",".join(m.get("paramTypes") or []),
-        "\x1e".join(m.get("anchors") or []),
-    ]))
+
+
+def split_params(sig):
+    end = sig.find(")")
+    if end < 0:
+        raise SystemExit("bad signature: " + sig)
+    out = []
+    i = 1
+    while i < end:
+        start = i
+        while sig[i] == "[":
+            i += 1
+        if sig[i] == "L":
+            i = sig.index(";", i) + 1
+        else:
+            i += 1
+        out.append(sig[start:i])
+    return out
+
+
+def return_type(sig):
+    return sig[sig.find(")") + 1:]
+
+
+rows = []
+if "profiles" in data and "anchors" in data and "mounts" not in data:
+    anchors_section = data.get("anchors") or {}
+    profiles = {p.get("versionName"): p for p in data.get("profiles", [])}
+    chain, seen, cur = [], set(), want
+    while cur:
+        if cur in seen:
+            raise SystemExit("base cycle at " + str(cur))
+        seen.add(cur)
+        profile = profiles.get(cur)
+        if profile is None:
+            raise SystemExit("unknown version: " + str(cur))
+        chain.append(profile)
+        cur = profile.get("base")
+    # mounts 是相对 base 的增量：按 mount id (feature/logicalName) 原位覆盖/追加。
+    merged, order = {}, []
+    for profile in reversed(chain):
+        for key in profile.get("mounts") or []:
+            entry = anchors_section.get(key)
+            if entry is None:
+                raise SystemExit("profile references unknown anchor: " + str(key))
+            feature = str(entry.get("feature", ""))
+            logical = entry.get("logicalName")
+            if not logical:
+                prefix = feature + "/"
+                if not str(key).startswith(prefix):
+                    raise SystemExit("bad anchor key: " + str(key))
+                logical = str(key)[len(prefix):]
+            mount_id = feature + "/" + str(logical)
+            if mount_id not in merged:
+                order.append(mount_id)
+            merged[mount_id] = entry
+    for mount_id in order:
+        entry = merged[mount_id]
+        feature, logical = mount_id.split("/", 1)
+        anchors = entry.get("dexkit") or []
+        signature = entry.get("s") or ""
+        params = entry.get("params")
+        if params is None:
+            params = split_params(signature) if signature else []
+        returns = return_type(signature) if signature else ""
+        rows.append([
+            feature,
+            logical,
+            ",".join(entry.get("candidates") or [entry.get("c", "")]),
+            entry.get("m") or "",
+            returns,
+            ",".join(params),
+            "\x1e".join(anchors),
+        ])
+else:
+    for mount in data.get("mounts", []):
+        rows.append([
+            str(mount.get("featureId", "")),
+            str(mount.get("logicalName", "")),
+            ",".join(mount.get("classCandidates") or []),
+            mount.get("methodName") or "",
+            mount.get("returnType") or "",
+            ",".join(mount.get("paramTypes") or []),
+            "\x1e".join(mount.get("anchors") or []),
+        ])
+
+for row in rows:
+    print("\x1f".join(row))
 PY
     elif command -v jq >/dev/null 2>&1; then
+        if jq -e 'has("profiles")' "$file" >/dev/null 2>&1; then
+            echo "ERROR: anchors.json 模式需要 python3/python（jq 不展开 base 继承）" >&2
+            return 4
+        fi
         jq -r '.mounts[] | [.featureId, .logicalName,
             (.classCandidates | join(",")), (.methodName // ""),
             (.returnType // ""), (.paramTypes | join(",")),
@@ -456,8 +626,12 @@ PY
     fi
 }
 
-if ! json_to_tsv "$PROFILE_JSON" > "$TSV"; then
-    echo "ERROR: cannot parse $PROFILE_JSON (need python3/python or jq)" >&2
+MOUNTS_SOURCE="$PROFILE_JSON"
+if [ -z "$PROFILE_JSON" ]; then
+    MOUNTS_SOURCE="$ANCHORS_JSON"
+fi
+if ! json_to_tsv "$MOUNTS_SOURCE" "$ANCHORS_VERSION" > "$TSV"; then
+    echo "ERROR: cannot parse $MOUNTS_SOURCE (need python3/python; jq 仅支持扁平 profile)" >&2
     exit 2
 fi
 
@@ -480,7 +654,7 @@ while IFS=$'\x1f' read -r fid logical classes method ret params anchors; do
 done < "$TSV"
 
 if [ "$MOUNT_COUNT" -eq 0 ]; then
-    echo "ERROR: profile has no mounts" >&2
+    echo "ERROR: 数据源没有任何 mount（anchors.json profile 或 profile JSON）" >&2
     exit 2
 fi
 
