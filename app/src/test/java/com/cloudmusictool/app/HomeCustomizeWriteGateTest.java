@@ -1,5 +1,7 @@
 package com.cloudmusictool.app;
 
+import io.github.yigenhuobah.core.WriteGate;
+
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -11,7 +13,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * 写回状态机的契约测试（{@link HomeCustomizeFragment.WriteGate}）。
+ * 写回状态机的契约测试（{@link io.github.yigenhuobah.core.WriteGate}）。
  *
  * <p>锁住两条曾经会导致“界面与远端不一致”的语义：
  * <ul>
@@ -28,7 +30,7 @@ public class HomeCustomizeWriteGateTest {
 
     @Test
     public void staleFailureCannotRollbackNewerSelection() {
-        HomeCustomizeFragment.WriteGate<Set<String>> gate = new HomeCustomizeFragment.WriteGate<>();
+        WriteGate<Set<String>> gate = new WriteGate<>();
         gate.seed("k", set("s0"));
         long first = gate.begin("k");
         long second = gate.begin("k");
@@ -44,7 +46,7 @@ public class HomeCustomizeWriteGateTest {
 
     @Test
     public void failureRollsBackToLastConfirmedNotOptimisticValue() {
-        HomeCustomizeFragment.WriteGate<Set<String>> gate = new HomeCustomizeFragment.WriteGate<>();
+        WriteGate<Set<String>> gate = new WriteGate<>();
         gate.seed("k", set("s0"));
 
         long first = gate.begin("k");
@@ -59,7 +61,7 @@ public class HomeCustomizeWriteGateTest {
 
     @Test
     public void supersededSuccessStillBecomesConfirmed() {
-        HomeCustomizeFragment.WriteGate<Set<String>> gate = new HomeCustomizeFragment.WriteGate<>();
+        WriteGate<Set<String>> gate = new WriteGate<>();
         long first = gate.begin("k");
         long second = gate.begin("k");
 
@@ -74,7 +76,7 @@ public class HomeCustomizeWriteGateTest {
 
     @Test
     public void snapshotSeedNeverOverridesConfirmedValue() {
-        HomeCustomizeFragment.WriteGate<Set<String>> gate = new HomeCustomizeFragment.WriteGate<>();
+        WriteGate<Set<String>> gate = new WriteGate<>();
         long token = gate.begin("k");
         assertTrue(gate.onResult("k", token, true, set("confirmed")));
 
@@ -86,7 +88,7 @@ public class HomeCustomizeWriteGateTest {
 
     @Test
     public void rollbackFallsBackToSnapshotThenCallerValue() {
-        HomeCustomizeFragment.WriteGate<Set<String>> gate = new HomeCustomizeFragment.WriteGate<>();
+        WriteGate<Set<String>> gate = new WriteGate<>();
 
         assertEquals("没有任何快照/确认值时才用调用方兜底值",
                 set("fallback"), gate.rollback("k", set("fallback")));
@@ -97,7 +99,7 @@ public class HomeCustomizeWriteGateTest {
 
     @Test
     public void tokensAreMonotonicAndPerKeyIndependent() {
-        HomeCustomizeFragment.WriteGate<Set<String>> gate = new HomeCustomizeFragment.WriteGate<>();
+        WriteGate<Set<String>> gate = new WriteGate<>();
         long a1 = gate.begin("a");
         long b1 = gate.begin("b");
         long a2 = gate.begin("a");
@@ -109,7 +111,7 @@ public class HomeCustomizeWriteGateTest {
 
     @Test
     public void clearDropsInFlightResults() {
-        HomeCustomizeFragment.WriteGate<Boolean> gate = new HomeCustomizeFragment.WriteGate<>();
+        WriteGate<Boolean> gate = new WriteGate<>();
         long token = gate.begin("app_hide_icon");
         gate.clear();
 

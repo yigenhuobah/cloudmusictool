@@ -3,11 +3,14 @@ package com.cloudmusictool.app;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import io.github.yigenhuobah.core.ReportProtocolCore;
+
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
@@ -41,7 +44,11 @@ import java.util.Set;
  */
 public final class ReportProtocol {
 
-    public static final int MAX_VALUE_CHARS = 256;
+    /**
+     * 公共值上限：与 core 回传协议一致（256）。模块专属的结构白名单仍在本类维护，
+     * core 只负责 feature key × 5 前缀的键值通道白名单与崩溃载体形态。
+     */
+    public static final int MAX_VALUE_CHARS = ReportProtocolCore.MAX_VALUE;
     public static final int MAX_ENTRIES = 800;
     public static final int MAX_PAYLOAD_CHARS = 64 * 1024;
 
@@ -49,16 +56,35 @@ public final class ReportProtocol {
      * crashes 通道（mounts 根级数组）至多保留的条数；HookState 的进程内环形缓冲
      * 同用此常量，保证生产端保留量与接收端计数门禁不会漂移。
      */
-    public static final int MAX_CRASH_ENTRIES = 3;
+    public static final int MAX_CRASH_ENTRIES = ReportProtocolCore.MAX_CRASH_ENTRIES;
 
     /** 超过 10 分钟没有新回传就视为过期，失败计数按“未知”处理（0）。 */
-    public static final long DEFAULT_TTL_MS = 10 * 60 * 1000L;
+    public static final long DEFAULT_TTL_MS = ReportProtocolCore.DEFAULT_TTL_MS;
 
     /**
      * 允许的时钟偏差：updatedAt 领先本机时间超过 5 分钟视为时间戳不可信（过期）。
      * 设备时钟回拨后，旧快照的 updatedAt 会落在“未来”，不设上限就会一直被当作新鲜数据。
      */
-    public static final long MAX_FUTURE_SKEW_MS = 5 * 60 * 1000L;
+    public static final long MAX_FUTURE_SKEW_MS = ReportProtocolCore.MAX_FUTURE_SKEW_MS;
+
+    /**
+     * 本模块的稳定 Feature key 集合，作为 core 键值通道白名单来源。
+     * Feature 枚举是模块专属内容，不抽入 core；core 只接受这里传入的字符串。
+     */
+    static Set<String> featureKeys() {
+        Set<String> keys = new LinkedHashSet<>();
+        for (Feature f : Feature.values()) {
+            keys.add(f.key);
+        }
+        return keys;
+    }
+
+    static {
+        // 进程级单次配置：CMT 的崩溃摘要放在根级 crashes 数组（README 中的 ROOT_ARRAY），
+        // 与 QB/QM/TB 的 crash0/1/2 平铺键不同。其他模块专属结构（features/items 白名单）
+        // 仍由本类校验。
+        ReportProtocolCore.configure(featureKeys(), ReportProtocolCore.CrashLayout.ROOT_ARRAY);
+    }
 
     /** 主进程名；子进程回传不计入失败功能数，避免未装 hook 的子进程误报。 */
     public static final String MAIN_PROCESS = "com.netease.cloudmusic";
@@ -220,7 +246,7 @@ public final class ReportProtocol {
                 for (int i = 0; i < array.length(); i++) {
                     pending.push(array.opt(i));
                 }
-            } else if (node instanceof String && ((String) node).length() > MAX_VALUE_CHARS) {
+            } else if (node instanceof String && !ReportProtocolCore.isValidValue((String) node)) {
                 return "string value exceeds " + MAX_VALUE_CHARS + " chars";
             }
         }
@@ -258,13 +284,7 @@ public final class ReportProtocol {
      * 否则回拨后旧快照会因 updatedAt 落在“未来”而被长期当作新鲜数据。
      */
     public static boolean isFresh(long updatedAt, long now, long ttlMs) {
-        if (updatedAt <= 0L || ttlMs <= 0L) {
-            return false;
-        }
-        if (updatedAt > now + MAX_FUTURE_SKEW_MS) {
-            return false;
-        }
-        return now - updatedAt <= ttlMs;
+        return ReportProtocolCore.isFresh(updatedAt, now, ttlMs);
     }
 
     /**

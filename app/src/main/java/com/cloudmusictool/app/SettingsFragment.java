@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import io.github.libxposed.service.HookedTarget;
 import io.github.libxposed.service.XposedService;
+import io.github.yigenhuobah.core.WriteGate;
 
 /**
  * 主设置页：四态状态卡、异常横幅、功能开关、二级页入口与页脚。
@@ -34,8 +35,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     private ExecutorService mStatusExecutor;
     private final AtomicInteger mStatusGeneration = new AtomicInteger();
     /** 每个 key 的写回令牌与最近确认值；与首页定制页共用同一状态机语义。 */
-    private final HomeCustomizeFragment.WriteGate<Boolean> mWriteGate =
-            new HomeCustomizeFragment.WriteGate<>();
+    private final WriteGate<Boolean> mWriteGate = new WriteGate<>();
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {

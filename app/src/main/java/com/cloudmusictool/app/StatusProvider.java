@@ -33,6 +33,11 @@ public class StatusProvider extends ContentProvider {
     public static final String KEY_OK = "ok";
     /** 回写类型：缺省 mounts（Hook 健康度），experiments 为 ABTest 观测。 */
     public static final String KEY_TYPE = "type";
+    /**
+     * 崩溃路径同步 flush 标记：为 true 时本次报告必须 commit 落盘后才返回，
+     * 不能像普通回传那样只 apply（目标进程随后可能立即退出）。
+     */
+    public static final String KEY_SYNC = "sync";
     public static final String TYPE_MOUNTS = "mounts";
     public static final String TYPE_EXPERIMENTS = "experiments";
     /** 「我的」页背景图片的固定 URI 路径；只接受这一个路径，避免目录穿越。 */
@@ -78,12 +83,23 @@ public class StatusProvider extends ContentProvider {
             Log.w(TAG, "status report rejected: uid=" + uid);
             return null;
         }
-        String json = extras.getString(KEY_JSON);
+        return storeReport(extras.getString(KEY_JSON),
+                extras.getString(KEY_TYPE, TYPE_MOUNTS),
+                extras.getBoolean(KEY_SYNC, false));
+    }
+
+    /**
+     * 校验通过后的一次落盘（包内可见 seam：单测直接覆盖 sync commit 成功/失败
+     * 与普通 apply 两条分支；Bundle 在 JVM 单测里不可构造，故不经过 call()）。
+     *
+     * @return 成功时非 null Bundle（含 ok=true）；结构/落盘失败或 commit=false
+     *         时 null（目标进程的 sync flush 据此判定未落盘）
+     */
+    Bundle storeReport(String json, String type, boolean sync) {
         if (!ReportProtocol.isValidPayload(json)) {
             Log.w(TAG, "status report rejected: invalid payload");
             return null;
         }
-        String type = extras.getString(KEY_TYPE, TYPE_MOUNTS);
         // type 只认 mounts/experiments 两种：未知 type 一律拒绝，
         // 否则调用方换个 type 字符串即可绕过 mounts 通道的门禁、直接覆盖主进程快照。
         if (!TYPE_MOUNTS.equals(type) && !TYPE_EXPERIMENTS.equals(type)) {
@@ -128,7 +144,16 @@ public class StatusProvider extends ContentProvider {
                 // 无新观测时不发空快照，不清除就会一直把旧会话命中当当前数据展示。
                 editor.remove(KEY_EXPERIMENTS);
             }
-            editor.putString(prefsKey, json).apply();
+            editor.putString(prefsKey, json);
+            if (sync) {
+                // 崩溃路径：目标进程随后可能立即退出，必须确认落盘。
+                if (!editor.commit()) {
+                    Log.w(TAG, "status sync store failed: commit=false");
+                    return null;
+                }
+            } else {
+                editor.apply();
+            }
         } catch (Throwable t) {
             Log.w(TAG, "status store failed", t);
             return null;
@@ -167,7 +192,8 @@ public class StatusProvider extends ContentProvider {
         return false;
     }
 
-    private SharedPreferences prefs() {
+    /** 包内可见的测试 seam：单测覆盖 sync commit 分支时注入内存 SharedPreferences。 */
+    SharedPreferences prefs() {
         return getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 

@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.util.Log;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -81,6 +82,33 @@ public final class TargetProcessPublisher {
     // 包私有可整体替换：单测置空/注入（与 sExecutor 同）；生产只由 targetContext() 写入。
     static volatile Context sTargetContext;
 
+    /**
+     * 一次回传的逻辑内容。JVM 单测里 Bundle 是 final 的不可读空桩，用普通对象承载
+     * extras 三要素（type/json/sync），单测才能断言崩溃路径的 KEY_SYNC 语义。
+     */
+    static final class Report {
+        final String type;
+        final String json;
+        final boolean sync;
+
+        Report(String type, String json, boolean sync) {
+            this.type = type;
+            this.json = json;
+            this.sync = sync;
+        }
+    }
+
+    /**
+     * 包私有测试 seam：把「发送到哪个模块包 + 发送什么内容」抽成可替换入口，
+     * 单测据此捕获 {@link Report} 并控制返回值（Bundle/Uri 在单测里都是空桩）。
+     * 生产默认 {@link #sendToProvider} 直连 ContentResolver.call。
+     */
+    interface Transport {
+        Bundle send(Context ctx, String modulePackage, Report report);
+    }
+
+    static volatile Transport sTransport = TargetProcessPublisher::sendToProvider;
+
     private TargetProcessPublisher() {
     }
 
@@ -107,6 +135,43 @@ public final class TargetProcessPublisher {
         sExecutor.execute(() -> doPublish(channel, 0));
     }
 
+    /**
+     * 同步发送一次快照：不排队到工作线程、不排 context 重试，直接在当前线程完成
+     * {@code ContentResolver.call}。崩溃路径（UEH + CrashFlush）专用。
+     *
+     * <p>返回值为模块 App 的确认结果：StatusProvider 在 sync 路径 commit 成功时
+     * 返回非 null Bundle，commit 失败/报告被拒绝时返回 null；只有拿到非 null
+     * 结果才算一次完成的同步投递。所有异常都被吞掉，模块包名为空、payload 为空、
+     * Context 不可用或发送失败时同样返回 false。目标进程自身没有可写的 prefs，
+     * 回传经 sync 标记要求模块 App 的 StatusProvider 用 commit 落盘（普通回传仍走
+     * apply）。
+     *
+     * @param channel 回传通道
+     * @return 模块 App 是否在返回前确认了本次同步投递
+     */
+    public static boolean flushNow(Channel channel) {
+        if (channel == null) {
+            return false;
+        }
+        try {
+            String pkg = channel.modulePackage();
+            if (pkg == null || pkg.isEmpty()) {
+                return false;
+            }
+            String json = channel.buildJson();
+            if (json == null) {
+                return false;
+            }
+            Context ctx = targetContext();
+            if (ctx == null) {
+                return false;
+            }
+            return send(channel, ctx, json, true) != null;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     private static void doPublish(Channel channel, int attempt) {
         String pkg = channel.modulePackage();
         if (pkg == null || pkg.isEmpty()) {
@@ -127,13 +192,7 @@ public final class TargetProcessPublisher {
             return;
         }
         try {
-            Bundle extras = new Bundle();
-            String type = channel.type();
-            if (type != null) {
-                extras.putString(StatusProvider.KEY_TYPE, type);
-            }
-            extras.putString(StatusProvider.KEY_JSON, json);
-            ctx.getContentResolver().call(StatusProvider.authority(pkg), "report", null, extras);
+            send(channel, ctx, json, false);
         } catch (Throwable t) {
             if (sFailureWarned.add(channel)) {
                 Log.w(TAG, channel.publishFailureWarning(t));
@@ -143,6 +202,59 @@ public final class TargetProcessPublisher {
             // 在状态已成功回传后再次发送。
             cancelRetry(channel);
         }
+    }
+
+    /**
+     * 一次回传的实际发送（调用方负责 Context/payload 已就绪与异常处理）。
+     *
+     * @param sync 崩溃路径的同步 flush：要求模块 App 用 commit 落盘后再返回；
+     *             普通回传仍用 apply，不阻塞 binder 线程
+     * @return ContentResolver.call 的返回值：StatusProvider 确认落盘时为非 null
+     *         Bundle（含 ok=true），拒绝/commit 失败时为 null
+     */
+    private static Bundle send(Channel channel, Context ctx, String json, boolean sync) {
+        Report report = new Report(channel.type(), json, sync);
+        String modulePackage = channel.modulePackage();
+        Transport transport = sTransport;
+        return transport == null
+                ? sendToProvider(ctx, modulePackage, report)
+                : transport.send(ctx, modulePackage, report);
+    }
+
+    /** 生产发送：ContentResolver.call("report")，返回值即 StatusProvider 的落盘确认。 */
+    private static Bundle sendToProvider(Context ctx, String modulePackage, Report report) {
+        return ctx.getContentResolver().call(
+                StatusProvider.authority(modulePackage), "report", null, buildExtras(report));
+    }
+
+    /** 构建回传 extras：sync 标记只在崩溃路径出现。 */
+    static Bundle buildExtras(Report report) {
+        Bundle extras = new Bundle();
+        for (Map.Entry<String, Object> entry : extrasValues(report).entrySet()) {
+            Object value = entry.getValue();
+            if (value instanceof Boolean) {
+                extras.putBoolean(entry.getKey(), (Boolean) value);
+            } else {
+                extras.putString(entry.getKey(), (String) value);
+            }
+        }
+        return extras;
+    }
+
+    /**
+     * extras 的逻辑键值（纯函数）。JVM 单测无法读取 Bundle（mockable android.jar
+     * 里是空桩），因此用本方法钉住「KEY_SYNC 只在 sync 路径出现、type 缺省不写」。
+     */
+    static Map<String, Object> extrasValues(Report report) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        if (report.type != null) {
+            values.put(StatusProvider.KEY_TYPE, report.type);
+        }
+        values.put(StatusProvider.KEY_JSON, report.json);
+        if (report.sync) {
+            values.put(StatusProvider.KEY_SYNC, Boolean.TRUE);
+        }
+        return values;
     }
 
     /**

@@ -89,6 +89,9 @@ dependencies {
 
     implementation 'io.github.libxposed:service:102.0.0'
 
+    // 四模块共用的纯 JVM 核心库（Gradle 复合构建）。
+    implementation 'io.github.yigenhuobah:core:0.1.0'
+
     implementation 'androidx.appcompat:appcompat:1.8.0'
     implementation 'com.google.android.material:material:1.14.0'
     implementation 'androidx.preference:preference:1.2.1'
@@ -98,6 +101,7 @@ dependencies {
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20240303'
+    testImplementation 'io.github.yigenhuobah:core-test:0.1.0'
     // HookRegistryTest 会加载 Hooks（其静态注册表在初始化时创建 Installer lambda），
     // 单测运行时需要 libxposed api 类型。仅测试用，不进入 APK。
     testImplementation 'io.github.libxposed:api:102.0.0'

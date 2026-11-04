@@ -2,11 +2,10 @@ package com.cloudmusictool.app.hooks;
 
 import com.cloudmusictool.app.Feature;
 
+import org.json.JSONObject;
 import org.junit.Test;
 
-import java.lang.reflect.Field;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.lang.reflect.Method;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -49,23 +48,21 @@ public class LyricsHintHooksTest {
         return false;
     }
 
-    private static int intFieldOf(Feature f, String name) throws Exception {
-        Field states = com.cloudmusictool.app.HookState.class.getDeclaredField("sStates");
-        states.setAccessible(true);
-        Object state = ((Map<?, ?>) states.get(null)).get(f);
-        if (state == null) {
-            return 0;
-        }
-        Field field = state.getClass().getDeclaredField(name);
-        field.setAccessible(true);
-        return ((AtomicInteger) field.get(state)).get();
+    /** UI-14 的诊断快照；buildJson 是包私有入口，跨包测试用反射读取。 */
+    private static JSONObject featureJson(Feature f) throws Exception {
+        Method build = com.cloudmusictool.app.HookState.class.getDeclaredMethod("buildJson", int.class);
+        build.setAccessible(true);
+        String json = (String) build.invoke(null, 1 << 20);
+        JSONObject features = new JSONObject(json).optJSONObject("features");
+        JSONObject state = features == null ? null : features.optJSONObject(f.name());
+        return state == null ? new JSONObject() : state;
     }
 
     private static int failedCount(Feature f) throws Exception {
-        return intFieldOf(f, "failed");
+        return featureJson(f).optInt("failed", 0);
     }
 
     private static int expectedCount(Feature f) throws Exception {
-        return intFieldOf(f, "expected");
+        return featureJson(f).optInt("expected", 0);
     }
 }

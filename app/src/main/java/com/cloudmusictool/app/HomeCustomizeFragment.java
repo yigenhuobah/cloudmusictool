@@ -12,10 +12,10 @@ import androidx.preference.PreferenceFragmentCompat;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
+import io.github.yigenhuobah.core.WriteGate;
+
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -349,65 +349,6 @@ public class HomeCustomizeFragment extends PreferenceFragmentCompat {
         Context context = getContext();
         if (context != null) {
             Toast.makeText(context, resId, Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    /**
-     * 单个 key 的写回状态机：令牌标识最新一次写入，确认值只由 commit 成功更新。
-     *
-     * <p>纯逻辑、不引用 Android 类型；设置页（功能开关/桌面图标）与首页定制页共用，
-     * 由 JVM 单测固定“旧结果不覆盖新选择、失败回到最近确认值”的语义。
-     */
-    static final class WriteGate<T> {
-        private final Map<String, Long> mLatest = new HashMap<>();
-        private final Map<String, T> mConfirmed = new HashMap<>();
-        private final Map<String, T> mBaseline = new HashMap<>();
-        private long mCounter;
-
-        /** 记录一次新写入并返回其令牌（单调递增，不依赖系统时钟）。 */
-        long begin(String key) {
-            long token = ++mCounter;
-            mLatest.put(key, token);
-            return token;
-        }
-
-        /** 快照读到的值：只作为“还没有确认值”时的基线，不覆盖已确认的值。 */
-        void seed(String key, T value) {
-            if (value != null && !mConfirmed.containsKey(key)) {
-                mBaseline.put(key, value);
-            }
-        }
-
-        /**
-         * 记录一次写入结果。
-         *
-         * @return true 表示该结果仍是最新一次写入，调用方需要据此更新界面；
-         *         false 表示已有更新的写入，旧结果不能覆盖界面
-         *         （成功仍然记入确认值，后续失败可回滚到它）。
-         */
-        boolean onResult(String key, long token, boolean saved, T value) {
-            if (saved && value != null) {
-                mConfirmed.put(key, value);
-            }
-            Long latest = mLatest.get(key);
-            return latest != null && latest.longValue() == token;
-        }
-
-        /** 失败回滚值：最近一次确认落盘的值 → 快照基线 → 调用方兜底值。 */
-        T rollback(String key, T fallback) {
-            T confirmed = mConfirmed.get(key);
-            if (confirmed != null) {
-                return confirmed;
-            }
-            T baseline = mBaseline.get(key);
-            return baseline != null ? baseline : fallback;
-        }
-
-        /** Fragment 销毁时丢弃在途结果。 */
-        void clear() {
-            mLatest.clear();
-            mConfirmed.clear();
-            mBaseline.clear();
         }
     }
 }

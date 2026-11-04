@@ -11,6 +11,8 @@ import com.cloudmusictool.app.hooks.ProcessFilter;
 import io.github.libxposed.api.XposedModule;
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam;
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam;
+import io.github.yigenhuobah.core.CrashFlush;
+import io.github.yigenhuobah.core.Logger;
 
 /**
  * 唯一的 Java 入口类。API 102 热重载规范要求必须恰好声明一个入口。
@@ -20,6 +22,19 @@ import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam;
 public class CloudMusicToolModule extends XposedModule {
 
     static final String TAG = "CloudMusicTool";
+
+    /**
+     * CrashFlush 的日志适配器：core 的 Logger 等级常量与 Android Log 对齐，
+     * 直接转发到 Log.println；异常附加堆栈。超时/任务异常/中断由
+     * {@link CrashFlush#runBestEffort} 以 WARN 级别回调本适配器。
+     */
+    private static final Logger CRASH_LOGGER = (level, tag, message, t) -> {
+        String text = message == null ? "" : message;
+        if (t != null) {
+            text = text + '\n' + Log.getStackTraceString(t);
+        }
+        Log.println(level, tag, text);
+    };
 
     private String mProcessName;
 
@@ -112,7 +127,7 @@ public class CloudMusicToolModule extends XposedModule {
      * - volatile 幂等位 + 类锁（static synchronized）双检保证只包一次：
      *   并发的 onPackageReady（框架热重载/重复回调）不会重复包装。
      */
-    private static synchronized void installCrashGuard(CloudMusicToolModule module) {
+    static synchronized void installCrashGuard(CloudMusicToolModule module) {
         if (sCrashGuardInstalled) {
             return;
         }
@@ -128,10 +143,18 @@ public class CloudMusicToolModule extends XposedModule {
     }
 
     /**
+     * 仅供单测：清除 UEH 安装幂等位，让用例可以重新验证安装路径。
+     * 生产代码不调用；调用方负责恢复原 default UEH。
+     */
+    static synchronized void resetCrashGuardForTest() {
+        sCrashGuardInstalled = false;
+    }
+
+    /**
      * 先记录崩溃再转交 previous。记录步骤不抛出；previous 的调用不在 try/catch
      * 内——previous 自己抛错时按宿主原有行为继续传播，不做二次处理。
      */
-    private static final class CrashRecordingHandler
+    static final class CrashRecordingHandler
             implements Thread.UncaughtExceptionHandler {
 
         private final Thread.UncaughtExceptionHandler mPrevious;
@@ -148,6 +171,15 @@ public class CloudMusicToolModule extends XposedModule {
                         HookState.crashSummary(throwable));
             } catch (Throwable ignored) {
                 // 记录失败不能影响原异常处理流程。
+            }
+            // ALL-CRASH-01：崩溃后把最新快照（含刚记录的 crashes 条目）同步 flush 给
+            // 模块 App，最多等待 200ms。runBestEffort 在超时/任务异常/中断时经
+            // CRASH_LOGGER 以 WARN 记录；外面再兜一层，保证崩溃路径绝不因诊断上报
+            // 而改变原异常处理流程。
+            try {
+                CrashFlush.runBestEffort(() -> HookState.flushNow(), 200L, CRASH_LOGGER, TAG);
+            } catch (Throwable ignored) {
+                // fail-safe：flush 失败只放弃本次诊断回传。
             }
             Thread.UncaughtExceptionHandler previous = mPrevious;
             if (previous != null) {

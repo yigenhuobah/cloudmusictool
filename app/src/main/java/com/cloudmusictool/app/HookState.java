@@ -2,6 +2,8 @@ package com.cloudmusictool.app;
 
 import android.util.Log;
 
+import io.github.yigenhuobah.core.HookStateCore;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -9,9 +11,9 @@ import org.json.JSONObject;
 import java.text.SimpleDateFormat;
 import java.util.ArrayDeque;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,14 +22,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * 目标进程内的 Hook 健康度状态。
  *
- * 记录每个 Feature 的 expected / installed / failed / entry / hit 与最近失败原因；
- * 通过模块 App 的 StatusProvider 回写（remote prefs 在宿主进程只读，不能反向写）。
+ * <p>本类现在只保留模块专属的胶水：Feature 枚举映射、enabled/unavailable 展示语义、
+ * ABTest 概要、崩溃摘要环形缓冲、回传节流与 JSON 字段面。安装/失败/命中/入口/
+ * 最近失败原因的账本统一委托 {@link HookStateCore}（按 {@link Feature#key} 记账），
+ * 不再维护一份本地 State。
  *
- * 写入策略：
+ * <p>写入策略：
  * - 普通状态变化按「领先 + 尾沿」节流：窗口首个变化立即发送（保持安装期响应性），
  *   窗口内后续变化在窗口关闭时合并为一次尾沿发送（携带最新状态），避免最后一次
  *   变化落在节流窗口内且之后无事件而永不上报；
  * - 安装结束后由 Hooks.installAll 调用一次 flush() 发送最终快照；
+ * - 崩溃路径由 {@link #flushNow()} 在调用线程同步发送一次（不排队、不节流）；
  * - 发送（节流调度、单线程工作线程、targetContext 解析、authority 拼接、
  *   warning-once 日志）统一委托共享回传管线 {@link TargetProcessPublisher}，
  *   与 ExperimentState 共用；节流决策见其 PublishThrottle。
@@ -36,13 +41,23 @@ public final class HookState {
 
     private static final String TAG = "CloudMusicTool";
     private static final int MAX_JSON_CHARS = 64 * 1024;
-    private static final int MAX_FAILURE_CHARS = 160;
 
     /**
      * crashes 通道（内置诊断）单条摘要的最大长度：240，给 ReportProtocol
      * MAX_VALUE_CHARS=256 的通道校验留出余量（时间 + 线程名 + 异常摘要拼成一条）。
      */
     static final int MAX_CRASH_CHARS = 240;
+
+    /** 安装/失败/命中/入口账本（core 纯 JVM 实现，按 Feature.key 记账）。 */
+    private static final HookStateCore sCore = new HookStateCore();
+
+    /**
+     * 模块专属展示状态：core 账本不记录「是否启用」与「安装结束后是否一个挂载点
+     * 都没装上」。enabled 决定根级汇总是否计入该 Feature；unavailable 只在
+     * {@link #finish(Feature)} 结算，{@link #installed(Feature, String)} 立即清除。
+     */
+    private static final Set<Feature> sEnabled = ConcurrentHashMap.newKeySet();
+    private static final Set<Feature> sUnavailable = ConcurrentHashMap.newKeySet();
 
     // 最近崩溃：最新在队尾，超过 MAX_CRASH_ENTRIES 条顶掉最旧的；只在 recordCrash/
     // crashesArray 内同步访问，publish 在锁外调用。
@@ -72,8 +87,6 @@ public final class HookState {
         return "s" + System.currentTimeMillis() + "-"
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
     }
-
-    private static final Map<Feature, State> sStates = new ConcurrentHashMap<>();
 
     // ABTEST 不是 Feature（AbTestHooks 本地定位/安装），单独一组静态计数，
     // 经同一 publish 节奏回传，诊断页在根级 "abtest" 概要中展示。
@@ -123,53 +136,6 @@ public final class HookState {
     private HookState() {
     }
 
-    private static final class State {
-        volatile boolean enabled;
-        final AtomicInteger expected = new AtomicInteger();
-        final AtomicInteger installed = new AtomicInteger();
-        final AtomicInteger failed = new AtomicInteger();
-        /** 失败的挂载点中，Profile 标记为 critical 的数量（按 label 去重）。 */
-        final AtomicInteger criticalFailed = new AtomicInteger();
-        /** 入口调用次数：hook 链路进入次数，与 hit（过滤/改写实际生效）独立。 */
-        final AtomicInteger entryCount = new AtomicInteger();
-        final AtomicInteger hitCount = new AtomicInteger();
-        final Set<String> failedKeys = ConcurrentHashMap.newKeySet();
-        final Set<String> criticalFailedKeys = ConcurrentHashMap.newKeySet();
-        /**
-         * 失败键 -> 挂载点 label。同一挂载点先 quiet miss、后经 fallback 找到并
-         * 安装成功时，按这个映射撤销此前的失败记录，避免诊断页出现假 failed。
-         */
-        final Map<String, String> failedKeyMounts = new ConcurrentHashMap<>();
-        volatile boolean hit;
-        /** critical 挂载点失败 -> 功能降级。 */
-        volatile boolean degraded;
-        /** 一个挂载点都没装上 -> 功能不可用。 */
-        volatile boolean unavailable;
-        volatile String lastFailure;
-        volatile long lastFailureAt;
-        /** lastFailure 对应的挂载点；note 未带挂载点时置空，避免误清无关失败。 */
-        volatile String lastFailureMount;
-
-        synchronized void attempted() {
-            int total = installed.get() + failed.get();
-            if (total > expected.get()) {
-                expected.set(total);
-            }
-        }
-    }
-
-    private static State state(Feature f) {
-        State s = sStates.get(f);
-        if (s == null) {
-            s = new State();
-            State prev = sStates.putIfAbsent(f, s);
-            if (prev != null) {
-                s = prev;
-            }
-        }
-        return s;
-    }
-
     /** 由 CloudMusicToolModule 在 onModuleLoaded 调用。 */
     public static void init(String modulePackage) {
         init(modulePackage, null);
@@ -190,7 +156,8 @@ public final class HookState {
         if (f == null) {
             return;
         }
-        state(f).enabled = true;
+        sEnabled.add(f);
+        sCore.enable(f.key);
         Log.i(TAG, f.id + " enabled");
         publish();
     }
@@ -199,36 +166,32 @@ public final class HookState {
         if (f == null) {
             return;
         }
-        State s = state(f);
-        synchronized (s) {
-            s.installed.incrementAndGet();
-            // 启动阶段可能已 finish 过（installed=0 -> unavailable=true）；运行时
-            // ClassLoader 安装成功后必须立即清除，不能等下一次 finish。
-            s.unavailable = false;
-            // 同一挂载点可能先 quiet miss、再经 fallback 定位成功：安装成功后
-            // 撤销该挂载点的失败记录，否则诊断页会同时显示 installed 与 failed。
-            clearFailuresLocked(s, label);
-            // expected 是 installed + failed 的派生值；撤销失败后重新对齐。
-            s.expected.set(s.installed.get() + s.failed.get());
-            s.degraded = s.criticalFailed.get() > 0;
-        }
+        // 启动阶段可能已 finish 过（installed=0 -> unavailable=true）；运行时
+        // ClassLoader 安装成功后必须立即清除，不能等下一次 finish。
+        sUnavailable.remove(f);
+        // 同一挂载点可能先 quiet miss、再经 fallback 定位成功：core 安装成功后
+        // 会撤销该挂载点的失败记录，避免诊断页同时显示 installed 与 failed。
+        sCore.installed(f.key, label);
         publish();
     }
 
     /**
      * 安装结束后结算健康状态。
      * - unavailable：一个挂载点都没装上；
-     * - degraded：Profile 中标记为 critical 的挂载点有失败。
-     * expected 始终与 installed + failed 对齐（markNotFound/installed 维护），
-     * 保证诊断卡比例自洽。
+     * - degraded：由 core 的 critical 失败集合派生（见 {@link #buildJson(int)}）。
+     * expected 由 core 的 installed + failed 派生，保证诊断卡比例自洽。
      */
     public static void finish(Feature f) {
         if (f == null) {
             return;
         }
-        State s = state(f);
-        s.unavailable = s.installed.get() == 0;
-        s.degraded = s.criticalFailed.get() > 0;
+        // 与旧实现一致：即使从未 enable/installed，finish 也要让该 Feature 进入快照。
+        sCore.enable(f.key);
+        if (sCore.installedCount(f.key) == 0) {
+            sUnavailable.add(f);
+        } else {
+            sUnavailable.remove(f);
+        }
         publish();
     }
 
@@ -237,12 +200,20 @@ public final class HookState {
      * 并标记该挂载点是否为 Profile 中的 critical。
      * critical 标记单独去重：即使 failed 已计过，也只在首次标记 critical 时累加。
      *
-     * <p>挂载点信息从 key 的既有格式推导（见 {@link #mountLabelFromKey(String)}）；
+     * <p>挂载点信息从 key 的既有格式推导（core 的 mountLabelFromKey）；
      * 需要精确挂载点时改用
      * {@link #markNotFound(Feature, String, boolean, String)}。
      */
     public static void markNotFound(Feature f, String label, boolean critical) {
-        markNotFound(f, label, critical, mountLabelFromKey(label));
+        if (f == null) {
+            return;
+        }
+        if (critical) {
+            sCore.markNotFoundCritical(f.key, label);
+        } else {
+            sCore.markNotFound(f.key, label);
+        }
+        publish();
     }
 
     /**
@@ -257,115 +228,12 @@ public final class HookState {
         if (f == null) {
             return;
         }
-        State s = state(f);
-        boolean changed = false;
-        synchronized (s) {
-            if (label != null && !s.failedKeys.add(label)) {
-                // 同一失败键只计一次；critical 标记仍按 key 去重。
-                if (mountLabel != null) {
-                    s.failedKeyMounts.put(label, mountLabel);
-                }
-                if (critical && s.criticalFailedKeys.add(label)) {
-                    s.criticalFailed.incrementAndGet();
-                    changed = true;
-                }
-            } else {
-                s.failed.incrementAndGet();
-                if (label != null && mountLabel != null) {
-                    s.failedKeyMounts.put(label, mountLabel);
-                }
-                if (critical && (label == null || s.criticalFailedKeys.add(label))) {
-                    s.criticalFailed.incrementAndGet();
-                }
-                s.attempted();
-                changed = true;
-            }
+        if (critical) {
+            sCore.markNotFoundCritical(f.key, label, mountLabel);
+        } else {
+            sCore.markNotFound(f.key, label, mountLabel);
         }
-        if (changed) {
-            publish();
-        }
-    }
-
-    /**
-     * 从既有失败键格式中提取挂载点 label：
-     * quiet 定位用 {@code method:cls#name (mount)}；install/rettype/hook 用
-     * {@code hook:label} / {@code rettype:label}；简单调用方直接把 label 当挂载点。
-     * 无法确定时返回 null，调用方仍可走显式 mountLabel 重载。
-     */
-    private static String mountLabelFromKey(String key) {
-        if (key == null) {
-            return null;
-        }
-        if (key.startsWith("method:")) {
-            int open = key.lastIndexOf(" (");
-            if (open >= 0 && key.endsWith(")")) {
-                return key.substring(open + 2, key.length() - 1);
-            }
-            return null;
-        }
-        if (key.startsWith("hook:") || key.startsWith("rettype:")) {
-            return key.substring(key.indexOf(':') + 1);
-        }
-        if (key.startsWith("mount:")) {
-            return key.substring("mount:".length());
-        }
-        int nullSuffix = key.indexOf(": method null");
-        if (nullSuffix > 0) {
-            return key.substring(0, nullSuffix);
-        }
-        if (key.startsWith("class:")) {
-            return null;
-        }
-        return key;
-    }
-
-    /**
-     * 撤销某个挂载点已记录的失败（同一挂载点后续 fallback 安装成功）。
-     * 调用方持有 State 锁；返回是否有记录被撤销。
-     */
-    private static boolean clearFailuresLocked(State s, String mountLabel) {
-        if (mountLabel == null) {
-            return false;
-        }
-        boolean cleared = false;
-        for (Map.Entry<String, String> entry : s.failedKeyMounts.entrySet()) {
-            if (!mountLabel.equals(entry.getValue())) {
-                continue;
-            }
-            String key = entry.getKey();
-            if (s.failedKeys.remove(key)) {
-                s.failed.decrementAndGet();
-                if (s.criticalFailedKeys.remove(key)) {
-                    s.criticalFailed.decrementAndGet();
-                }
-                cleared = true;
-            }
-            s.failedKeyMounts.remove(key);
-        }
-        if (cleared && lastFailureBelongsToMount(s.lastFailure, s.lastFailureMount, mountLabel)) {
-            s.lastFailure = null;
-            s.lastFailureAt = 0L;
-            s.lastFailureMount = null;
-        }
-        return cleared;
-    }
-
-    /**
-     * lastFailure 是否属于刚恢复的挂载点：优先用 noteMount 记录的挂载点；
-     * 兼容直接 note(...) 写入的标准失败文案（文案里带挂载点 label）。
-     */
-    private static boolean lastFailureBelongsToMount(String text, String failureMount,
-                                                     String mountLabel) {
-        if (text == null) {
-            return false;
-        }
-        if (mountLabel.equals(failureMount)) {
-            return true;
-        }
-        return text.equals("挂载点未找到 " + mountLabel)
-                || text.equals("方法为空 " + mountLabel)
-                || text.equals("hook 失败 " + mountLabel)
-                || text.equals("返回类型不匹配 " + mountLabel);
+        publish();
     }
 
     public static void note(Feature f, String text) {
@@ -384,14 +252,15 @@ public final class HookState {
         if (f == null) {
             return;
         }
-        State s = state(f);
-        synchronized (s) {
-            if (text != null) {
-                s.lastFailure = truncate(text, MAX_FAILURE_CHARS);
-                s.lastFailureAt = System.currentTimeMillis();
-                s.lastFailureMount = mountLabel;
-                Log.i(TAG, f.id + " " + text);
-            }
+        // 与旧实现一致：note 也会让该 Feature 进入快照（text 为 null 时只建账本）。
+        sCore.enable(f.key);
+        if (mountLabel == null) {
+            sCore.note(f.key, text);
+        } else {
+            sCore.noteMount(f.key, mountLabel, text);
+        }
+        if (text != null) {
+            Log.i(TAG, f.id + " " + text);
         }
         publish();
     }
@@ -423,7 +292,7 @@ public final class HookState {
         if (text == null) {
             return;
         }
-        sAbTestLastFailure = truncate(text, MAX_FAILURE_CHARS);
+        sAbTestLastFailure = truncate(text, 160);
         publish();
     }
 
@@ -509,7 +378,7 @@ public final class HookState {
         if (f == null) {
             return;
         }
-        state(f).entryCount.incrementAndGet();
+        sCore.entry(f.key);
         publish();
     }
 
@@ -517,9 +386,7 @@ public final class HookState {
         if (f == null) {
             return;
         }
-        State s = state(f);
-        s.hit = true;
-        s.hitCount.incrementAndGet();
+        sCore.hit(f.key);
         publish();
     }
 
@@ -529,6 +396,28 @@ public final class HookState {
             return;
         }
         TargetProcessPublisher.flush(sChannel);
+    }
+
+    /**
+     * 崩溃路径专用同步 flush：在当前线程直接构建快照并投递给模块 App，
+     * 不排队到工作线程、不经过节流；任何异常都被吞掉。
+     *
+     * <p>目标进程没有可写的本地 prefs（remote prefs 只读，回传经 ContentResolver
+     * 交给模块 App），因此这里同步的是 ContentResolver.call 的完成，而不是本进程
+     * 的 SharedPreferences 落盘；状态持久化由 StatusProvider 负责。
+     *
+     * @return 是否在返回前完成了一次同步投递（Context 不可用/未初始化/异常时为 false）
+     */
+    public static boolean flushNow() {
+        try {
+            if (sModulePackage == null || sModulePackage.isEmpty()) {
+                return false;
+            }
+            return TargetProcessPublisher.flushNow(sChannel);
+        } catch (Throwable ignored) {
+            // 崩溃路径绝不能因为 flush 失败而改变原有异常处理流程。
+            return false;
+        }
     }
 
     /**
@@ -551,6 +440,7 @@ public final class HookState {
         try {
             JSONObject root = new JSONObject();
             JSONObject features = new JSONObject();
+            Set<String> touched = new HashSet<>(sCore.touched());
             int enabledCount = 0;
             int installed = 0;
             int expected = 0;
@@ -559,38 +449,47 @@ public final class HookState {
             int degradedCount = 0;
             int unavailableCount = 0;
             for (Feature f : Feature.values()) {
-                State s = sStates.get(f);
-                if (s == null) {
+                if (!touched.contains(f.key)) {
                     continue;
                 }
+                int featureInstalled = sCore.installedCount(f.key);
+                int featureFailed = sCore.failedCount(f.key);
+                int featureCriticalFailed = sCore.criticalFailedCount(f.key);
+                int featureExpected = featureInstalled + featureFailed;
+                long featureHits = sCore.hits(f.key);
+                boolean enabled = sEnabled.contains(f);
+                boolean degraded = sCore.hasCriticalSkip(f.key);
+                boolean unavailable = sUnavailable.contains(f);
+
                 JSONObject o = new JSONObject();
                 o.put("id", f.id);
-                o.put("enabled", s.enabled);
-                o.put("expected", s.expected.get());
-                o.put("installed", s.installed.get());
-                o.put("failed", s.failed.get());
-                o.put("criticalFailed", s.criticalFailed.get());
-                o.put("entryCount", s.entryCount.get());
-                o.put("hit", s.hit);
-                o.put("hitCount", s.hitCount.get());
-                o.put("degraded", s.degraded);
-                o.put("unavailable", s.unavailable);
-                if (s.lastFailure != null) {
-                    o.put("lastFailure", s.lastFailure);
+                o.put("enabled", enabled);
+                o.put("expected", featureExpected);
+                o.put("installed", featureInstalled);
+                o.put("failed", featureFailed);
+                o.put("criticalFailed", featureCriticalFailed);
+                o.put("entryCount", sCore.entries(f.key));
+                o.put("hit", featureHits > 0L);
+                o.put("hitCount", featureHits);
+                o.put("degraded", degraded);
+                o.put("unavailable", unavailable);
+                String lastFailure = sCore.lastFailure(f.key);
+                if (lastFailure != null) {
+                    o.put("lastFailure", lastFailure);
                 }
                 features.put(f.name(), o);
-                if (s.enabled) {
+                if (enabled) {
                     enabledCount++;
-                    installed += s.installed.get();
-                    expected += s.expected.get();
-                    failed += s.failed.get();
-                    if (s.degraded) {
+                    installed += featureInstalled;
+                    expected += featureExpected;
+                    failed += featureFailed;
+                    if (degraded) {
                         degradedCount++;
                     }
-                    if (s.unavailable) {
+                    if (unavailable) {
                         unavailableCount++;
                     }
-                    if (!s.hit && s.expected.get() > 0) {
+                    if (featureHits == 0L && featureExpected > 0) {
                         noHit++;
                     }
                 }

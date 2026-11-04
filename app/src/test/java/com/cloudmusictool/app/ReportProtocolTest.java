@@ -4,6 +4,8 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.Test;
 
+import io.github.yigenhuobah.core.ReportProtocolCore;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -527,6 +529,30 @@ public class ReportProtocolTest {
         assertEquals(0, ReportProtocol.failedFeatureCount((JSONObject) null));
         assertNotNull(ReportProtocol.validateMountsPayload(null));
         assertNotNull(ReportProtocol.validateExperimentsPayload(null));
+    }
+
+    @Test
+    public void coreProtocolIsConfiguredWithFeatureKeysAndRootArrayCrashes() {
+        // ReportProtocol 的静态配置必须把 Feature 稳定 key 交给 core，并选用 CMT 的
+        // ROOT_ARRAY 崩溃载体（crashes 根级数组），不能退回 crash0/1/2 平铺键。
+        for (Feature f : Feature.values()) {
+            assertTrue("core 白名单缺少 reg." + f.key,
+                    ReportProtocolCore.validKey(ReportProtocolCore.PREFIX_REG + f.key));
+            assertTrue("core 白名单缺少 hit." + f.key,
+                    ReportProtocolCore.validKey(ReportProtocolCore.PREFIX_HIT + f.key));
+            assertTrue("core 白名单缺少 err." + f.key,
+                    ReportProtocolCore.validKey(ReportProtocolCore.PREFIX_ERR + f.key));
+            assertTrue("core 白名单缺少 skip." + f.key,
+                    ReportProtocolCore.validKey(ReportProtocolCore.PREFIX_SKIP + f.key));
+            assertTrue("core 白名单缺少 crit." + f.key,
+                    ReportProtocolCore.validKey(ReportProtocolCore.PREFIX_CRIT + f.key));
+        }
+        assertEquals("ROOT_ARRAY 布局：崩溃条目都落在 crashes 容器键",
+                "crashes", ReportProtocolCore.crashKey(0));
+        assertEquals("crashes", ReportProtocolCore.crashKey(5));
+        assertNull("非法下标仍返回 null", ReportProtocolCore.crashKey(-1));
+        assertFalse("未登记 key 必须被 core 拒绝",
+                ReportProtocolCore.validKey(ReportProtocolCore.PREFIX_HIT + "not_a_feature"));
     }
 
     // ------------------------------------------------------------------ helpers

@@ -2,12 +2,10 @@ package com.cloudmusictool.app.hooks;
 
 import com.cloudmusictool.app.Feature;
 
+import org.json.JSONObject;
 import org.junit.Test;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -75,15 +73,13 @@ public class PlayerAdHooksTest {
         return false;
     }
 
+    /** SEARCH_AD/PLAYER_AD 等 Feature 的 failed 计数；buildJson 是包私有入口，跨包测试用反射读取。 */
     private static int failedCount(Feature f) throws Exception {
-        Field states = com.cloudmusictool.app.HookState.class.getDeclaredField("sStates");
-        states.setAccessible(true);
-        Object state = ((Map<?, ?>) states.get(null)).get(f);
-        if (state == null) {
-            return 0;
-        }
-        Field failed = state.getClass().getDeclaredField("failed");
-        failed.setAccessible(true);
-        return ((AtomicInteger) failed.get(state)).get();
+        Method build = com.cloudmusictool.app.HookState.class.getDeclaredMethod("buildJson", int.class);
+        build.setAccessible(true);
+        String json = (String) build.invoke(null, 1 << 20);
+        JSONObject features = new JSONObject(json).optJSONObject("features");
+        JSONObject state = features == null ? null : features.optJSONObject(f.name());
+        return state == null ? 0 : state.optInt("failed", 0);
     }
 }
