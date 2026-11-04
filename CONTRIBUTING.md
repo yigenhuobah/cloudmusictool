@@ -5,7 +5,7 @@
 ## 本仓库适配
 
 - 目标应用：网易云音乐 `com.netease.cloudmusic` **9.6.08 / 9.6.13 / 9.6.15**（versionCode 9006008 / 9006013 / 9006015）
-- 模块当前版本：**2.4.9**（versionCode 19）
+- 模块当前版本：**2.4.11**（versionCode 21）
 - 只保证上述版本；其他版本 best-effort，功能可能失效，诊断页会提示未适配
 
 ## 提交 PR
@@ -25,6 +25,7 @@
 - compileSdk 37 对应平台包若装成 `android-37.2` 目录，AGP 解析不到，需重命名为 `android-37`
 - `local.properties` 写 `sdk.dir=<SDK 路径>`，不入库
 - `keystore.properties` 与 `*.jks` 不入库；没有签名也能跑测试和 lint，只有 release 会硬失败
+- 本仓库通过 Gradle 复合构建引用同级 `xposed-core`（默认 `../xposed-core`，也可用 `XPOSED_CORE_PATH` 指定）；缺少 core 时 Gradle 配置阶段直接失败，不会静默使用旧副本
 
 ## 构建与检查
 
@@ -43,6 +44,8 @@
 - 锚点缺失或方法找不到时必须降级，不能让宿主崩溃或白屏
 - `chain.proceed()` 每个 hook 恰好调用一次；异常记录后原样抛出，不要吞掉
 - 目标应用的类名/方法名走 `HookKit` / 锚点表，不散落硬编码
+- 锚点数据唯一来源是 `app/src/main/resources/anchors.json`；改完运行 `python3 tools/gen_anchors.py` 重新生成 `AnchorKeys.java` / `DexKitAnchors.java`，`python3 tools/gen_anchors.py --check`、`AnchorContractTest` 与 `check-mounts.sh` 必须通过
+- 配置读取必须逐键容错（单 key 坏值只回退该 key）；新增配置键同步 `config_version` 迁移说明；“恢复默认”的语义必须等于全新安装
 - 不在主线程做类加载、DexKit 扫描或磁盘 IO
 
 ## 适配新版本

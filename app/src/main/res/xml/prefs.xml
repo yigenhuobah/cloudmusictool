@@ -181,6 +181,15 @@
 
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="@string/group_reset">
+
+        <Preference
+            android:key="reset_defaults"
+            android:title="@string/reset_defaults_title"
+            android:summary="@string/reset_defaults_summary" />
+
+    </PreferenceCategory>
+
     <Preference
         android:key="footer_limits"
         android:layout="@layout/preference_footer"

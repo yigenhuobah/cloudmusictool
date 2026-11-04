@@ -32,6 +32,17 @@
     <string name="group_ex">实验功能</string>
     <string name="group_other">其他</string>
     <string name="group_pages">更多</string>
+    <string name="group_reset">恢复默认</string>
+
+    <!-- 恢复默认 -->
+    <string name="reset_defaults_title">恢复默认</string>
+    <string name="reset_defaults_summary">将所有功能开关恢复为默认值，并清除自定义过滤集合与实验设置</string>
+    <string name="reset_defaults_confirm_title">恢复默认设置？</string>
+    <string name="reset_defaults_confirm_message">所有开关将回到默认值。</string>
+    <string name="reset_defaults_cancel">取消</string>
+    <string name="reset_defaults_confirm">恢复默认</string>
+    <string name="reset_defaults_success">已恢复默认设置</string>
+    <string name="reset_defaults_failed">恢复默认失败：无法写入配置</string>
 
     <!-- 其他 -->
     <string name="app_hide_icon_title">隐藏桌面图标</string>

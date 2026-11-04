@@ -24,6 +24,11 @@ final class PrefsSetCodec {
     private PrefsSetCodec() {
     }
 
+    /** 底层读取抛异常时的回调；用于上层按 key 记录一次 WARN。 */
+    interface ReadErrorHandler {
+        void onError(Throwable t);
+    }
+
     /**
      * 读取 set 型配置。
      *
@@ -32,12 +37,23 @@ final class PrefsSetCodec {
      *         读取抛异常时返回 null，由调用方回退默认值。
      */
     static Set<String> read(SharedPreferences sp, String key) {
+        return read(sp, key, null);
+    }
+
+    /**
+     * 与 {@link #read(SharedPreferences, String)} 语义一致，额外把“最终无法读取”
+     * 的异常交给 onError：StringSet 抛错但字符串兜底成功不算失败；两种格式都
+     * 读不到且至少有一次抛异常时才回调，避免把正常兜底/缺失报成 WARN。
+     */
+    static Set<String> read(SharedPreferences sp, String key, ReadErrorHandler onError) {
+        Throwable failure = null;
         try {
             Set<String> set = sp.getStringSet(key, null);
             if (set != null) {
                 return new HashSet<>(set);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            failure = t;
         }
         try {
             String raw = sp.getString(key, null);
@@ -45,7 +61,13 @@ final class PrefsSetCodec {
             if (raw != null && !raw.isEmpty()) {
                 return parse(raw);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            if (failure == null) {
+                failure = t;
+            }
+        }
+        if (failure != null && onError != null) {
+            onError.onError(failure);
         }
         return null;
     }

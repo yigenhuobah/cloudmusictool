@@ -6,6 +6,7 @@ import android.content.pm.PackageInfo;
 import android.os.Bundle;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 
@@ -32,12 +33,15 @@ public class SettingsFragment extends PreferenceFragmentCompat {
 
     /** 与 res/xml/prefs.xml 的 android:key 保持一致。 */
     private static final String KEY_HIDE_ICON = "app_hide_icon";
+    private static final String KEY_RESET_DEFAULTS = "reset_defaults";
 
     private ConfigStore mStore;
     private ExecutorService mStatusExecutor;
     private final AtomicInteger mStatusGeneration = new AtomicInteger();
     /** 每个 key 的写回令牌与最近确认值；与首页定制页共用同一状态机语义。 */
     private final WriteGate<Boolean> mWriteGate = new WriteGate<>();
+    /** 恢复默认提交门：防止多个确认框重复入队。只在主线程使用。 */
+    private final ResetSubmitGate mResetGate = new ResetSubmitGate();
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -52,6 +56,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
         bindFeatures();
         bindLauncherIcon();
         bindPages();
+        bindResetDefaults();
         refresh();
     }
 
@@ -218,6 +223,72 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 return true;
             });
         }
+    }
+
+    /** 恢复默认：确认后异步写 remote prefs，成功时重新拉取开关快照。 */
+    private void bindResetDefaults() {
+        Preference reset = findPreference(KEY_RESET_DEFAULTS);
+        if (reset == null) {
+            return;
+        }
+        reset.setTitle(R.string.reset_defaults_title);
+        reset.setSummary(R.string.reset_defaults_summary);
+        reset.setOnPreferenceClickListener(pref -> {
+            // 在途时不再弹确认框：两个确认框都能入队会造成重复 reset。
+            if (!mResetGate.inFlight()) {
+                showResetConfirmDialog();
+            }
+            return true;
+        });
+    }
+
+    private void showResetConfirmDialog() {
+        if (mResetGate.inFlight() || !isAdded() || getContext() == null) {
+            return;
+        }
+        new AlertDialog.Builder(requireContext())
+                .setTitle(R.string.reset_defaults_confirm_title)
+                .setMessage(R.string.reset_defaults_confirm_message)
+                .setNegativeButton(R.string.reset_defaults_cancel, null)
+                .setPositiveButton(R.string.reset_defaults_confirm,
+                        (dialog, which) -> requestResetDefaults())
+                .show();
+    }
+
+    private void requestResetDefaults() {
+        if (!isAdded()) {
+            return;
+        }
+        Preference reset = findPreference(KEY_RESET_DEFAULTS);
+        if (reset == null || !mResetGate.begin()) {
+            return;
+        }
+        // 写盘期间禁止重复点击；回调（含 remote 不可用的失败）会恢复状态。
+        reset.setEnabled(false);
+        mStatusGeneration.incrementAndGet();
+        mStore.resetToDefaults(success -> {
+            mResetGate.finish();
+            if (!isAdded()) {
+                return;
+            }
+            // 恢复结果比任何在途快照都新。
+            mStatusGeneration.incrementAndGet();
+            Preference current = findPreference(KEY_RESET_DEFAULTS);
+            if (current != null) {
+                // 无论成功失败都恢复可点击：失败时允许用户重试。
+                current.setEnabled(true);
+            }
+            if (!success) {
+                Toast.makeText(requireContext(),
+                        R.string.reset_defaults_failed, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            // 整体重置后旧开关的确认值/回滚基线不再可信；清空后由快照重新建立。
+            mWriteGate.clear();
+            Toast.makeText(requireContext(),
+                    R.string.reset_defaults_success, Toast.LENGTH_SHORT).show();
+            refresh();
+        });
     }
 
     private void openPage(androidx.fragment.app.Fragment page) {

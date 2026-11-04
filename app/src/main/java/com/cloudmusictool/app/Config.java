@@ -36,6 +36,10 @@ public final class Config {
     public static final String KEY_DEXKIT_SELFTEST = "dexkit_selftest";
     public static final boolean DEFAULT_DEXKIT_SELFTEST = false;
 
+    /** 配置格式版本：写入侧每次提交都携带，读取侧只做兼容性提示，不阻断加载。 */
+    public static final String KEY_CONFIG_VERSION = "config_version";
+    public static final int CURRENT_CONFIG_VERSION = 1;
+
     private static volatile boolean sDexKitSelfTest = DEFAULT_DEXKIT_SELFTEST;
 
     private static final String TAG = "CloudMusicTool";
@@ -43,6 +47,7 @@ public final class Config {
     private final Map<Feature, Boolean> mEnabled = new EnumMap<>(Feature.class);
     private final Map<String, Set<String>> mCustomSets = new java.util.HashMap<>();
     private Map<String, String> mAbTestForceMap = Collections.emptyMap();
+    private int mConfigVersion = CURRENT_CONFIG_VERSION;
 
     private Config() {
         for (Feature f : Feature.values()) {
@@ -50,6 +55,10 @@ public final class Config {
         }
     }
 
+    /**
+     * 读取配置。每个 key 独立读取、独立容错：单个坏值只回退该 key 的默认值，
+     * 已经读到的值和后续 key（含 set 与 abtest 表）继续加载。
+     */
     public static Config load(XposedModule module) {
         Config config = new Config();
         sDexKitSelfTest = DEFAULT_DEXKIT_SELFTEST;
@@ -58,28 +67,92 @@ public final class Config {
             module.log(Log.WARN, TAG, "no PROP_CAP_REMOTE: use built-in defaults");
             return config;
         }
+        final SharedPreferences sp;
         try {
-            SharedPreferences sp = module.getRemotePreferences(GROUP);
-            if (sp != null) {
-                for (Feature f : Feature.values()) {
-                    config.mEnabled.put(f, sp.getBoolean(f.key, f.defaultEnabled));
-                }
-                sDexKitSelfTest = sp.getBoolean(KEY_DEXKIT_SELFTEST, DEFAULT_DEXKIT_SELFTEST);
-                loadSet(sp, KEY_HOME_BLOCKS_FILTER, config.mCustomSets);
-                loadSet(sp, KEY_TOP_CHANNELS_KEEP, config.mCustomSets);
-                loadSet(sp, KEY_BOTTOM_NAV_KEEP, config.mCustomSets);
-                loadSet(sp, KEY_STARTUP_TASK_BLOCKLIST, config.mCustomSets);
-                try {
-                    config.mAbTestForceMap = parseForceMap(
-                            sp.getString(KEY_ABTEST_FORCE_MAP, "{}"));
-                } catch (Throwable t) {
-                    module.log(Log.WARN, TAG, "abtest_force_map unreadable, ignored", t);
-                }
-            }
+            sp = module.getRemotePreferences(GROUP);
         } catch (Throwable t) {
             module.log(Log.WARN, TAG, "remote prefs unavailable: use built-in defaults", t);
+            return config;
         }
+        if (sp == null) {
+            module.log(Log.WARN, TAG, "remote prefs unavailable: use built-in defaults");
+            return config;
+        }
+
+        // 每个 key 只告警一次；坏 key 不能中断整个加载流程。
+        Set<String> warned = new HashSet<>();
+        config.mConfigVersion = readInt(module, sp, KEY_CONFIG_VERSION,
+                CURRENT_CONFIG_VERSION, warned);
+        if (config.mConfigVersion > CURRENT_CONFIG_VERSION) {
+            module.log(Log.WARN, TAG, "配置版本 v" + config.mConfigVersion
+                    + " 高于模块支持 v" + CURRENT_CONFIG_VERSION + "，按兼容模式继续");
+        }
+        for (Feature f : Feature.values()) {
+            config.mEnabled.put(f, readBoolean(module, sp, f.key, f.defaultEnabled, warned));
+        }
+        sDexKitSelfTest = readBoolean(module, sp, KEY_DEXKIT_SELFTEST,
+                DEFAULT_DEXKIT_SELFTEST, warned);
+        loadSetTolerant(module, sp, KEY_HOME_BLOCKS_FILTER, config.mCustomSets, warned);
+        loadSetTolerant(module, sp, KEY_TOP_CHANNELS_KEEP, config.mCustomSets, warned);
+        loadSetTolerant(module, sp, KEY_BOTTOM_NAV_KEEP, config.mCustomSets, warned);
+        loadSetTolerant(module, sp, KEY_STARTUP_TASK_BLOCKLIST, config.mCustomSets, warned);
+        config.mAbTestForceMap = readForceMap(module, sp, warned);
         return config;
+    }
+
+    private static boolean readBoolean(XposedModule module, SharedPreferences sp, String key,
+                                       boolean def, Set<String> warned) {
+        try {
+            return sp.getBoolean(key, def);
+        } catch (Throwable t) {
+            warnKey(module, warned, key, t);
+            return def;
+        }
+    }
+
+    private static int readInt(XposedModule module, SharedPreferences sp, String key,
+                               int def, Set<String> warned) {
+        try {
+            return sp.getInt(key, def);
+        } catch (Throwable t) {
+            warnKey(module, warned, key, t);
+            return def;
+        }
+    }
+
+    private static void loadSetTolerant(XposedModule module, SharedPreferences sp, String key,
+                                        Map<String, Set<String>> out, Set<String> warned) {
+        try {
+            Set<String> parsed = PrefsSetCodec.read(sp, key,
+                    t -> warnKey(module, warned, key, t));
+            if (parsed != null) {
+                out.put(key, parsed);
+            }
+        } catch (Throwable t) {
+            warnKey(module, warned, key, t);
+        }
+    }
+
+    private static Map<String, String> readForceMap(XposedModule module, SharedPreferences sp,
+                                                    Set<String> warned) {
+        try {
+            return parseForceMap(sp.getString(KEY_ABTEST_FORCE_MAP, "{}"));
+        } catch (Throwable t) {
+            warnKey(module, warned, KEY_ABTEST_FORCE_MAP, t);
+            return Collections.emptyMap();
+        }
+    }
+
+    /** 每个 key 名只记录一次 WARN，消息包含 key 与异常类型/信息。 */
+    private static void warnKey(XposedModule module, Set<String> warned, String key,
+                                Throwable t) {
+        if (!warned.add(key)) {
+            return;
+        }
+        String detail = t.getClass().getName()
+                + (t.getMessage() != null ? ": " + t.getMessage() : "");
+        module.log(Log.WARN, TAG, "config key '" + key + "' unreadable (" + detail
+                + "), use default", t);
     }
 
     static void loadSet(SharedPreferences sp, String key, Map<String, Set<String>> out) {
@@ -99,6 +172,11 @@ public final class Config {
      */
     public Map<String, String> getAbTestForceMap() {
         return mAbTestForceMap;
+    }
+
+    /** 本次加载读到的配置版本；缺失或坏值时回退 {@link #CURRENT_CONFIG_VERSION}。 */
+    int configVersion() {
+        return mConfigVersion;
     }
 
     static Map<String, String> parseForceMap(String raw) {

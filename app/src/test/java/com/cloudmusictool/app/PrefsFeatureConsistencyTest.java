@@ -25,6 +25,7 @@ import static org.junit.Assert.fail;
  * 非功能 key 白名单说明（按当前 prefs.xml 实际内容）：
  * - status / warning：设置页顶部状态卡与警告横幅，由 StatusProvider 动态填充；
  * - app_hide_icon：桌面图标显隐开关（LauncherIcon），不是目标进程 hook；
+ * - reset_defaults：恢复默认入口（ConfigStore.resetToDefaults），不是目标进程 hook；
  * - page_*：二级页面入口（主页自定义、实验、诊断、关于）；
  * - footer_*：页脚说明。
  * 以后新增非功能 key 必须同步这里，否则测试失败——这是故意的。
@@ -36,7 +37,8 @@ public class PrefsFeatureConsistencyTest {
     private static final Set<String> EXACT_NON_FEATURE_KEYS = new HashSet<>(Arrays.asList(
             "status",
             "warning",
-            "app_hide_icon"));
+            "app_hide_icon",
+            "reset_defaults"));
 
     private static final Pattern NON_FEATURE_PREFIX = Pattern.compile("^(page|footer)_");
 

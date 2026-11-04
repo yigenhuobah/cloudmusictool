@@ -63,8 +63,29 @@ public class DexKitLocatorCacheTest {
 
     @After
     public void cleanUpLocatorState() throws Exception {
+        // warmUpAsync 的线程是异步的：先等它们结束再清静态缓存，避免迟到线程
+        // 在下一个用例里触碰 native 加载状态，污染 loadFailed()/loadFailure()。
+        awaitWarmupThreads();
         resetStatics();
         hostLoader = null;
+    }
+
+    private static void awaitWarmupThreads() throws InterruptedException {
+        long deadline = System.currentTimeMillis() + 5000;
+        while (System.currentTimeMillis() < deadline) {
+            boolean alive = false;
+            for (Thread thread : Thread.getAllStackTraces().keySet()) {
+                if (thread.isAlive()
+                        && "CloudMusicTool-DexKitWarmup".equals(thread.getName())) {
+                    alive = true;
+                    break;
+                }
+            }
+            if (!alive) {
+                return;
+            }
+            Thread.sleep(10);
+        }
     }
 
     // ---------------------------------------------------------------- id 36
