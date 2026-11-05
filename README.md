@@ -2,7 +2,7 @@
 
 网易云音乐 Android 客户端的 LSPosed 体验优化模块：去广告、精简界面、收敛弹窗、隐私加固。
 
-> 当前版本 **2.4.11**（versionCode 21）。适配网易云音乐 **9.6.08 / 9.6.13 / 9.6.15**（versionCode 9006008 / 9006013 / 9006015）。
+> 当前版本 **2.4.12**（versionCode 22）。适配网易云音乐 **9.6.08 / 9.6.13 / 9.6.15 / 9.6.20**（versionCode 9006008 / 9006013 / 9006015 / 9006020）。
 > 与网易官方无任何关联，仅供学习研究和个人设备使用。
 
 **仓库**：<https://github.com/yigenhuobah/cloudmusictool> ｜ **下载**：[Releases](https://github.com/yigenhuobah/cloudmusictool/releases) ｜ **反馈**：[Issues](https://github.com/yigenhuobah/cloudmusictool/issues/new/choose)
@@ -13,7 +13,7 @@
 
 | 项 | 值 |
 |---|---|
-| 目标应用 | `com.netease.cloudmusic` **9.6.08 / 9.6.13 / 9.6.15** (versionCode 9006008 / 9006013 / 9006015) |
+| 目标应用 | `com.netease.cloudmusic` **9.6.08 / 9.6.13 / 9.6.15 / 9.6.20** (versionCode 9006008 / 9006013 / 9006015 / 9006020) |
 | 模块包名 | `io.github.yigenhuobah.cloudmusictool` |
 | Xposed API | libxposed API 102（`minApiVersion=102` / `targetApiVersion=102`） |
 | 系统要求 | Android 10+（minSdk 29） |
@@ -123,11 +123,12 @@ tab 切换用 hide/show 保留各自滚动位置；非设置 tab 按返回先回
 
 环境：JDK 21（构建用；Java source/target 仍为 17）、Android SDK Platform 37、Gradle wrapper 8.13、AGP 8.13.2。
 
+
 ```bash
-# 单元测试（含 ProfileExportTest，导出 app/build/profile9608.json、profile9613.json 与 profile9615.json）
+# 单元测试（含 ProfileExportTest，导出 app/build/profile9608.json、profile9613.json、profile9615.json 与 profile9620.json）
 ./gradlew :app:testDebugUnitTest
 
-# 挂载点体检（按 APK versionCode 自动选择 9608/9613/9615 profile；
+# 挂载点体检（按 APK versionCode 自动选择 9608/9613/9615/9620 profile；
 # 输出 OK/GONE/ERROR，并校验 DexKitAnchors；--skip-anchors 可跳过锚点）
 bash tools/check-mounts.sh --apk /path/to/base.apk --dexsql /path/to/dexsql
 
@@ -152,12 +153,12 @@ bash tools/release.sh --host-apk /path/to/base.apk --dexsql /path/to/dexsql
 - `implementation io.github.libxposed:service:102.0.0`
 - `implementation org.luckypray:dexkit:2.3.0`（硬编码失败时兜底，已启用 legacy JNI 打包）
 - AppCompat / Material / androidx.preference
-- 单测：JUnit 4.13.2 + `org.json:json`；当前 **400 个用例**（`:app:testDebugUnitTest`）
+- 单测：JUnit 4.13.2 + `org.json:json`；当前 **491 个用例**（`:app:testDebugUnitTest`）
 
 ## 已知限制
 
-- **适配版本：9.6.08 / 9.6.13 / 9.6.15**。其他版本默认 best-effort 继续挂载（与 QuietBox 语义一致），功能可能失效，状态卡/横幅会提示未适配。
-- **9.6.20 尚未适配**：2026-11-05 宿主已出现 9.6.20（9006020），静态体检 `OK=116 GONE=29`、运行时 `installed 87/116`；需按新 APK 重新定位锚点后再声明支持。
+- **适配版本：9.6.08 / 9.6.13 / 9.6.15 / 9.6.20**。其他版本默认 best-effort 继续挂载（与 QuietBox 语义一致），功能可能失效，状态卡/横幅会提示未适配。
+- **9.6.20 适配状态**：2026-11-05 对 9.6.20 base.apk 完成 143/143 挂载点静态体检（16/16 DexKit 锚点），未做真机逐功能回归。PV-05 的 d/e 已合并到 c()Z 并通过 profile.remove 删除；PV-01 从 o(String) 迁到 m(String) 上传入口，属语义迁移需真机验证；其余 9.6.15 坐标复用 base。
 - 广告由服务端下发，模块只能阻止展示/上报，不能阻止接口请求。
 - 宿主存在 Tinker 风格热补丁，补丁可能替换被 hook 的实现。
 - **9.6.13 / 9.6.15 适配状态**：9.6.13 已在 2.4.4 真机验证；9.6.15 复用

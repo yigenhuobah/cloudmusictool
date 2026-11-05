@@ -4,6 +4,8 @@ import com.cloudmusictool.app.anchor.AnchorTable;
 import com.cloudmusictool.app.profile.MountSpec;
 import com.cloudmusictool.app.profile.Profile9608;
 import com.cloudmusictool.app.profile.Profile9613;
+import com.cloudmusictool.app.profile.Profile9615;
+import com.cloudmusictool.app.profile.Profile9620;
 import com.cloudmusictool.app.profile.ProfileRegistry;
 import com.cloudmusictool.app.profile.TargetProfile;
 
@@ -50,7 +52,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class ProfileExportTest {
 
-    private static final String[] EXPECTED_VERSIONS = {"9.6.08", "9.6.13", "9.6.15"};
+    private static final String[] EXPECTED_VERSIONS = {
+            "9.6.08", "9.6.13", "9.6.15", "9.6.20"};
 
     private static AnchorTable anchors() {
         AnchorTable table = AnchorTable.load(ProfileExportTest.class.getClassLoader());
@@ -70,7 +73,9 @@ public class ProfileExportTest {
         assertNotNull(table.versionByCode(9006008L));
         assertNotNull(table.versionByCode(9006013L));
         assertNotNull(table.versionByCode(9006015L));
+        assertNotNull(table.versionByCode(9006020L));
         assertNotNull(table.versionByName("9.6.15"));
+        assertNotNull(table.versionByName("9.6.20"));
         assertEquals(null, table.versionByCode(9006009L));
         assertEquals(null, table.versionByName("9.6.09"));
     }
@@ -95,6 +100,8 @@ public class ProfileExportTest {
         }
         assertSame(Profile9608.PROFILE, ProfileRegistry.forVersionCode(9006008L));
         assertSame(Profile9613.PROFILE, ProfileRegistry.forVersionCode(9006013L));
+        assertSame(Profile9615.PROFILE, ProfileRegistry.forVersionCode(9006015L));
+        assertSame(Profile9620.PROFILE, ProfileRegistry.forVersionCode(9006020L));
         assertEquals(null, ProfileRegistry.forVersionCode(9006009L));
         assertEquals(null, ProfileRegistry.forVersionName("9.6.09"));
     }

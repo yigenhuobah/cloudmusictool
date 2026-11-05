@@ -231,10 +231,54 @@ public class AnchorTableTest {
         AnchorTable table = AnchorTable.load(AnchorTableTest.class.getClassLoader());
         assertNotNull("build 需要把 app/src/main/resources/anchors.json 打进测试 classpath",
                 table);
-        assertEquals(3, table.versions().size());
+        assertEquals(4, table.versions().size());
         assertNotNull(table.versionByCode(9006015L));
         assertEquals(145, table.versionByCode(9006015L).profile.mounts.size());
-        assertEquals(182, table.anchorKeys().size());
+        assertNotNull(table.versionByCode(9006020L));
+        assertEquals(143, table.versionByCode(9006020L).profile.mounts.size());
+        assertEquals(209, table.anchorKeys().size());
+    }
+
+    /** profile.remove：同 id 的 mount 不再从 base 继承，且先于 mounts 应用。 */
+    @Test
+    public void removeDropsInheritedMountBeforeApplyingMounts() {
+        String json = SYNTHETIC.replace(
+                "\"versionName\": \"2.0\", \"versionCode\": 2, \"base\": \"1.0\",",
+                "\"versionName\": \"2.0\", \"versionCode\": 2, \"base\": \"1.0\","
+                        + " \"remove\": [\"F/Base#b\"],");
+        TargetProfile profile = AnchorTable.parse(json).versionByName("2.0").profile;
+        assertEquals(Arrays.asList("F/Base#a", "F/New#c"), ids(profile));
+        assertNull(find(profile, "F/Base#b"));
+    }
+
+    /** remove 删除不存在的 mount id 是 build 期数据错误。 */
+    @Test
+    public void parseRejectsRemoveOfUnknownMountId() {
+        String bad = SYNTHETIC.replace(
+                "\"versionName\": \"2.0\", \"versionCode\": 2, \"base\": \"1.0\",",
+                "\"versionName\": \"2.0\", \"versionCode\": 2, \"base\": \"1.0\","
+                        + " \"remove\": [\"F/Missing#z\"],");
+        assertThrows(IllegalArgumentException.class, () -> AnchorTable.parse(bad));
+    }
+
+    /** remove 元素必须是 feature/logicalName，而不是 anchor key。 */
+    @Test
+    public void parseRejectsBadRemoveElement() {
+        String bad = SYNTHETIC.replace(
+                "\"versionName\": \"2.0\", \"versionCode\": 2, \"base\": \"1.0\",",
+                "\"versionName\": \"2.0\", \"versionCode\": 2, \"base\": \"1.0\","
+                        + " \"remove\": [\"F/Base#a@2.0\"],");
+        assertThrows(IllegalArgumentException.class, () -> AnchorTable.parse(bad));
+    }
+
+    /** remove 必须是数组，字符串形式不能静默忽略。 */
+    @Test
+    public void parseRejectsNonArrayRemove() {
+        String bad = SYNTHETIC.replace(
+                "\"versionName\": \"2.0\", \"versionCode\": 2, \"base\": \"1.0\",",
+                "\"versionName\": \"2.0\", \"versionCode\": 2, \"base\": \"1.0\","
+                        + " \"remove\": \"F/Base#b\",");
+        assertThrows(IllegalArgumentException.class, () -> AnchorTable.parse(bad));
     }
 
     private static List<String> names(AnchorTable table) {

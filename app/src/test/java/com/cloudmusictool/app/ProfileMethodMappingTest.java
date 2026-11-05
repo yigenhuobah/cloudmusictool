@@ -4,6 +4,7 @@ import com.cloudmusictool.app.profile.MountSpec;
 import com.cloudmusictool.app.profile.Profile9608;
 import com.cloudmusictool.app.profile.Profile9613;
 import com.cloudmusictool.app.profile.Profile9615;
+import com.cloudmusictool.app.profile.Profile9620;
 import com.cloudmusictool.app.profile.TargetProfile;
 
 import org.junit.Test;
@@ -17,8 +18,8 @@ import static org.junit.Assert.assertTrue;
  * {@link TargetProfile#findByLogicalName} 的纯 JVM 单测。
  *
  * hook 文件按 9.6.08 的旧混淆方法名请求方法（如 LoadingAdManager#E）；
- * Profile9613 的覆盖里 methodName 已是新名（如 H），logicalName 保留旧逻辑名。
- * 这里断言旧名 -> 新名的映射在 9.6.13 生效、9.6.08 不受影响。
+ * Profile9613/Profile9620 的覆盖里 methodName 已是新名（如 H），logicalName 保留旧逻辑名。
+ * 这里断言旧名 -> 新名的映射在 9.6.13 与 9.6.20 生效、9.6.08 不受影响。
  */
 public class ProfileMethodMappingTest {
 
@@ -34,6 +35,10 @@ public class ProfileMethodMappingTest {
             "com.netease.cloudmusic.discovery.view.newframework.BaseArkV3Fragment";
     private static final String LYRIC_VIDEO_TIPS =
             "com.netease.cloudmusic.fragment.LyricVideoTipsDialog";
+    private static final String COMMENT_ADAPTER =
+            "com.netease.cloudmusic.adapter.CommentAdapter";
+    private static final String MINE_PROXY =
+            "com.netease.cloudmusic.fragment.MyMusicProxyFragment";
 
     private static MountSpec mapped(TargetProfile profile, String className, String requested) {
         MountSpec spec = profile.findByLogicalName(className, requested);
@@ -109,6 +114,69 @@ public class ProfileMethodMappingTest {
         assertNotNull(legacy);
         assertEquals("E", legacy.methodName);
         assertTrue(legacy.critical);
+    }
+
+    @Test
+    public void profile9620_mapsRenamedMethods() {
+        // AD-07: y1(CommentListEntry) -> w1；AD-08: q(Ad) -> p。
+        assertEquals("w1", mapped(Profile9620.PROFILE, COMMENT_ADAPTER, "y1").methodName);
+        assertEquals("p", mapped(Profile9620.PROFILE, PLAYER_AD_DELEGATE, "q").methodName);
+        // AD-09: 9.6.13 的 B 在 9.6.20 回退为 z。
+        assertEquals("z", mapped(Profile9620.PROFILE, PODCAST_VIDEO_AD, "z").methodName);
+        // UI-04: hc -> cc、Tc -> Oc、Lc -> Gc。
+        assertEquals("cc", mapped(Profile9620.PROFILE, BASE_ARK_V3, "hc").methodName);
+        assertEquals("Oc", mapped(Profile9620.PROFILE, BASE_ARK_V3, "Tc").methodName);
+        assertEquals("Gc", mapped(Profile9620.PROFILE, BASE_ARK_V3, "Lc").methodName);
+        // UI-14: oc -> jc；EN-01: kc -> jc。
+        assertEquals("jc", mapped(Profile9620.PROFILE, LYRIC_VIDEO_TIPS, "oc").methodName);
+        assertEquals("jc", mapped(Profile9620.PROFILE, MINE_PROXY, "kc").methodName);
+        // 9.6.13 的覆盖继续生效（E -> H）。
+        assertEquals("H", mapped(Profile9620.PROFILE, LOADING_AD_MANAGER, "E").methodName);
+    }
+
+    @Test
+    public void profile9620_mapsViaRenamedClassCandidates() {
+        assertEquals("q", mapped(Profile9620.PROFILE, "lu0.e", "q").methodName);
+        assertEquals("O0", mapped(Profile9620.PROFILE, "kq.h", "T0").methodName);
+        assertEquals("h", mapped(Profile9620.PROFILE, "wf0.h", "h").methodName);
+        assertEquals("c", mapped(Profile9620.PROFILE, "uf0.c", "c").methodName);
+        assertEquals("y", mapped(Profile9620.PROFILE, "wf0.o$a", "y").methodName);
+        assertEquals("checkAndShowYouthDialog",
+                mapped(Profile9620.PROFILE, "on2.c", "checkAndShowYouthDialog").methodName);
+        assertEquals("m0",
+                mapped(Profile9620.PROFILE,
+                        "com.netease.cloudmusic.utils.vn", "m0").methodName);
+        assertEquals("L",
+                mapped(Profile9620.PROFILE,
+                        "com.netease.cloudmusic.utils.vn", "L").methodName);
+        assertEquals("d",
+                mapped(Profile9620.PROFILE,
+                        "com.netease.cloudmusic.utils.t2", "d").methodName);
+        assertEquals("v",
+                mapped(Profile9620.PROFILE,
+                        "com.netease.cloudmusic.abtest2.b", "x").methodName);
+        assertEquals("m",
+                mapped(Profile9620.PROFILE,
+                        "com.netease.cloudmusic.oaid.MusicOaidUploadManager", "o").methodName);
+        assertEquals("B", mapped(Profile9620.PROFILE, "yb2.e$a", "B").methodName);
+        assertEquals("g", mapped(Profile9620.PROFILE, "yb2.f", "g").methodName);
+        assertEquals("s", mapped(Profile9620.PROFILE, "yb2.f", "s").methodName);
+        assertEquals("s",
+                mapped(Profile9620.PROFILE,
+                        "com.netease.cloudmusic.utils.eh", "s").methodName);
+        assertEquals("a", mapped(Profile9620.PROFILE, "zr0.d", "a").methodName);
+        assertEquals("d", mapped(Profile9620.PROFILE, "zr0.d", "d").methodName);
+        assertEquals("j", mapped(Profile9620.PROFILE, "bs0.r", "j").methodName);
+        assertEquals("c", mapped(Profile9620.PROFILE, "rt0.j", "e").methodName);
+    }
+
+    @Test
+    public void profile9620_dropsRemovedLogMonitorMethods() {
+        assertNull("9.6.20 的 d 已合并进 c",
+                Profile9620.PROFILE.findByLogicalName(
+                        "com.netease.cloudmusic.statistic.monitor.LogMonitorConfigManager", "d"));
+        assertNull(Profile9620.PROFILE.findByLogicalName(
+                "com.netease.cloudmusic.statistic.monitor.LogMonitorConfigManager", "e"));
     }
 
     @Test

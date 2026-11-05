@@ -30,8 +30,8 @@ import java.util.Set;
  *   "schemaVersion": 1,
  *   "generatedBy": "tools/gen_anchors.py",
  *   "app": "com.netease.cloudmusic",
- *   "appVersion": "9.6.15",
- *   "versionCode": 9006015,
+ *   "appVersion": "9.6.20",
+ *   "versionCode": 9006020,
  *   "anchors": {
  *     "AD-01/LoadingAdManager#E": {
  *       "c": "com...", "candidates": ["...", "..."], "m": "E",
@@ -46,7 +46,11 @@ import java.util.Set;
  *     { "versionName": "9.6.13", "versionCode": 9006013,
  *       "base": "9.6.08", "mounts": ["key", ...] },
  *     { "versionName": "9.6.15", "versionCode": 9006015,
- *       "base": "9.6.13", "mounts": [] }
+ *       "base": "9.6.13", "mounts": [] },
+ *     { "versionName": "9.6.20", "versionCode": 9006020,
+ *       "base": "9.6.15",
+ *       "remove": ["PV-05/LogMonitorConfigManager#d", "..."],
+ *       "mounts": ["key", ...] }
  *   ]
  * }
  * </pre>
@@ -54,6 +58,11 @@ import java.util.Set;
  * <p>profile 的 {@code mounts} 是相对 {@code base} 的增量：先展开 base 链，
  * 再按 mount id（{@code feature + "/" + logicalName}）合并——同 id 原位替换，
  * 新 id 追加。这样 9.6.15 只需 {@code base: 9.6.13} + 空 mounts。
+ *
+ * <p>可选 {@code remove} 是该版本要删除的 mount id 数组（不是 anchor key）：
+ * 在同一 profile 的 {@code mounts} 合并之前应用，用于宿主把多个旧挂载点合并
+ * 成一个实现（如 9.6.20 的 PV-05 把 d/e 合并进 c）。元素必须是已存在的
+ * mount id，否则按 build 期数据错误抛出 {@link IllegalArgumentException}。
  *
  * <p>方法名/签名随版本漂移的挂载点用 {@code <mountId>@<versionName>} 作为
  * {@code anchors} 的 key，{@code logicalName} 仍保留原 mount id，因此
@@ -431,6 +440,37 @@ public final class AnchorTable {
         Map<String, MountSpec> merged = new LinkedHashMap<>();
         for (JSONObject profile : chain) {
             String versionName = requireString(profile, "versionName");
+            // remove 先于 mounts 应用：被删除的旧挂载点不再从 base 继承。
+            // 元素是 mount id（feature/logicalName），不是 anchor key。
+            if (profile.has("remove") && !profile.isNull("remove")) {
+                JSONArray remove = profile.optJSONArray("remove");
+                if (remove == null) {
+                    throw new IllegalArgumentException(
+                            "profile remove must be an array: " + versionName);
+                }
+                Set<String> removedInProfile = new LinkedHashSet<>();
+                for (int i = 0; i < remove.length(); i++) {
+                    String mountId = remove.optString(i, "");
+                    if (mountId.isEmpty()) {
+                        throw new IllegalArgumentException(
+                                "empty remove mount id in profile " + versionName);
+                    }
+                    if (mountId.indexOf('/') < 0) {
+                        throw new IllegalArgumentException("remove needs feature/logicalName: "
+                                + mountId + " in profile " + versionName);
+                    }
+                    if (!removedInProfile.add(mountId)) {
+                        throw new IllegalArgumentException(
+                                "duplicate remove mount id in profile " + versionName
+                                        + ": " + mountId);
+                    }
+                    if (merged.remove(mountId) == null) {
+                        throw new IllegalArgumentException(
+                                "profile " + versionName
+                                        + " removes unknown mount id: " + mountId);
+                    }
+                }
+            }
             JSONArray mounts = profile.optJSONArray("mounts");
             if (mounts == null) {
                 throw new IllegalArgumentException(

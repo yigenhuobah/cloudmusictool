@@ -11,8 +11,8 @@ import java.util.Map;
  *
  * <p>版本身份（versionCode/versionName）来自 anchors.json（{@link SupportedVersions}），
  * 这里只负责把版本名映射到编译期运行时 Profile 类。运行时仍使用
- * {@link Profile9608}/{@link Profile9613}/{@link Profile9615}（保守策略），
- * ProfileAnchorEquivalenceTest 锁定它们与 anchors.json 派生表逐项一致。
+ * {@link Profile9608}/{@link Profile9613}/{@link Profile9615}/{@link Profile9620}
+ * （保守策略），ProfileAnchorEquivalenceTest 锁定它们与 anchors.json 派生表逐项一致。
  */
 public final class ProfileRegistry {
 
@@ -21,7 +21,8 @@ public final class ProfileRegistry {
 
     static {
         for (TargetProfile profile : new TargetProfile[]{
-                Profile9608.PROFILE, Profile9613.PROFILE, Profile9615.PROFILE}) {
+                Profile9608.PROFILE, Profile9613.PROFILE, Profile9615.PROFILE,
+                Profile9620.PROFILE}) {
             RUNTIME.put(profile.versionName, profile);
         }
     }

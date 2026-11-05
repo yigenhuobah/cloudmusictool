@@ -59,6 +59,7 @@ public class AnchorContractTest {
             {"9.6.08", "9006008", "142"},
             {"9.6.13", "9006013", "145"},
             {"9.6.15", "9006015", "145"},
+            {"9.6.20", "9006020", "143"},
     };
 
     /** 统一 schema 的顶层键（顺序不参与断言）。 */
@@ -425,15 +426,34 @@ public class AnchorContractTest {
 
     @Test
     public void supportedVersionsComeFromAnchors() {
-        assertEquals("9.6.08 / 9.6.13 / 9.6.15", SupportedVersions.namesLabel());
-        assertEquals("9006008 / 9006013 / 9006015", SupportedVersions.codesLabel());
-        assertEquals("9.6.15", SupportedVersions.table().appVersion());
-        assertTrue(SupportedVersions.isSupported("9.6.15"));
+        assertEquals("9.6.08 / 9.6.13 / 9.6.15 / 9.6.20", SupportedVersions.namesLabel());
+        assertEquals("9006008 / 9006013 / 9006015 / 9006020", SupportedVersions.codesLabel());
+        assertEquals("9.6.20", SupportedVersions.table().appVersion());
+        assertTrue(SupportedVersions.isSupported("9.6.20"));
         assertFalse(SupportedVersions.isSupported("9.6.09"));
         assertFalse(SupportedVersions.isSupported(null));
         assertNull(SupportedVersions.byCode(1L));
         assertNull(SupportedVersions.byName("1.0.0"));
-        assertEquals(3, SupportedVersions.all().size());
+        assertEquals(4, SupportedVersions.all().size());
+    }
+
+    /** 9.6.20 的 profile.remove 必须把 PV-05 已合并的 d/e 从派生表删除。 */
+    @Test
+    public void profile9620DropsMergedLogMonitorMounts() {
+        AnchorTable table = table();
+        TargetProfile profile = table.versionByCode(9006020L).profile;
+        assertNull(profile.findByLogicalName(
+                "com.netease.cloudmusic.statistic.monitor.LogMonitorConfigManager", "d"));
+        assertNull(profile.findByLogicalName(
+                "com.netease.cloudmusic.statistic.monitor.LogMonitorConfigManager", "e"));
+        assertNotNull(profile.findByLogicalName(
+                "com.netease.cloudmusic.statistic.monitor.LogMonitorConfigManager", "c"));
+        // 9.6.15 仍然保留 d/e（旧版本行为不能被 remove 波及）。
+        TargetProfile previous = table.versionByCode(9006015L).profile;
+        assertNotNull(previous.findByLogicalName(
+                "com.netease.cloudmusic.statistic.monitor.LogMonitorConfigManager", "d"));
+        assertNotNull(previous.findByLogicalName(
+                "com.netease.cloudmusic.statistic.monitor.LogMonitorConfigManager", "e"));
     }
 
     /** 从测试工作目录向上找仓库文件（Gradle 单测 cwd 多为模块目录）。 */

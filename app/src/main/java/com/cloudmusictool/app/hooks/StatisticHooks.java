@@ -1,6 +1,8 @@
 package com.cloudmusictool.app.hooks;
 
 import com.cloudmusictool.app.Feature;
+import com.cloudmusictool.app.profile.ProfileRegistry;
+import com.cloudmusictool.app.profile.TargetProfile;
 
 import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -13,6 +15,11 @@ import io.github.libxposed.api.XposedModule;
  * 1. StatisticImpl#log / #logJSON（只观测，不拦截）：限流记录统计 key 后放行宿主；
  * 2. LogMonitorConfigManager#b/c/d/e（拦截改写）：constBool(false) 强制关闭监控开关，
  *    直接改写宿主返回值。
+ *
+ * <p>9.6.20 把原 d/e 两条解析路径合并进 c()Z（127 opcodes/callee 序列一致），
+ * anchors.json 的 profile.remove 已删除 d/e；活动 Profile 里没有对应 logicalName
+ * 的挂载点不再查找，避免诊断页出现两条假的非 critical 缺失（9.6.08/9.6.13/9.6.15
+ * 仍有 d/e，行为不变）。
  */
 public final class StatisticHooks {
 
@@ -96,8 +103,14 @@ public final class StatisticHooks {
             Class<?> monitorCls = HookKit.findClass(module, f, cl,
                     "com.netease.cloudmusic.statistic.monitor.LogMonitorConfigManager");
             if (monitorCls != null) {
+                TargetProfile active = ProfileRegistry.active();
                 String[] methods = {"b", "c", "d", "e"};
                 for (String mName : methods) {
+                    // 9.6.20 起 d/e 已被宿主合并进 c()Z，Profile 里不再有这两个挂载点。
+                    if (active != null && active.findByLogicalName(
+                            monitorCls.getName(), mName) == null) {
+                        continue;
+                    }
                     Method m = HookKit.findByNameQuiet(module, f,
                             "LogMonitorConfigManager#" + mName, monitorCls, mName);
                     if (m != null) {

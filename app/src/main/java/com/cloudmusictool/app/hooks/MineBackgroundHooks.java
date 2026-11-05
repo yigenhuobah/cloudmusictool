@@ -74,6 +74,9 @@ public final class MineBackgroundHooks {
             "com.netease.cloudmusic.fragment.MyMusicProxyFragment";
     private static final String SG =
             "com.netease.cloudmusic.utils.sg";
+    /** 9.6.20 起 sg 改名为 utils.eh（s(JSONObject)Z 语义不变）。 */
+    private static final String SG_EH =
+            "com.netease.cloudmusic.utils.eh";
 
     private static final int FL_HEADER_IMAGE_FALLBACK = 0x7f09136e;
 
@@ -200,17 +203,22 @@ public final class MineBackgroundHooks {
      * 启用 EN-01 时强制「我的」页走原生 V4（AB mine-rn-android=false）。
      *
      * 9.6.13 的分支方法是 {@code kc()Z}（与 9.6.08 的 {@code oc()Z} opcode 完全
-     * 一致）；9.6.13 的 {@code oc()V} 只启动协程，hook 它返回 false 没有意义，
-     * 因此只接受「零参 + boolean 返回」的候选，绝不会误挂 {@code oc()V}。
-     * 找不到 kc 时回退 9.6.08 的 oc()Z。
+     * 一致）；9.6.20 又改名为 {@code jc()Z}（41 opcodes 不变）。9.6.13 的
+     * {@code oc()V} 只启动协程，hook 它返回 false 没有意义，因此只接受
+     * 「零参 + boolean 返回」的候选，绝不会误挂 {@code oc()V}。
+     * 找不到 kc/jc 时回退 9.6.08 的 oc()Z。
      */
     private static void installProxyHook(XposedModule module, Feature f, ClassLoader cl) {
         Class<?> proxy = HookKit.findClass(module, f, cl, MINE_PROXY);
         if (proxy == null) {
             return;
         }
+        // 9.6.20 的 mappedMethodName(proxy, "kc") 是 jc；如果仍按字面量
+        // "kc".equals(实际名) 判断，会把 jc 误当成 oc 回退：日志标签错误，
+        // 且 installProxyProbes 被跳过。用映射后的请求名做判断。
+        String kcName = HookKit.mappedMethodName(proxy, "kc");
         Method kc = selectProxyBranchMethod(proxy,
-                HookKit.mappedMethodName(proxy, "kc"),
+                kcName,
                 HookKit.mappedMethodName(proxy, "oc"));
         if (kc == null) {
             HookKit.warn(module, f.id + " skip: " + MINE_PROXY
@@ -219,7 +227,7 @@ public final class MineBackgroundHooks {
             HookState.note(f, "kc()Z/oc()Z 未找到");
             return;
         }
-        boolean isKc = "kc".equals(kc.getName());
+        boolean isKc = kcName != null && kcName.equals(kc.getName());
         String label = isKc ? "MyMusicProxyFragment#kc" : "MyMusicProxyFragment#oc";
         HookKit.install(module, f, label, kc, chain -> {
             HookKit.hit(module, f, isKc ? "proxy kc=false" : "proxy oc=false",
@@ -350,7 +358,7 @@ public final class MineBackgroundHooks {
                 }
             }
             for (StackTraceElement e : stack) {
-                if (SG.equals(e.getClassName())) {
+                if (SG.equals(e.getClassName()) || SG_EH.equals(e.getClassName())) {
                     return "sg#" + e.getMethodName();
                 }
             }

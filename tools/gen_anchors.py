@@ -96,6 +96,7 @@ def validate_document(document: dict) -> None:
     anchors = document.get("anchors")
     if not isinstance(anchors, dict) or not anchors:
         raise SystemExit("anchors 段缺失或为空")
+    mount_ids = set()
     for key, entry in anchors.items():
         if not entry.get("note"):
             raise SystemExit("anchor 缺少 note: " + key)
@@ -105,11 +106,67 @@ def validate_document(document: dict) -> None:
             raise SystemExit("anchor 缺少 feature: " + key)
         if entry.get("key"):
             raise SystemExit("anchor 使用旧 schema 的 key 字段: " + key)
-    for profile in document.get("profiles") or []:
+        if entry.get("feature") and entry.get("logicalName"):
+            mount_ids.add("%s/%s" % (entry["feature"], entry["logicalName"]))
+
+    profiles = document.get("profiles") or []
+    by_name = {}
+    for profile in profiles:
+        name = profile.get("versionName")
+        if not name:
+            raise SystemExit("profile 缺少 versionName")
+        if name in by_name:
+            raise SystemExit("profile versionName 重复: " + name)
+        by_name[name] = profile
+
+    for profile in profiles:
+        name = profile.get("versionName")
         for key in profile.get("mounts") or []:
             if key not in anchors:
-                raise SystemExit("profile %s 引用了不存在的 key: %s"
-                                 % (profile.get("versionName"), key))
+                raise SystemExit("profile %s 引用了不存在的 key: %s" % (name, key))
+        remove = profile.get("remove")
+        if remove is None:
+            continue
+        if not isinstance(remove, list):
+            raise SystemExit("profile %s 的 remove 必须是字符串数组" % name)
+        for mount_id in remove:
+            if not isinstance(mount_id, str) or "/" not in mount_id:
+                raise SystemExit("profile %s 的 remove 元素必须是 feature/logicalName: %r"
+                                 % (name, mount_id))
+            if mount_id not in mount_ids:
+                raise SystemExit("profile %s remove 了不存在的 mount id: %s"
+                                 % (name, mount_id))
+
+    # 与 AnchorTable.buildMounts / check-mounts.sh 同步：remove 必须在展开后的
+    # base 链里真实存在（先 remove 再合并 mounts），否则 build 期必须报错。
+    for profile in profiles:
+        chain, seen, cur = [], set(), profile.get("versionName")
+        while cur:
+            if cur in seen:
+                raise SystemExit("profile base cycle at: " + str(cur))
+            seen.add(cur)
+            item = by_name.get(cur)
+            if item is None:
+                raise SystemExit("profile base not found: " + str(cur))
+            chain.append(item)
+            cur = item.get("base")
+        merged = set()
+        for item in reversed(chain):
+            item_name = item.get("versionName")
+            for mount_id in item.get("remove") or []:
+                if mount_id not in merged:
+                    raise SystemExit("profile %s 的 remove 在 base 链中不存在: %s"
+                                     % (item_name, mount_id))
+                merged.discard(mount_id)
+            for key in item.get("mounts") or []:
+                entry = anchors[key]
+                feature = str(entry.get("feature", ""))
+                logical = entry.get("logicalName")
+                if not logical:
+                    prefix = feature + "/"
+                    logical = (str(key)[len(prefix):]
+                               if str(key).startswith(prefix) else str(key))
+                merged.add(feature + "/" + str(logical))
 
 
 def dexkit_sections(document: dict) -> list:

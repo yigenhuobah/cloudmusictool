@@ -52,7 +52,7 @@ Usage:
                         [--aapt2 PATH] [--allow-version] [--skip-anchors]
 
 Arguments:
-  APK_PATH / --apk      目标 APK（网易云 9.6.08 / 9.6.13 / 9.6.15）；也可用 TARGET_APK 环境变量
+  APK_PATH / --apk      目标 APK（网易云 9.6.08 / 9.6.13 / 9.6.15 / 9.6.20）；也可用 TARGET_APK 环境变量
   --dexsql PATH         dexsql 可执行文件；也可用 DEXSQL
   --anchors JSON        anchors.json（默认 app/src/main/resources/anchors.json）；
                         按 APK versionCode 自动选择 profile 并展开 base 继承链
@@ -466,8 +466,19 @@ if "profiles" in data and "anchors" in data and "mounts" not in data:
         chain.append(profile)
         cur = profile.get("base")
     # mounts 是相对 base 的增量：按 mount id (feature/logicalName) 原位覆盖/追加。
+    # remove 先于 mounts 应用，元素是 mount id 而非 anchor key。
     merged, order = {}, []
     for profile in reversed(chain):
+        for mount_id in profile.get("remove") or []:
+            if not isinstance(mount_id, str) or "/" not in mount_id:
+                raise SystemExit("bad remove mount id: " + str(mount_id))
+            if mount_id not in merged:
+                raise SystemExit("profile removes unknown mount id: " + str(mount_id))
+            merged.pop(mount_id, None)
+            try:
+                order.remove(mount_id)
+            except ValueError:
+                pass
         for key in profile.get("mounts") or []:
             entry = anchors_section.get(key)
             if entry is None:
@@ -562,8 +573,19 @@ if "profiles" in data and "anchors" in data and "mounts" not in data:
         chain.append(profile)
         cur = profile.get("base")
     # mounts 是相对 base 的增量：按 mount id (feature/logicalName) 原位覆盖/追加。
+    # remove 先于 mounts 应用，元素是 mount id 而非 anchor key。
     merged, order = {}, []
     for profile in reversed(chain):
+        for mount_id in profile.get("remove") or []:
+            if not isinstance(mount_id, str) or "/" not in mount_id:
+                raise SystemExit("bad remove mount id: " + str(mount_id))
+            if mount_id not in merged:
+                raise SystemExit("profile removes unknown mount id: " + str(mount_id))
+            merged.pop(mount_id, None)
+            try:
+                order.remove(mount_id)
+            except ValueError:
+                pass
         for key in profile.get("mounts") or []:
             entry = anchors_section.get(key)
             if entry is None:

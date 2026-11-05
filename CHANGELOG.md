@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.4.12 - 2026-11-05
+
+### 新增
+
+- **网易云 9.6.20（9006020）适配**：27 个 @9.6.20 坐标变体（含类改名 fw0.e/gu0.e→lu0.e、utils.jn→utils.vn、utils.sg→utils.eh、utils.i2→utils.t2、nb2→yb2、tf0→wf0、rf0→uf0、mt0→rt0、ur0→zr0、wr0→bs0、iq→kq、en2→on2 等），candidates 保留全部历史类名，避免 9.6.20 中同名无关类被误命中。
+- **profile.remove 构建能力**：anchors.json 的 profile 可声明要删除的 mount id；AnchorTable、`tools/check-mounts.sh` 与 `tools/gen_anchors.py` 同步实现并在 build 期严格校验。9.6.20 用它删除 PV-05 已合并进 c()Z 的 d/e 两条解析路径。
+- **运行时 Profile9620**：复用 Profile9615 基表（145），移除 d/e 后原位应用 27 个覆盖，得到 143 个挂载点；ProfileRegistry/VersionGate 自动识别 9006020。
+
+### 修复
+
+- **MineBackgroundHooks 的 jc 分支门控**：9.6.20 的 `kc()Z` 映射为 `jc()Z`，原代码按字面量 `"kc"` 判断会把 jc 当成 oc 回退，导致日志标签错误且 sg/hc 探针不安装；改为比较 Profile 映射后的方法名。探针调用方识别同时匹配 `utils.eh`。
+- **StatisticHooks 对已移除 d/e 的误报**：活动 Profile 不存在 `LogMonitorConfigManager#d/#e` 时不再查找，9.6.20 诊断页不会出现两条假的非 critical 缺失；9.6.08/9.6.13/9.6.15 行为不变。
+
+### 构建
+
+- `tools/gen_anchors.py` 重新生成 209 个 AnchorKeys 常量（DexKitAnchors 字符串不变）。
+- 9.6.20 全量静态体检 143/143 挂载点、16/16 DexKit 锚点通过；新增 Profile9620OverrideCoverageTest 锁定 27 个覆盖不静默 miss。
+
+### 已知限制
+
+- 9.6.20 **仅完成静态验证**（dexsql + check-mounts），未做 LSPosed 真机逐功能回归；release 前需在真机确认诊断页 installed/failed。
+- PV-01 从 `o(String)` 迁到 `m(String)` 上传入口是语义迁移（旧 jsonParseOptAdStartInfoUpload 解析壳在 9.6.20 消失），置信度中，需真机验证 OAID 上报拦截。9.6.20 仍存在无参 `MusicOaidUploadManager.o()V`（由 `AppIdleInitTask$b0.invoke` 调用，且不转调 `m(String)`），本挂载点不覆盖该入口，真机验收需单独确认这条路径。
+- 其余 9.6.15 坐标复用 base，仅做类名+签名级校验，未逐条证明语义不变。
+
 ## 2.4.11 - 2026-11-04
 
 ### 修复

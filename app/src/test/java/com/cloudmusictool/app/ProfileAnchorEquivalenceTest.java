@@ -5,6 +5,7 @@ import com.cloudmusictool.app.profile.MountSpec;
 import com.cloudmusictool.app.profile.Profile9608;
 import com.cloudmusictool.app.profile.Profile9613;
 import com.cloudmusictool.app.profile.Profile9615;
+import com.cloudmusictool.app.profile.Profile9620;
 import com.cloudmusictool.app.profile.TargetProfile;
 
 import org.junit.Test;
@@ -19,7 +20,7 @@ import static org.junit.Assert.assertTrue;
 /**
  * 运行时 Profile* 与 anchors.json 派生 Profile 的逐项等价（保守切换策略的门闩）。
  *
- * <p>当前运行时仍走编译期 {@link Profile9608}/{@link Profile9613}/{@link Profile9615}，
+ * <p>当前运行时仍走编译期 {@link Profile9608}/{@link Profile9613}/{@link Profile9615}/{@link Profile9620}，
  * 但 anchors.json 才是唯一来源。本测试按顺序逐项比较 id、类候选、方法名、
  * 返回/参数类型、anchors 与 critical，任何一侧漂移都会失败：
  * - 只改 anchors.json：提醒同步运行时 Profile（或改用 AnchorTable 派生）；
@@ -52,6 +53,21 @@ public class ProfileAnchorEquivalenceTest {
     @Test
     public void profile9615MatchesAnchors() {
         assertEquivalent(Profile9615.PROFILE, derived("9.6.15"));
+    }
+
+    @Test
+    public void profile9620MatchesAnchors() {
+        assertEquivalent(Profile9620.PROFILE, derived("9.6.20"));
+    }
+
+    @Test
+    public void profile9620DropsLogMonitorDAndE() {
+        TargetProfile profile = derived("9.6.20");
+        for (MountSpec spec : profile.mounts) {
+            assertTrue("9.6.20 不应包含已合并的挂载点: " + spec.id,
+                    !"PV-05/LogMonitorConfigManager#d".equals(spec.id)
+                            && !"PV-05/LogMonitorConfigManager#e".equals(spec.id));
+        }
     }
 
     @Test

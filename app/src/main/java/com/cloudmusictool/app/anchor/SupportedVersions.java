@@ -9,9 +9,9 @@ import java.util.List;
  * <p>versionCode ↔ versionName ↔ Profile 全部来自 anchors.json。
  * VersionGate（支持判定/日志）、ProfileRegistry（版本 -> 运行时 Profile）、
  * check-mounts.sh（APK versionCode -> 锚点表）与 README 一致性测试都从这里
- * 派生，代码里不再写死 9006008/9006013/9006015 或版本名清单。
+ * 派生，代码里不再写死 9006008/9006013/9006015/9006020 或版本名清单。
  *
- * <p>运行时 Profile9608/9613/9615 作为回滚点保留，由
+ * <p>运行时 Profile9608/9613/9615/9620 作为回滚点保留，由
  * ProfileAnchorEquivalenceTest 锁定与 anchors.json 派生表逐项一致。
  *
  * <p>anchors.json 缺失或损坏时返回空列表：VersionGate 按未适配 fail-open。
@@ -61,12 +61,12 @@ public final class SupportedVersions {
         return byName(versionName) != null;
     }
 
-    /** 展示/日志用版本名清单，如 {@code "9.6.08 / 9.6.13 / 9.6.15"}。 */
+    /** 展示/日志用版本名清单，如 {@code "9.6.08 / 9.6.13 / 9.6.15 / 9.6.20"}。 */
     public static String namesLabel() {
         return join(false);
     }
 
-    /** 展示/日志用 versionCode 清单，如 {@code "9006008 / 9006013 / 9006015"}。 */
+    /** 展示/日志用 versionCode 清单，如 {@code "9006008 / 9006013 / 9006015 / 9006020"}。 */
     public static String codesLabel() {
         return join(true);
     }
