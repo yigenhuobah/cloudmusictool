@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### 修复
+
+- **EN-01 fragment 定位失败可见**：`findMineFragment` 反射/列表异常每会话 WARN 一次，不再静默不生效。
+- **UI-04 addTab 兜底缺失可见**：`MusicTabLayout#addTab` 找不到目标重载时记 skip 原因，诊断页不再显示为健康。
+
 ## 2.4.12 - 2026-11-06
 
 ### 新增

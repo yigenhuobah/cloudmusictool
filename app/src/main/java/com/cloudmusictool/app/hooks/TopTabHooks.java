@@ -390,6 +390,7 @@ public final class TopTabHooks {
                 }
             }
             if (target == null) {
+                HookState.markNotFound(f, "MusicTabLayout#addTab target not found", false);
                 return;
             }
             target.setAccessible(true);

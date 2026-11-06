@@ -132,6 +132,7 @@ public final class MineBackgroundHooks {
     private static final AtomicBoolean sSgProbeOtherLogged = new AtomicBoolean();
     private static final AtomicBoolean sHcProbeLogged = new AtomicBoolean();
     private static final AtomicBoolean sGuestFragmentLogged = new AtomicBoolean();
+    private static final AtomicBoolean sFindMineFailed = new AtomicBoolean();
 
     private MineBackgroundHooks() {
     }
@@ -1278,7 +1279,12 @@ public final class MineBackgroundHooks {
                             + " manager; non-self page behavior unchanged");
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            // 反射/fragment 列表失败会让 EN-01 静默不生效；只记一次 WARN 供排障，
+            // 不登记 HookState：该私有 helper 也被其它调用点复用。
+            if (sFindMineFailed.compareAndSet(false, true)) {
+                Log.w(TAG, "EN-01 findMineFragment failed; background hook may not apply", t);
+            }
         }
         return null;
     }
